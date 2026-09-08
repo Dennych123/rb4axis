@@ -21,7 +21,17 @@
 const fs = require('fs');
 const path = require('path');
 
+// Parser .smc2 dipinjam dari repo ALAT (sysmac-generator), yang letaknya di atas
+// folder ini. rb4axis bisa di-klon sendirian - dan kalau begitu, alat ini memang
+// tidak bisa jalan. Yang penting pesannya menyebut sebab, bukan menyemburkan
+// "Cannot find module" dari kedalaman loader Node.
 const RSRC = path.join(__dirname, '..', '..', 'reader', 'src');
+if (!fs.existsSync(path.join(RSRC, 'zip.js'))) {
+  console.error('GAGAL: pembaca .smc2 tidak ketemu di ' + RSRC);
+  console.error('       Alat ini butuh repo sysmac-generator sebagai induk folder ini.');
+  console.error('       Klon berdiri sendiri cuma bisa memakai extract/ yang sudah ter-commit.');
+  process.exit(3);
+}
 const { unzip, inflate } = require(path.join(RSRC, 'zip.js'));
 const { text } = require(path.join(RSRC, 'env.js'));
 const { xmlParse, xmlChild } = require(path.join(RSRC, 'xml.js'));

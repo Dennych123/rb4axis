@@ -113,16 +113,22 @@ chk('ExternalVars program memuat tiap global yang dipakainya', kurang.length ===
 // ------------------------------------------------------------ XSD resmi Studio
 const XSD = 'C:\\Program Files\\OMRON\\Sysmac Studio\\Sample\\IEC 61131-10 XML\\Controller';
 const adaXsd = fs.existsSync(path.join(XSD, 'IEC61131_10_Ed1_0_Spc1_0.xsd'));
+// Validatornya milik repo ALAT (sysmac-generator), bukan repo ini. rb4axis bisa
+// di-klon sendirian, dan waktu itu gerbang XSD memang tidak bisa dijalankan -
+// bukan gagal.
+const VALIDATOR = path.join(ROOT, '..', 'scripts', 'validate_xml.ps1');
 const pwsh = spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'],
   { encoding: 'utf8' });
-if (!adaXsd) {
+if (!fs.existsSync(VALIDATOR)) {
+  console.log('  SKIP  validate_xml.ps1 tidak ada - repo alat sysmac-generator tidak di sebelah repo ini');
+  console.log('        ' + VALIDATOR);
+} else if (!adaXsd) {
   console.log('  SKIP  XSD Sysmac tidak ada di mesin ini (' + XSD + ')');
   console.log('        XSD-nya milik Studio, memang tidak boleh disalin ke repo');
 } else if (pwsh.status !== 0) {
   console.log('  SKIP  pwsh tidak ada di mesin ini - XSD tidak bisa dijalankan');
 } else {
-  const v = spawnSync('pwsh', ['-NoProfile', '-File',
-    path.join(ROOT, '..', 'scripts', 'validate_xml.ps1'), XML_PATH], { encoding: 'utf8' });
+  const v = spawnSync('pwsh', ['-NoProfile', '-File', VALIDATOR, XML_PATH], { encoding: 'utf8' });
   const out = ((v.stdout || '') + (v.stderr || '')).trim();
   chk('lolos XSD resmi Sysmac', v.status === 0, out.split('\n').slice(-3).join(' | '));
 }

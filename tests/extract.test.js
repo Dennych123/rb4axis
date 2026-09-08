@@ -25,6 +25,17 @@ const KELUAR = path.join(ROOT, 'extract');
 let fail = 0;
 const chk = (l, c, x) => { if (!c) fail++; console.log((c ? '  OK  ' : '>>BAD ') + l + (x ? '   ' + x : '')); };
 
+// Repo ini bisa di-klon sendirian (rb4axis), tanpa repo alat di atasnya. Kalau
+// begitu, extract/ yang ter-commit tetap dipakai - yang tidak bisa cuma
+// MEMBANGKITKANNYA ulang, dan itu bukan kegagalan.
+const READER = path.join(ROOT, '..', 'reader', 'src', 'zip.js');
+if (!fs.existsSync(READER)) {
+  console.log('  SKIP  pembaca .smc2 (repo alat sysmac-generator) tidak ada di sebelah repo ini');
+  console.log('        ' + READER);
+  console.log('        extract/ yang ter-commit tetap sah - yang tidak bisa cuma regenerasinya');
+  process.exit(0);
+}
+
 if (!fs.existsSync(SMC2)) {
   console.log('  SKIP  project mesin tidak ada di mesin ini:');
   console.log('        ' + SMC2);
