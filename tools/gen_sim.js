@@ -224,8 +224,14 @@ function stBaru(lama, cfg) {
 
 // Kolom tabel Global Variable Studio - sama persis dengan TSV_HEAD di
 // js/gen_all.js dan dengan extract/variables.tsv. TANPA baris judul.
+//
+// Network Publish = "Publish Only" untuk SEMUA variabel sim. Yang tidak di-publish
+// bisa tidak muncul di server OPC UA sama sekali, dan gejalanya "tag tidak terbaca" -
+// persis sama dengan gejala program yang belum ditugaskan ke task, jadi gampang
+// salah kira. Project mesin yang jadi acuan menyetel PublicationOnly di 2188
+// variabelnya; menyetelnya di sini murah dan menghapus satu kemungkinan.
 function barisGlobal(n, t, cmt) {
-  return [n, t, '', '', 'False', 'False', 'Do not publish', cmt || ''].join('\t');
+  return [n, t, '', '', 'False', 'False', 'Publish Only', cmt || ''].join('\t');
 }
 
 function main() {
@@ -238,8 +244,17 @@ function main() {
   // Variabel global sim + external yang dituntut kedua FB. Yang kedua disalin apa
   // adanya dari extract/ supaya tipe, retain dan Constant-nya tidak pernah
   // ditebak ulang di sini.
-  const ext = fs.existsSync(EXTRACT_TSV)
-    ? fs.readFileSync(EXTRACT_TSV, 'utf8').split('\n').filter(Boolean) : [];
+  // Dipakai apa adanya KECUALI kolom Network Publish: di project sim, tiap variabel
+  // yang dibaca atau ditulis halaman HARUS di-publish, dan project mesin tidak
+  // menyetelnya untuk semua (ROBOT_ROBOT_ORG_OFFSET_LREAL misalnya). Konstanta
+  // dilewati - tidak ada yang membacanya dari luar.
+  const ext = (fs.existsSync(EXTRACT_TSV)
+    ? fs.readFileSync(EXTRACT_TSV, 'utf8').split('\n').filter(Boolean) : [])
+    .map(l => {
+      const c = l.split('\t');
+      if (c[5] !== 'True') c[6] = 'Publish Only';
+      return c.join('\t');
+    });
   if (!ext.length) {
     console.error('GAGAL: extract/variables.tsv kosong - jalanin dulu: node blurobot/tools/extract.js');
     process.exit(2);

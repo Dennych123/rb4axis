@@ -40,6 +40,16 @@ const { readStText } = require(path.join(RSRC, 'smc2.js'));
 const SMC2_DEFAULT = 'C:/Users/denny/Downloads/Blurobot ECU/Blurobot ECU/BLUEROBOT ECU 28032020.smc2';
 const OUT_DEFAULT = path.join(__dirname, '..', 'extract');
 
+// Medan NTP di baris SLWD = kolom "Network Publish" di tabel Studio. JANGAN dibuang:
+// variabel yang tidak di-publish TIDAK MUNCUL di server OPC UA sama sekali, dan
+// gejalanya "tag tidak terbaca" - yang terbaca seperti programnya belum jalan.
+// Project mesin ini menyetel PublicationOnly di 2188 variabelnya.
+const PUBLISH = {
+  PublicationOnly: 'Publish Only',
+  PublicationInput: 'Input',
+  PublicationOutput: 'Output'
+};
+
 // FB yang diangkat. Daftar EKSPLISIT, bukan "semua FB yang ketemu": daftar yang
 // diam-diam bertambah bikin tes determinisme gagal karena alasan yang tidak ada
 // hubungannya dengan algoritmanya.
@@ -192,7 +202,7 @@ async function main() {
     const g = globals.get(n);
     if (!g) { console.error('GAGAL: external ' + n + ' dipakai ST tapi bukan variabel global'); process.exit(2); }
     tsv.push([g.N, g.D || '', g.IV || '', '', g.R === '1' ? 'True' : 'False',
-      g.Const === '1' ? 'True' : 'False', 'Do not publish',
+      g.Const === '1' ? 'True' : 'False', PUBLISH[g.NTP] || 'Do not publish',
       (g.Com || '').replace(/\$t/g, ' ')].join('\t'));
   }
   fs.writeFileSync(path.join(out, 'variables.tsv'), tsv.join('\n') + '\n', 'utf8');

@@ -1137,22 +1137,27 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
         <GlobalVars>
           <Variable name="SIM_INIT_DONE">
             <Documentation xsi:type="SimpleText">sudah diinisialisasi dari config</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_RESET">
             <Documentation xsi:type="SimpleText">tulis TRUE: paksa init ulang dari nilai config</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_DT">
             <Documentation xsi:type="SimpleText">periode task primer detik - HARUS sama dengan setelan task di Studio</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="SIM_HEARTBEAT">
             <Documentation xsi:type="SimpleText">naik tiap scan - bukti program sim benar-benar jalan</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>UDINT</TypeName></Type>
           </Variable>
           <Variable name="SIM_JOINT_POS">
             <Documentation xsi:type="SimpleText">posisi sumbu sekarang: X mm, theta1-3 derajat</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>LREAL</TypeName></BaseType>
@@ -1162,6 +1167,7 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_JOINT_CMD">
             <Documentation xsi:type="SimpleText">target sumbu yang dikejar motion model</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>LREAL</TypeName></BaseType>
@@ -1171,6 +1177,7 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_JOINT_OUT">
             <Documentation xsi:type="SimpleText">keluaran joint FORWARD_KINEMATIC</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>REAL</TypeName></BaseType>
@@ -1180,6 +1187,7 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_WORLD_POS">
             <Documentation xsi:type="SimpleText">pose world hasil FK: X Y Z theta_EE - sudah termasuk tool</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>REAL</TypeName></BaseType>
@@ -1189,6 +1197,7 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_WORLD_CMD">
             <Documentation xsi:type="SimpleText">target move point: X Y Z theta_EE</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>LREAL</TypeName></BaseType>
@@ -1198,18 +1207,22 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_JOG_MODE">
             <Documentation xsi:type="SimpleText">0 joint / 1 world / 2 tool</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>INT</TypeName></Type>
           </Variable>
           <Variable name="SIM_JOG_HOLD">
             <Documentation xsi:type="SimpleText">TRUE: tahan-jalan (tambahan viz). FALSE: satu langkah per tekan, seperti mesin</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_JOG_STEP">
             <Documentation xsi:type="SimpleText">besar satu langkah jog - mm atau derajat</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="SIM_JOG_P">
             <Documentation xsi:type="SimpleText">tombol jog arah plus per sumbu</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>BOOL</TypeName></BaseType>
@@ -1219,6 +1232,7 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_JOG_N">
             <Documentation xsi:type="SimpleText">tombol jog arah minus per sumbu</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>BOOL</TypeName></BaseType>
@@ -1228,18 +1242,22 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_MOVE_EXEC">
             <Documentation xsi:type="SimpleText">tepi naik: jalankan move ke SIM_WORLD_CMD</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_MOVE_DONE">
             <Documentation xsi:type="SimpleText">semua sumbu sudah sampai target</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_HOME_EXEC">
             <Documentation xsi:type="SimpleText">tepi naik: kembali ke pose home</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_HOME">
             <Documentation xsi:type="SimpleText">pose home per sumbu</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>LREAL</TypeName></BaseType>
@@ -1249,6 +1267,7 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_VEL">
             <Documentation xsi:type="SimpleText">kecepatan maksimum per sumbu - mm/s atau derajat/s</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>LREAL</TypeName></BaseType>
@@ -1258,6 +1277,7 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_VEL_W">
             <Documentation xsi:type="SimpleText">kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>LREAL</TypeName></BaseType>
@@ -1267,10 +1287,12 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_BUSY">
             <Documentation xsi:type="SimpleText">masih ada sumbu yang bergerak</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_LIMIT">
             <Documentation xsi:type="SimpleText">soft limit yang KENA - pasangan min/max per sumbu</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>BOOL</TypeName></BaseType>
@@ -1280,57 +1302,72 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
           </Variable>
           <Variable name="SIM_ERROR">
             <Documentation xsi:type="SimpleText">perintah terakhir ditolak</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_ERROR_ID">
             <Documentation xsi:type="SimpleText">0 tidak ada, 1 di luar jangkauan, 2 terlalu dekat, 3 singular, 4 soft limit</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>INT</TypeName></Type>
           </Variable>
           <Variable name="SIM_ELBOW_UP">
             <Documentation xsi:type="SimpleText">FALSE = cabang elbow yang sama dengan mesin. TRUE = cermin, cuma ada di FB V2</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_GRIP_CMD">
             <Documentation xsi:type="SimpleText">TRUE tutup, FALSE buka</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_GRIP_POS">
             <Documentation xsi:type="SimpleText">bukaan sekarang - jarak antar jari, mm</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="SIM_GRIP_STROKE">
             <Documentation xsi:type="SimpleText">bukaan penuh, mm</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="SIM_GRIP_VEL">
             <Documentation xsi:type="SimpleText">kecepatan jari, mm/s</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="SIM_GRIP_OPEN">
             <Documentation xsi:type="SimpleText">jari sudah terbuka penuh</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_GRIP_CLOSED">
             <Documentation xsi:type="SimpleText">jari sudah menutup rapat</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
           <Variable name="SIM_GRIP_LEN">
             <Documentation xsi:type="SimpleText">panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="ROBOT_L1_LREAL">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="ROBOT_L2_LREAL">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="ROBOT_L3_LREAL">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="ROBOT_L4_LREAL">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="ROBOT_ROBOT_ORG_OFFSET_LREAL">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
                 <BaseType><TypeName>LREAL</TypeName></BaseType>
@@ -1339,9 +1376,11 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
             </Type>
           </Variable>
           <Variable name="ROBOT_TOOL_Y_LREAL">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="ROBOT_TOOL_Z_LREAL">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
         </GlobalVars>
@@ -1361,27 +1400,35 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
         </GlobalVars>
         <GlobalVars retain="true">
           <Variable name="PD1300_000">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>REAL</TypeName></Type>
           </Variable>
           <Variable name="PD1300_001">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>REAL</TypeName></Type>
           </Variable>
           <Variable name="PD1300_002">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>REAL</TypeName></Type>
           </Variable>
           <Variable name="PD1300_003">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>REAL</TypeName></Type>
           </Variable>
           <Variable name="PD1300_004">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>REAL</TypeName></Type>
           </Variable>
           <Variable name="PD1300_005">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>REAL</TypeName></Type>
           </Variable>
           <Variable name="PD1300_006">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>REAL</TypeName></Type>
           </Variable>
           <Variable name="PD1300_007">
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>REAL</TypeName></Type>
           </Variable>
         </GlobalVars>

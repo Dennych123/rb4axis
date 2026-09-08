@@ -66,9 +66,28 @@ function tipeXml(t, ind) {
 
 // Urutan anak Variable TERIKAT xsd:sequence, dan urutannya BUKAN urutan kolom di
 // tabel Studio:  Documentation -> AddData -> Type -> InitialValue -> Address.
+// Label kolom Studio -> nilai enum di XSD. Dua ejaan untuk satu hal, dan yang salah
+// eja DITOLAK XSD - itu bagusnya, karena kalau lolos diam-diam variabelnya cuma
+// menghilang dari OPC UA.
+const PUBLISH_XML = {
+  'Publish Only': 'PublishOnly',
+  Input: 'Input',
+  Output: 'Output',
+  'Do not publish': null
+};
+
 function varXml(v, ind, extra) {
   const b = [ind + '<Variable name="' + esc(v.nama) + '"' + (extra || '') + '>'];
   if (v.komen) b.push(ind + '  <Documentation xsi:type="SimpleText">' + esc(v.komen) + '</Documentation>');
+  // Network Publish: variabel yang tidak di-publish TIDAK ADA di server OPC UA
+  // simulator. Bukan "ada tapi kosong" - tidak ada, dan yang mencarinya melapor
+  // "tag tidak terbaca", yang terbaca seperti programnya belum jalan.
+  const pub = PUBLISH_XML[v.publish];
+  if (pub) {
+    b.push(ind + '  <AddData><Data name="' + SMC + '" handleUnknown="discard">'
+      + '<smcext:GlobalVariableAdditionalProperties networkPublish="' + pub + '" />'
+      + '</Data></AddData>');
+  }
   b.push(tipeXml(v.tipe, ind + '  '));
   if (v.awal) b.push(ind + '  <InitialValue><SimpleValue value="' + esc(v.awal) + '" /></InitialValue>');
   if (v.at) b.push(ind + '  <Address address="' + esc(v.at) + '" />');
@@ -100,7 +119,7 @@ function varsGlobal() {
   return baris('GlobalVariables.tsv').map(l => {
     const c = l.split('\t');
     return { nama: c[0], tipe: c[1], awal: c[2], at: c[3],
-             retain: c[4] === 'True', konstan: c[5] === 'True', komen: c[7] };
+             retain: c[4] === 'True', konstan: c[5] === 'True', publish: c[6], komen: c[7] };
   });
 }
 

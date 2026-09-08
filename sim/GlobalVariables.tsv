@@ -1,50 +1,50 @@
-SIM_INIT_DONE	BOOL			False	False	Do not publish	sudah diinisialisasi dari config
-SIM_RESET	BOOL			False	False	Do not publish	tulis TRUE: paksa init ulang dari nilai config
-SIM_DT	LREAL			False	False	Do not publish	periode task primer detik - HARUS sama dengan setelan task di Studio
-SIM_HEARTBEAT	UDINT			False	False	Do not publish	naik tiap scan - bukti program sim benar-benar jalan
-SIM_JOINT_POS	ARRAY[0..3] OF LREAL			False	False	Do not publish	posisi sumbu sekarang: X mm, theta1-3 derajat
-SIM_JOINT_CMD	ARRAY[0..3] OF LREAL			False	False	Do not publish	target sumbu yang dikejar motion model
-SIM_JOINT_OUT	ARRAY[0..3] OF REAL			False	False	Do not publish	keluaran joint FORWARD_KINEMATIC
-SIM_WORLD_POS	ARRAY[0..3] OF REAL			False	False	Do not publish	pose world hasil FK: X Y Z theta_EE - sudah termasuk tool
-SIM_WORLD_CMD	ARRAY[0..3] OF LREAL			False	False	Do not publish	target move point: X Y Z theta_EE
-SIM_JOG_MODE	INT			False	False	Do not publish	0 joint / 1 world / 2 tool
-SIM_JOG_HOLD	BOOL			False	False	Do not publish	TRUE: tahan-jalan (tambahan viz). FALSE: satu langkah per tekan, seperti mesin
-SIM_JOG_STEP	LREAL			False	False	Do not publish	besar satu langkah jog - mm atau derajat
-SIM_JOG_P	ARRAY[0..3] OF BOOL			False	False	Do not publish	tombol jog arah plus per sumbu
-SIM_JOG_N	ARRAY[0..3] OF BOOL			False	False	Do not publish	tombol jog arah minus per sumbu
-SIM_MOVE_EXEC	BOOL			False	False	Do not publish	tepi naik: jalankan move ke SIM_WORLD_CMD
-SIM_MOVE_DONE	BOOL			False	False	Do not publish	semua sumbu sudah sampai target
-SIM_HOME_EXEC	BOOL			False	False	Do not publish	tepi naik: kembali ke pose home
-SIM_HOME	ARRAY[0..3] OF LREAL			False	False	Do not publish	pose home per sumbu
-SIM_VEL	ARRAY[0..3] OF LREAL			False	False	Do not publish	kecepatan maksimum per sumbu - mm/s atau derajat/s
-SIM_VEL_W	ARRAY[0..3] OF LREAL			False	False	Do not publish	kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE
-SIM_BUSY	BOOL			False	False	Do not publish	masih ada sumbu yang bergerak
-SIM_LIMIT	ARRAY[0..7] OF BOOL			False	False	Do not publish	soft limit yang KENA - pasangan min/max per sumbu
-SIM_ERROR	BOOL			False	False	Do not publish	perintah terakhir ditolak
-SIM_ERROR_ID	INT			False	False	Do not publish	0 tidak ada, 1 di luar jangkauan, 2 terlalu dekat, 3 singular, 4 soft limit
-SIM_ELBOW_UP	BOOL			False	False	Do not publish	FALSE = cabang elbow yang sama dengan mesin. TRUE = cermin, cuma ada di FB V2
-SIM_GRIP_CMD	BOOL			False	False	Do not publish	TRUE tutup, FALSE buka
-SIM_GRIP_POS	LREAL			False	False	Do not publish	bukaan sekarang - jarak antar jari, mm
-SIM_GRIP_STROKE	LREAL			False	False	Do not publish	bukaan penuh, mm
-SIM_GRIP_VEL	LREAL			False	False	Do not publish	kecepatan jari, mm/s
-SIM_GRIP_OPEN	BOOL			False	False	Do not publish	jari sudah terbuka penuh
-SIM_GRIP_CLOSED	BOOL			False	False	Do not publish	jari sudah menutup rapat
-SIM_GRIP_LEN	LREAL			False	False	Do not publish	panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz
+SIM_INIT_DONE	BOOL			False	False	Publish Only	sudah diinisialisasi dari config
+SIM_RESET	BOOL			False	False	Publish Only	tulis TRUE: paksa init ulang dari nilai config
+SIM_DT	LREAL			False	False	Publish Only	periode task primer detik - HARUS sama dengan setelan task di Studio
+SIM_HEARTBEAT	UDINT			False	False	Publish Only	naik tiap scan - bukti program sim benar-benar jalan
+SIM_JOINT_POS	ARRAY[0..3] OF LREAL			False	False	Publish Only	posisi sumbu sekarang: X mm, theta1-3 derajat
+SIM_JOINT_CMD	ARRAY[0..3] OF LREAL			False	False	Publish Only	target sumbu yang dikejar motion model
+SIM_JOINT_OUT	ARRAY[0..3] OF REAL			False	False	Publish Only	keluaran joint FORWARD_KINEMATIC
+SIM_WORLD_POS	ARRAY[0..3] OF REAL			False	False	Publish Only	pose world hasil FK: X Y Z theta_EE - sudah termasuk tool
+SIM_WORLD_CMD	ARRAY[0..3] OF LREAL			False	False	Publish Only	target move point: X Y Z theta_EE
+SIM_JOG_MODE	INT			False	False	Publish Only	0 joint / 1 world / 2 tool
+SIM_JOG_HOLD	BOOL			False	False	Publish Only	TRUE: tahan-jalan (tambahan viz). FALSE: satu langkah per tekan, seperti mesin
+SIM_JOG_STEP	LREAL			False	False	Publish Only	besar satu langkah jog - mm atau derajat
+SIM_JOG_P	ARRAY[0..3] OF BOOL			False	False	Publish Only	tombol jog arah plus per sumbu
+SIM_JOG_N	ARRAY[0..3] OF BOOL			False	False	Publish Only	tombol jog arah minus per sumbu
+SIM_MOVE_EXEC	BOOL			False	False	Publish Only	tepi naik: jalankan move ke SIM_WORLD_CMD
+SIM_MOVE_DONE	BOOL			False	False	Publish Only	semua sumbu sudah sampai target
+SIM_HOME_EXEC	BOOL			False	False	Publish Only	tepi naik: kembali ke pose home
+SIM_HOME	ARRAY[0..3] OF LREAL			False	False	Publish Only	pose home per sumbu
+SIM_VEL	ARRAY[0..3] OF LREAL			False	False	Publish Only	kecepatan maksimum per sumbu - mm/s atau derajat/s
+SIM_VEL_W	ARRAY[0..3] OF LREAL			False	False	Publish Only	kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE
+SIM_BUSY	BOOL			False	False	Publish Only	masih ada sumbu yang bergerak
+SIM_LIMIT	ARRAY[0..7] OF BOOL			False	False	Publish Only	soft limit yang KENA - pasangan min/max per sumbu
+SIM_ERROR	BOOL			False	False	Publish Only	perintah terakhir ditolak
+SIM_ERROR_ID	INT			False	False	Publish Only	0 tidak ada, 1 di luar jangkauan, 2 terlalu dekat, 3 singular, 4 soft limit
+SIM_ELBOW_UP	BOOL			False	False	Publish Only	FALSE = cabang elbow yang sama dengan mesin. TRUE = cermin, cuma ada di FB V2
+SIM_GRIP_CMD	BOOL			False	False	Publish Only	TRUE tutup, FALSE buka
+SIM_GRIP_POS	LREAL			False	False	Publish Only	bukaan sekarang - jarak antar jari, mm
+SIM_GRIP_STROKE	LREAL			False	False	Publish Only	bukaan penuh, mm
+SIM_GRIP_VEL	LREAL			False	False	Publish Only	kecepatan jari, mm/s
+SIM_GRIP_OPEN	BOOL			False	False	Publish Only	jari sudah terbuka penuh
+SIM_GRIP_CLOSED	BOOL			False	False	Publish Only	jari sudah menutup rapat
+SIM_GRIP_LEN	LREAL			False	False	Publish Only	panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz
 DEGREE_TO_RAD	LREAL	0.017453292		False	True	Do not publish	
-PD1300_000	REAL			True	False	Do not publish	
-PD1300_001	REAL			True	False	Do not publish	
-PD1300_002	REAL			True	False	Do not publish	
-PD1300_003	REAL			True	False	Do not publish	
-PD1300_004	REAL			True	False	Do not publish	
-PD1300_005	REAL			True	False	Do not publish	
-PD1300_006	REAL			True	False	Do not publish	
-PD1300_007	REAL			True	False	Do not publish	
+PD1300_000	REAL			True	False	Publish Only	
+PD1300_001	REAL			True	False	Publish Only	
+PD1300_002	REAL			True	False	Publish Only	
+PD1300_003	REAL			True	False	Publish Only	
+PD1300_004	REAL			True	False	Publish Only	
+PD1300_005	REAL			True	False	Publish Only	
+PD1300_006	REAL			True	False	Publish Only	
+PD1300_007	REAL			True	False	Publish Only	
 PI	LREAL	3.141592654		False	True	Do not publish	
 RAD_TO_DEGREE	LREAL	57.29577951		False	True	Do not publish	
-ROBOT_L1_LREAL	LREAL			False	False	Do not publish	
-ROBOT_L2_LREAL	LREAL			False	False	Do not publish	
-ROBOT_L3_LREAL	LREAL			False	False	Do not publish	
-ROBOT_L4_LREAL	LREAL			False	False	Do not publish	
-ROBOT_ROBOT_ORG_OFFSET_LREAL	ARRAY[0..4] OF LREAL			False	False	Do not publish	
-ROBOT_TOOL_Y_LREAL	LREAL			False	False	Do not publish	
-ROBOT_TOOL_Z_LREAL	LREAL			False	False	Do not publish	
+ROBOT_L1_LREAL	LREAL			False	False	Publish Only	
+ROBOT_L2_LREAL	LREAL			False	False	Publish Only	
+ROBOT_L3_LREAL	LREAL			False	False	Publish Only	
+ROBOT_L4_LREAL	LREAL			False	False	Publish Only	
+ROBOT_ROBOT_ORG_OFFSET_LREAL	ARRAY[0..4] OF LREAL			False	False	Publish Only	
+ROBOT_TOOL_Y_LREAL	LREAL			False	False	Publish Only	
+ROBOT_TOOL_Z_LREAL	LREAL			False	False	Publish Only	

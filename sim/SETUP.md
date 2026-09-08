@@ -117,8 +117,17 @@ blok init di `PRG_SIM_ROBOT.st`, dari `robot.config.json`. Satu sumber angka, bu
 Kecuali `PI`, `DEGREE_TO_RAD`, `RAD_TO_DEGREE`: itu `Constant` dengan nilai awal dari
 project mesin, dan memang tidak boleh ditulis program mana pun.
 
-**Network Publish tidak perlu disetel.** Variabel global ter-publish otomatis ke OPC UA
-server simulator; path-nya `GlobalVars.<nama>`.
+**Network Publish HARUS `Publish Only`** untuk tiap variabel yang dibaca atau ditulis
+halaman viz. Kolom itu sudah terisi di `GlobalVariables.tsv` dan di XML import, jadi
+kalau kamu menempel berkas itu apa adanya tidak ada yang perlu diklik.
+
+Catatan lama di repo alat bilang "ter-publish otomatis". Yang bisa dipastikan: project
+mesin acuan **menyetel** `PublicationOnly` di 2188 variabelnya, jadi pengalaman di situ
+tidak membuktikan apa pun untuk project kosong. Menyetelnya murah dan menghapus satu
+kemungkinan; gejala variabel yang tidak di-publish **sama persis** dengan gejala
+program yang belum ditugaskan ke task - tag tidak terbaca satu pun.
+
+Path OPC UA-nya `GlobalVars.<nama>`.
 
 ## 4. Program + penugasan task
 
@@ -194,6 +203,7 @@ Sesudah itu baru jalankan bridge + halaman viz — lihat [`../README.md`](../REA
 | gejala | sebabnya hampir selalu |
 |---|---|
 | tag ada, semua diam, `SIM_HEARTBEAT` tetap 0 | program belum ditugaskan ke task |
+| NOL tag terbaca, padahal Studio menunjukkan client tersambung | jalankan `node bridge/bridge.js --list` — dia mencetak isi pohon OPC UA yang SEBENARNYA. Kalau nama SIM_/ROBOT_ tidak ada di situ: belum Transfer to simulator, atau Network Publish belum `Publish Only`. Kalau ada tapi jalurnya beda: ganti `prefix` di `bridge/tags.json` |
 | Build gagal menyebut `BLUE_ROBOT_AXIS1` | yang ditempel FB V1 dari `extract/`, bukan V2 dari `sim/` |
 | `(Import failed)` tanpa nomor baris | validasi dulu ke XSD (validator repo alat) — dia menyebut elemen dan barisnya, Studio tidak |
 | `(DefinitionError)` sesudah import XML | susunan pin FB tidak cocok; catat nama POU-nya, itu bahan buat memperbaiki `gen_xml.js` |

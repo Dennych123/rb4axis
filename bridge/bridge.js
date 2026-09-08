@@ -177,10 +177,26 @@ async function sambung() {
   // Baca sekali dulu: itu yang memberi tahu tipe data dan bentuk (skalar/array)
   // tiap tag. Tipe bisa saja ditebak dari nama tipe IEC, tapi tebakan yang meleset
   // ditolak server sebagai BadTypeMismatch - dan pesannya tidak menyebut tag mana.
+  // Pencocokan bertingkat: jalur PENUH dulu, baru akhiran ".<nama>". Controller yang
+  // pohonnya punya satu lapis tambahan (mis. <NamaController>.GlobalVars.X) bikin
+  // pencocokan kaku gagal untuk SEMUA tag sekaligus - dan gejalanya sama persis
+  // dengan variabel yang memang tidak ada.
+  const akhiran = new Map();
+  for (const [j, id] of peta) {
+    const n = j.split('.').pop();
+    if (!akhiran.has(n)) akhiran.set(n, { id, jalur: j });
+  }
+  const cari = n => {
+    const penuh = peta.get(jalur(n));
+    if (penuh) return penuh;
+    const a = akhiran.get(n);
+    return a ? a.id : null;
+  };
+
   const semua = [...new Set(dibaca.concat([...bolehTulis]))];
   let hilang = [];
   for (const n of semua) {
-    const nodeId = peta.get(jalur(n));
+    const nodeId = cari(n);
     if (!nodeId) { hilang.push(n); continue; }
     try {
       const d = await sesi.read({ nodeId, attributeId: AttributeIds.Value });
@@ -190,10 +206,39 @@ async function sambung() {
     } catch (e) { hilang.push(n); }
   }
   if (hilang.length) {
-    console.log('  tag tidak terbaca (' + hilang.length + '): ' + hilang.join(' '));
-    console.log('  biasanya: tabel variabel global belum ditempel, atau program belum ditugaskan ke task');
+    console.log('  tag tidak terbaca (' + hilang.length + '): ' + hilang.slice(0, 12).join(' ')
+      + (hilang.length > 12 ? ' ...' : ''));
   }
-  if (!Object.keys(meta).length) throw new Error('tidak satu pun tag terbaca di ' + ENDPOINT);
+
+  // Kalau TIDAK SATU PUN ketemu, yang berguna bukan menebak sebabnya melainkan
+  // menunjukkan pohon yang benar-benar ada di server. Tanpa ini, "tag tidak terbaca"
+  // cocok dengan empat sebab yang beda - tabel global belum ditempel, program belum
+  // ditugaskan ke task, variabelnya tidak di-publish, atau jalur simpulnya memang
+  // bukan GlobalVars.<nama> di controller ini - dan menebak salah satu memakan satu
+  // putaran ke Studio per tebakan.
+  if (!Object.keys(meta).length) {
+    const semuaJalur = [...peta.keys()];
+    console.log('');
+    console.log('  TIDAK SATU PUN tag ketemu. Isi pohon OPC UA yang sebenarnya:');
+    console.log('  simpul variabel yang terlihat: ' + semuaJalur.length);
+    const contoh = semuaJalur.filter(j => !/^Server\b/.test(j));
+    console.log('  contoh jalur (di luar cabang Server):');
+    for (const j of contoh.slice(0, 25)) console.log('    ' + j);
+    if (contoh.length > 25) console.log('    ... ' + (contoh.length - 25) + ' lagi');
+    const mirip = semuaJalur.filter(j => /SIM_|ROBOT_|GlobalVars/i.test(j));
+    if (mirip.length) {
+      console.log('  yang namanya mirip punya kita (jalurnya beda dari prefix "'
+        + TAGS.prefix + '"):');
+      for (const j of mirip.slice(0, 10)) console.log('    ' + j);
+      console.log('  -> ganti "prefix" di bridge/tags.json, atau laporkan jalur di atas.');
+    } else {
+      console.log('  tidak ada satu pun nama SIM_/ROBOT_ di pohon. Berarti variabelnya');
+      console.log('  memang belum sampai ke controller: cek Transfer to simulator,');
+      console.log('  kolom Network Publish (harus "Publish Only"), dan penugasan task.');
+    }
+    console.log('');
+    throw new Error('tidak satu pun tag terbaca di ' + ENDPOINT);
+  }
 
   sub = await sesi.createSubscription2({
     requestedPublishingInterval: 50, requestedLifetimeCount: 1000,

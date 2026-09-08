@@ -98,6 +98,29 @@ chk('konstanta ada di kontainer constant="true"', (() => {
 })(), 'kalau constant ditulis sebagai atribut Variable, XSD menolak');
 chk('nilai awal konstanta ikut', /<InitialValue><SimpleValue value="3.141592654" \/>/.test(xml));
 
+// Network Publish: variabel yang tidak di-publish bisa TIDAK MUNCUL sama sekali di
+// server OPC UA simulator, dan gejalanya "tag tidak terbaca" - sama persis dengan
+// gejala program yang belum ditugaskan ke task. Sudah kejadian: 47 tag, nol terbaca.
+// Yang diperiksa di sini TAG-nya, bukan daftar variabelnya: yang tidak dicari bridge
+// boleh saja tidak di-publish.
+// Dicari HANYA di dalam <Instances> - tabel variabel globalnya. Nama yang sama juga
+// muncul di ExternalVars milik program, dan yang itu memang tidak punya (dan tidak
+// boleh punya) atribut publish. Mencari di seluruh berkas menemukan yang salah
+// duluan, dan tesnya melapor "nol ter-publish" padahal semuanya ter-publish.
+const tags = JSON.parse(fs.readFileSync(path.join(ROOT, 'bridge', 'tags.json'), 'utf8'));
+const namaTag = [...new Set(tags.baca.concat(tags.tulis).map(t => t.nama))];
+const instances = xml.slice(xml.indexOf('<Instances>'));
+const takPublish = namaTag.filter(n => {
+  const i = instances.indexOf('<Variable name="' + n + '">');
+  if (i < 0) return true;
+  return !instances.slice(i, instances.indexOf('</Variable>', i)).includes('networkPublish="PublishOnly"');
+});
+chk('tiap tag yang dicari bridge di-publish (' + namaTag.length + ' tag)', takPublish.length === 0,
+    takPublish.join(' ') + ' - tanpa Publish Only, tag itu tidak ada di pohon OPC UA');
+chk('nilai networkPublish sesuai enum XSD',
+    !/networkPublish="(?!PublishOnly|Input|Output|DoNotPublish)/.test(xml),
+    'ejaan label Studio ("Publish Only") BUKAN nilai XML ("PublishOnly")');
+
 // ExternalVars per program: simbol global yang dipakai PRG_SIM_ROBOT harus dideklarasi
 // ULANG di programnya. Yang lupa lolos XSD, lolos import, lalu muncul sebagai
 // variabel merah di Studio - tidak ada yang memberi tahu.
