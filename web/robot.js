@@ -239,7 +239,10 @@ function bikinScene() {
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   var c = sun.shadow.camera;
-  c.left = -1600; c.right = 1600; c.top = 1600; c.bottom = -1600; c.near = 100; c.far = 4200;
+  // Kotak bayangan harus MELIPUTI seluruh sel, bukan cuma lengannya. Rel 3 m dengan
+  // stasiun di +-1400: batas 1600 memotong bayangan mesin di kedua ujung, dan yang
+  // kelihatan cuma "mesin ujung kok kelihatan melayang".
+  c.left = -2200; c.right = 2200; c.top = 2200; c.bottom = -2200; c.near = 100; c.far = 5200;
   scene.add(sun);
   // Lampu isi dari sisi berlawanan. Posisinya DISETEL, bukan lewat translateX:
   // cahaya terarah menyinari dari position ke target, dan light yang posisinya
@@ -311,6 +314,14 @@ function bikinScene() {
     bagian.stasiun.push({ badan: badan, plat: plat });
   }
 
+  // Nama stasiun ditulis di layar. Warna saja tidak cukup: ICC 1 dan ICC 2 warnanya
+  // sama, dan yang perlu dibaca justru "gripper turun di ICC 1 atau ICC 2".
+  for (var t = 0; t < 6; t++) {
+    var lab = labelSprite('');
+    scene.add(lab);
+    bagian.stasiun[t].label = lab;
+  }
+
   // PCB: satu kotak yang berpindah induk secara logis - digambar di gripper waktu
   // dipegang, di stasiun waktu ditinggal, disembunyikan sesudah keluar di WIP OUT.
   bagian.pcb = kotak(1, 1, 1, MAT.pcb);
@@ -343,6 +354,37 @@ function pasangOrbit(cv) {
     e.preventDefault();
     orbit.jarak = Math.max(500, Math.min(6000, orbit.jarak * (1 + e.deltaY * 0.001)));
   }, { passive: false });
+}
+
+// Label teks di scene 3D: tekstur kanvas di atas sprite. three.js inti tidak punya
+// teks sama sekali, dan pemuat font tambahan berarti satu unduhan CDN lagi yang bisa
+// gagal sendiri - untuk enam kata.
+function labelSprite(teks) {
+  var cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 64;
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true
+  }));
+  sp.scale.set(320, 80, 1);
+  sp.userData.cv = cv;
+  sp.userData.teks = null;
+  if (teks) tulisLabel(sp, teks);
+  return sp;
+}
+
+function tulisLabel(sp, teks) {
+  if (sp.userData.teks === teks) return;      // menggambar ulang tiap frame = tekstur baru tiap frame
+  sp.userData.teks = teks;
+  var cv = sp.userData.cv, g = cv.getContext('2d');
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.fillStyle = 'rgba(15,18,22,0.75)';
+  g.fillRect(0, 8, cv.width, 48);
+  g.font = 'bold 30px system-ui, sans-serif';
+  g.fillStyle = '#e5e7eb';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(teks, cv.width / 2, 32);
+  sp.material.map.needsUpdate = true;
 }
 
 function ukur() {
@@ -404,7 +446,12 @@ function gambar() {
   var pcb = st.pcb;
   for (var s = 0; s < bagian.stasiun.length; s++) {
     var b = bagian.stasiun[s], sd = st.stasiun[s];
-    if (!sd) { b.badan.visible = false; b.plat.visible = false; continue; }
+    if (!sd) {
+      b.badan.visible = false;
+      b.plat.visible = false;
+      if (b.label) b.label.visible = false;
+      continue;
+    }
     b.badan.visible = true;
     b.plat.visible = true;
     b.badan.material = (sd.tipe === 1) ? MAT.icc : (sd.tipe === 2) ? MAT.dw : MAT.wip;
@@ -419,6 +466,11 @@ function gambar() {
     b.badan.position.set(sd.x, sd.z - tinggi / 2, sd.y);
     b.plat.scale.set(320, 16, 340);
     b.plat.position.set(sd.x, sd.z, sd.y);
+    if (b.label) {
+      tulisLabel(b.label, sd.nama + (sd.proses > 0 ? '  ' + sd.proses + 's' : ''));
+      b.label.visible = true;
+      b.label.position.set(sd.x, sd.z + 130, sd.y);
+    }
   }
 
   bagian.pcb.scale.set(pcb.panjang, pcb.tebal, pcb.lebar);
