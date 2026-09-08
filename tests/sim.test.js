@@ -39,7 +39,8 @@ chk('tanpa instruksi MC_*', !/\bMC_[A-Za-z]/.test(ST),
 const KATA = new Set([
   'IF', 'THEN', 'ELSE', 'ELSIF', 'END_IF', 'FOR', 'TO', 'DO', 'END_FOR',
   'CASE', 'OF', 'END_CASE', 'AND', 'OR', 'NOT', 'TRUE', 'FALSE',
-  'ABS', 'SQRT', 'SIN', 'COS', 'ATAN', 'ACOS', 'REAL_TO_LREAL', 'LREAL_TO_REAL'
+  'ABS', 'SQRT', 'SIN', 'COS', 'ATAN', 'ACOS', 'MOD',
+  'REAL_TO_LREAL', 'LREAL_TO_REAL', 'UDINT_TO_INT'
 ]);
 
 // Nama pin FB (dipakai sebagai IK2.DONE, FK2.ROBOT_POS_WORLD_OUTPUT, ...) diambil

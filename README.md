@@ -27,6 +27,22 @@ benar, dan satu lagi membuktikan keduanya memang beda di pose yang sama.
 terbukti ter-import. Kuadrannya dibetulkan lewat `ATAN` + koreksi eksplisit, dan port
 JS-nya melakukan hal yang sama supaya hasil PLC dan hasil JS tetap bisa diadu.
 
+**Sel kerja + siklus pick and place.** Rel 3 m, enam stasiun: WIP IN, dua ICC test
+(tinggi), dua DW data writer (rendah), WIP OUT. Siklusnya
+`WIP IN -> ICC (1/2 bergantian) -> DW (1/2 bergantian) -> WIP OUT`, lalu PCB-nya
+hilang dan pencacah naik.
+
+Sekuensnya jalan **di PLC** (`PRG_SIM_ROBOT.st`), bukan di halaman. Halaman cuma
+menggambar, dan pose stasiun yang digambarnya dibaca dari tag PLC (`SIM_ST_*`) -
+bukan dari config. Kalau keduanya sempat berbeda, yang salah kelihatan sebagai
+gripper yang turun di sebelah mesin, bukan tersembunyi di balik dua angka yang
+masing-masing benar. Selama siklus jalan, jog dimatikan: dua sumber perintah untuk
+satu lengan berebut tiap scan.
+
+Tiap fase bentuknya sama - berhenti di ATAS stasiun, turun, gripper bekerja,
+(tunggu mesin), naik. Approach itu yang menjaga lengan tidak mendekat dari samping
+dan menembus badan mesin.
+
 **Gripper dua jari** di ujung tool. Panjangnya masuk TCP: `gen_sim.js` menulis
 `ROBOT_TOOL_Y_LREAL = tool.Y + gripper.panjang` — satu kali, satu tempat.
 
@@ -117,8 +133,14 @@ sim/*.st + *.tsv    --gen_xml.js-->  sim/BlurobotSim.xml   (satu berkas, di-impo
   digambar.
 * **Motion model bukan dinamika.** Sumbu dan jari gripper didorong ke target dengan
   batas kecepatan, tanpa profil trapesium, tanpa massa. Yang dinilai kinematiknya.
-* **Gripper tidak memegang apa-apa.** Jarinya membuka dan menutup, tapi tidak ada
-  benda kerja, tidak ada tabrakan, tidak ada gaya jepit.
+* **PCB-nya penanda, bukan benda fisik.** Dia mengikuti gripper waktu dipegang dan
+  duduk di stasiun waktu ditinggal, tapi tidak ada tabrakan, tidak ada gaya jepit,
+  dan tidak ada yang mencegah gripper menembus mesin kalau pose stasiunnya salah.
+* **Mesin ICC dan DW tidak mensimulasikan apa pun.** Yang ada cuma penundaan
+  (`proses` detik di config) - tidak ada hasil tes, tidak ada data yang ditulis.
+* **Siklusnya butuh PLC.** Waktu offline tombol Start dimatikan, bukan dijalankan di
+  halaman: sekuens kedua di JS berarti dua sumber kebenaran, dan yang di layar bakal
+  terlihat benar justru waktu yang di PLC salah.
 * **Round-trip tidak bisa lebih rapat dari ~5e-6 derajat.** `DEGREE_TO_RAD` dan
   `RAD_TO_DEGREE` di project dipotong 9 angka, jadi perkaliannya `1 - 2.98e-8`.
   Itu lantainya, berapa pun benarnya rumusnya — dan konstanta itu yang dipakai PLC.

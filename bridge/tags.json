@@ -139,6 +139,81 @@
       "komen": "panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz"
     },
     {
+      "nama": "SIM_AUTO",
+      "tipe": "BOOL",
+      "komen": "jalankan siklus otomatis. Jog dimatikan selama ini menyala"
+    },
+    {
+      "nama": "SIM_CYCLE_PHASE",
+      "tipe": "INT",
+      "komen": "0 ambil di WIP IN, 1 ICC, 2 DW, 3 lepas di WIP OUT"
+    },
+    {
+      "nama": "SIM_CYCLE_STEP",
+      "tipe": "INT",
+      "komen": "langkah di dalam fase - buat melihat di mana sekuensnya berhenti"
+    },
+    {
+      "nama": "SIM_CYCLE_COUNT",
+      "tipe": "UDINT",
+      "komen": "jumlah PCB yang sudah selesai"
+    },
+    {
+      "nama": "SIM_TARGET_ST",
+      "tipe": "INT",
+      "komen": "stasiun yang sedang dituju"
+    },
+    {
+      "nama": "SIM_PART_STATE",
+      "tipe": "INT",
+      "komen": "0 tidak ada PCB, 1 dipegang gripper, 2+i ada di stasiun i"
+    },
+    {
+      "nama": "SIM_WAIT",
+      "tipe": "LREAL",
+      "komen": "sisa waktu proses mesin, detik"
+    },
+    {
+      "nama": "SIM_APPROACH",
+      "tipe": "LREAL",
+      "komen": "tinggi berhenti di atas stasiun sebelum turun, mm"
+    },
+    {
+      "nama": "SIM_ST_N",
+      "tipe": "INT",
+      "komen": "jumlah stasiun"
+    },
+    {
+      "nama": "SIM_ST_X",
+      "tipe": "ARRAY[0..5] OF LREAL",
+      "komen": "posisi stasiun di sepanjang rel"
+    },
+    {
+      "nama": "SIM_ST_Y",
+      "tipe": "ARRAY[0..5] OF LREAL",
+      "komen": "jangkauan mendatar tiap stasiun"
+    },
+    {
+      "nama": "SIM_ST_Z",
+      "tipe": "ARRAY[0..5] OF LREAL",
+      "komen": "tinggi permukaan tiap stasiun"
+    },
+    {
+      "nama": "SIM_ST_T",
+      "tipe": "ARRAY[0..5] OF LREAL",
+      "komen": "sudut end-effector tiap stasiun"
+    },
+    {
+      "nama": "SIM_ST_TIPE",
+      "tipe": "ARRAY[0..5] OF INT",
+      "komen": "0 WIP IN, 1 ICC test, 2 DW, 3 WIP OUT"
+    },
+    {
+      "nama": "SIM_ST_PROSES",
+      "tipe": "ARRAY[0..5] OF LREAL",
+      "komen": "lama mesin bekerja, detik"
+    },
+    {
       "nama": "PD1300_000",
       "tipe": "REAL",
       "komen": "external FB"
@@ -294,6 +369,16 @@
       "nama": "SIM_GRIP_VEL",
       "tipe": "LREAL",
       "komen": "kecepatan jari, mm/s"
+    },
+    {
+      "nama": "SIM_AUTO",
+      "tipe": "BOOL",
+      "komen": "jalankan siklus otomatis. Jog dimatikan selama ini menyala"
+    },
+    {
+      "nama": "SIM_APPROACH",
+      "tipe": "LREAL",
+      "komen": "tinggi berhenti di atas stasiun sebelum turun, mm"
     },
     {
       "nama": "PD1300_000",

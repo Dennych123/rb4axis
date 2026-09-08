@@ -54,8 +54,8 @@ IF NOT SIM_INIT_DONE THEN
 	ROBOT_ROBOT_ORG_OFFSET_LREAL[3] := 0.0;
 	ROBOT_ROBOT_ORG_OFFSET_LREAL[4] := 0.0;
 
-	PD1300_000 := -500.0;
-	PD1300_001 := 500.0;
+	PD1300_000 := -1500.0;
+	PD1300_001 := 1500.0;
 	PD1300_002 := -90.0;
 	PD1300_003 := 180.0;
 	PD1300_004 := -150.0;
@@ -80,6 +80,38 @@ IF NOT SIM_INIT_DONE THEN
 
 	SIM_DT := 0.004;
 	SIM_JOG_STEP := 10.0;
+
+	SIM_APPROACH := 140.0;
+	SIM_ST_N := 6;
+	// WIP IN
+	SIM_ST_X[0] := -1400.0;   SIM_ST_Y[0] := 420.0;
+	SIM_ST_Z[0] := 250.0;   SIM_ST_T[0] := 0.0;
+	SIM_ST_TIPE[0] := 0;   SIM_ST_PROSES[0] := 0.0;
+	// ICC 1
+	SIM_ST_X[1] := -700.0;   SIM_ST_Y[1] := 450.0;
+	SIM_ST_Z[1] := 620.0;   SIM_ST_T[1] := 0.0;
+	SIM_ST_TIPE[1] := 1;   SIM_ST_PROSES[1] := 3.0;
+	// ICC 2
+	SIM_ST_X[2] := -300.0;   SIM_ST_Y[2] := 450.0;
+	SIM_ST_Z[2] := 620.0;   SIM_ST_T[2] := 0.0;
+	SIM_ST_TIPE[2] := 1;   SIM_ST_PROSES[2] := 3.0;
+	// DW 1
+	SIM_ST_X[3] := 300.0;   SIM_ST_Y[3] := 430.0;
+	SIM_ST_Z[3] := 300.0;   SIM_ST_T[3] := 0.0;
+	SIM_ST_TIPE[3] := 2;   SIM_ST_PROSES[3] := 2.0;
+	// DW 2
+	SIM_ST_X[4] := 700.0;   SIM_ST_Y[4] := 430.0;
+	SIM_ST_Z[4] := 300.0;   SIM_ST_T[4] := 0.0;
+	SIM_ST_TIPE[4] := 2;   SIM_ST_PROSES[4] := 2.0;
+	// WIP OUT
+	SIM_ST_X[5] := 1400.0;   SIM_ST_Y[5] := 420.0;
+	SIM_ST_Z[5] := 250.0;   SIM_ST_T[5] := 0.0;
+	SIM_ST_TIPE[5] := 3;   SIM_ST_PROSES[5] := 0.0;
+
+	SIM_AUTO := FALSE;
+	SIM_CYCLE_PHASE := 0;
+	SIM_CYCLE_STEP := 0;
+	SIM_PART_STATE := 0;
 	// >>> DIBANGKITKAN
 
 	FOR i := 0 TO 3 DO
@@ -136,11 +168,110 @@ FOR i := 0 TO 3 DO
 END_FOR;
 
 // ------------------------------------------------------------ pose yang diminta
-// POSE_REQ diisi kalau ada permintaan berbasis WORLD (jog world/tool atau move
-// point). NEED_IK menandai bahwa IK perlu dijalankan scan ini.
+// POSE_REQ diisi kalau ada permintaan berbasis WORLD (jog world/tool, move point,
+// atau sekuenser siklus). NEED_IK menandai bahwa IK perlu dijalankan scan ini.
 NEED_IK := FALSE;
 
-IF (AX >= 0) AND (SIM_JOG_MODE = 0) THEN
+// Sekuenser dan jog TIDAK PERNAH jalan berbarengan. Dua sumber perintah untuk satu
+// lengan berarti pose yang ditulis belakangan menang, dan siapa yang menang berubah
+// tiap scan - gerakannya jadi tersendat tanpa ada yang salah di kedua sisinya.
+IF SIM_AUTO THEN
+
+	// ============================================================ siklus otomatis
+	// WIP IN -> ICC (1/2 bergantian) -> DW (1/2 bergantian) -> WIP OUT.
+	//
+	// Tiap fase bentuknya sama: berhenti DI ATAS stasiun, turun, kerjakan gripper,
+	// (tunggu mesin), naik lagi. Approach itu bukan hiasan: tanpa berhenti di atas,
+	// lengan mendekati stasiun dari samping dan menabrak badan mesin - di layar
+	// terlihat sebagai gripper yang menembus kotak.
+	//
+	// Nomor langkah dipublikasikan (SIM_CYCLE_STEP) supaya waktu sekuensnya berhenti,
+	// yang kelihatan langkah mana - bukan cuma "robotnya diam".
+	CASE SIM_CYCLE_STEP OF
+
+		0:	// tentukan stasiun untuk fase ini
+			CASE SIM_CYCLE_PHASE OF
+				0: ST_IDX := 0;
+				1: ST_IDX := 1 + UDINT_TO_INT(SIM_CYCLE_COUNT MOD 2);
+				2: ST_IDX := 3 + UDINT_TO_INT(SIM_CYCLE_COUNT MOD 2);
+			ELSE
+				ST_IDX := 5;
+			END_CASE;
+			SIM_TARGET_ST := ST_IDX;
+			SIM_CYCLE_STEP := 10;
+
+		10:	// ke atas stasiun
+			POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX] + SIM_APPROACH;
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 11;
+
+		11:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 12; END_IF;
+
+		12:	// turun ke permukaan stasiun
+			POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX];
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 13;
+
+		13:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 14; END_IF;
+
+		14:	// di WIP IN gripper MENUTUP (ambil); di stasiun lain MEMBUKA (menaruh)
+			IF SIM_CYCLE_PHASE = 0 THEN SIM_GRIP_CMD := TRUE; ELSE SIM_GRIP_CMD := FALSE; END_IF;
+			SIM_CYCLE_STEP := 15;
+
+		15:	IF (SIM_CYCLE_PHASE = 0) AND SIM_GRIP_CLOSED THEN
+				SIM_PART_STATE := 1;                       // PCB ikut gripper
+				SIM_CYCLE_STEP := 18;
+			ELSIF (SIM_CYCLE_PHASE <> 0) AND SIM_GRIP_OPEN THEN
+				SIM_PART_STATE := 2 + ST_IDX;              // PCB tinggal di stasiun
+				SIM_WAIT := SIM_ST_PROSES[ST_IDX];
+				IF SIM_CYCLE_PHASE = 3 THEN SIM_CYCLE_STEP := 18; ELSE SIM_CYCLE_STEP := 16; END_IF;
+			END_IF;
+
+		16:	// mesin bekerja. Hitung mundur pakai SIM_DT, bukan TON: satu sumber waktu
+			// di seluruh program, dan yang dipakai motion model juga ini.
+			SIM_WAIT := SIM_WAIT - SIM_DT;
+			IF SIM_WAIT <= 0.0 THEN
+				SIM_WAIT := 0.0;
+				SIM_GRIP_CMD := TRUE;                      // ambil lagi
+				SIM_CYCLE_STEP := 17;
+			END_IF;
+
+		17:	IF SIM_GRIP_CLOSED THEN
+				SIM_PART_STATE := 1;
+				SIM_CYCLE_STEP := 18;
+			END_IF;
+
+		18:	// naik lagi ke ketinggian approach
+			POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX] + SIM_APPROACH;
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 19;
+
+		19:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 20; END_IF;
+
+		20:	// fase berikutnya
+			IF SIM_CYCLE_PHASE >= 3 THEN
+				// Di WIP OUT PCB-nya ditinggal, lalu hilang - itu ujung sel ini.
+				SIM_PART_STATE := 0;
+				SIM_CYCLE_COUNT := SIM_CYCLE_COUNT + 1;
+				SIM_CYCLE_PHASE := 0;
+			ELSE
+				SIM_CYCLE_PHASE := SIM_CYCLE_PHASE + 1;
+			END_IF;
+			SIM_CYCLE_STEP := 0;
+	ELSE
+		SIM_CYCLE_STEP := 0;
+	END_CASE;
+
+ELSIF (AX >= 0) AND (SIM_JOG_MODE = 0) THEN
 	// Jog JOINT: tidak lewat IK sama sekali.
 	SIM_JOINT_CMD[AX] := SIM_JOINT_CMD[AX] + DELTA;
 

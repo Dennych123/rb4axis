@@ -9,6 +9,7 @@ TH	LREAL		False	False	theta_EE radian, buat jog mode tool
 STEP_M	LREAL		False	False	langkah motion model satu scan
 D	LREAL		False	False	sisa jarak ke target
 GRIP_TARGET	LREAL		False	False	bukaan gripper yang dituju
+ST_IDX	INT		False	False	indeks stasiun yang sedang dikerjakan sekuenser
 IK_OUT	ARRAY[0..3] OF LREAL		False	False	salinan ROBOT_POS_OUTPUT milik IK2
 FK_WORLD	ARRAY[0..3] OF REAL		False	False	salinan ROBOT_POS_WORLD_OUTPUT milik FK2
 FK_JOINT	ARRAY[0..3] OF REAL		False	False	salinan ROBOT_POS_JOINT_OUTPUT milik FK2

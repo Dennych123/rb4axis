@@ -31,6 +31,10 @@ var st = {
   limit: [false, false, false, false, false, false, false, false],
   beat: 0, err: false, errId: 0, elbowUp: false,
   grip: { pos: 80, stroke: 80, len: 90, cmd: false, vel: 120 },
+  auto: false, fase: 0, langkah: 0, siklus: 0, tujuan: 0, part: 0, tunggu: 0,
+  approach: 140,
+  stasiun: [],                    // {nama,tipe,x,y,z,theta,proses}
+  pcb: { panjang: 120, lebar: 80, tebal: 8 },
   dim: { L1: 400, L2: 300, L3: 250, L4: 100, toolY: 140, toolZ: 0,
          offset: [0, 0, 0, 0, 0], limitv: [-500, 500, -90, 180, -150, 0, -120, 120] },
   vel: [200, 30, 30, 45], velW: [100, 100, 100, 30], step: 10, mode: 0, hold: false
@@ -101,6 +105,26 @@ function stream() {
         st.dim.L1 = v.ROBOT_L1_LREAL; st.dim.L2 = v.ROBOT_L2_LREAL;
         st.dim.L3 = v.ROBOT_L3_LREAL; st.dim.L4 = v.ROBOT_L4_LREAL;
         st.dim.toolY = v.ROBOT_TOOL_Y_LREAL; st.dim.toolZ = v.ROBOT_TOOL_Z_LREAL;
+      }
+      if (v.SIM_AUTO !== undefined) st.auto = !!v.SIM_AUTO;
+      if (v.SIM_CYCLE_PHASE !== undefined) st.fase = v.SIM_CYCLE_PHASE;
+      if (v.SIM_CYCLE_STEP !== undefined) st.langkah = v.SIM_CYCLE_STEP;
+      if (v.SIM_CYCLE_COUNT !== undefined) st.siklus = v.SIM_CYCLE_COUNT;
+      if (v.SIM_TARGET_ST !== undefined) st.tujuan = v.SIM_TARGET_ST;
+      if (v.SIM_PART_STATE !== undefined) st.part = v.SIM_PART_STATE;
+      if (v.SIM_WAIT !== undefined) st.tunggu = v.SIM_WAIT;
+      if (v.SIM_APPROACH) st.approach = v.SIM_APPROACH;
+      // Pose stasiun dibaca dari PLC, bukan dari config: yang digambar harus yang
+      // benar-benar dikejar sekuenser. Kalau keduanya beda, yang salah ketahuan
+      // sebagai gripper yang turun di sebelah mesin - bukan sebagai angka.
+      if (v.SIM_ST_X) {
+        const sx = keArray(v.SIM_ST_X), sy = keArray(v.SIM_ST_Y),
+              sz = keArray(v.SIM_ST_Z), stt = keArray(v.SIM_ST_T),
+              tp = keArray(v.SIM_ST_TIPE), pr = keArray(v.SIM_ST_PROSES);
+        st.stasiun = sx.map((x, i) => ({
+          nama: (st.stasiun[i] && st.stasiun[i].nama) || ('ST' + i),
+          tipe: tp[i] || 0, x: x, y: sy[i], z: sz[i], theta: stt[i] || 0, proses: pr[i] || 0
+        }));
       }
       if (v.SIM_VEL) st.vel = keArray(v.SIM_VEL, 4);
       if (v.SIM_VEL_W) st.velW = keArray(v.SIM_VEL_W, 4);
@@ -270,6 +294,28 @@ function bikinScene() {
   bagian.jari = [kotak(26, 14, 1, MAT.jari), kotak(26, 14, 1, MAT.jari)];
   bagian.jari.forEach(function (m) { scene.add(m); });
 
+  // Enam badan stasiun + pelat atasnya. Dibuat SEKALI dengan ukuran satuan lalu
+  // diskalakan tiap frame - membangun ulang mesh tiap kali pose berubah bikin
+  // pengumpul sampah bekerja terus dan animasinya tersendat.
+  MAT.icc = bahan(0xf59e0b, 0.35, 0.6);
+  MAT.dw = bahan(0x14b8a6, 0.35, 0.6);
+  MAT.wip = bahan(0x64748b, 0.3, 0.7);
+  MAT.plat = bahan(0xcbd5e1, 0.6, 0.4);
+  MAT.pcb = bahan(0x16a34a, 0.1, 0.8);
+  bagian.stasiun = [];
+  for (var s = 0; s < 6; s++) {
+    var badan = kotak(1, 1, 1, MAT.wip);
+    var plat = kotak(1, 1, 1, MAT.plat);
+    scene.add(badan);
+    scene.add(plat);
+    bagian.stasiun.push({ badan: badan, plat: plat });
+  }
+
+  // PCB: satu kotak yang berpindah induk secara logis - digambar di gripper waktu
+  // dipegang, di stasiun waktu ditinggal, disembunyikan sesudah keluar di WIP OUT.
+  bagian.pcb = kotak(1, 1, 1, MAT.pcb);
+  scene.add(bagian.pcb);
+
   // Penanda TCP: bola kecil di ujung jari. Itu titik yang dijanjikan FK/IK, jadi
   // kalau dia tidak berimpit dengan angka world di panel, ada yang salah.
   bagian.tcp = new THREE.Mesh(new THREE.SphereGeometry(11, 16, 12),
@@ -354,6 +400,40 @@ function gambar() {
   for (var j = 0; j < 2; j++) ruasKe(bagian.jari[j], ke3(g.jari[j].atas), ke3(g.jari[j].ujung));
   bagian.tcp.position.copy(ke3(g.tcp));
 
+  // ------------------------------------------------------------ stasiun + PCB
+  var pcb = st.pcb;
+  for (var s = 0; s < bagian.stasiun.length; s++) {
+    var b = bagian.stasiun[s], sd = st.stasiun[s];
+    if (!sd) { b.badan.visible = false; b.plat.visible = false; continue; }
+    b.badan.visible = true;
+    b.plat.visible = true;
+    b.badan.material = (sd.tipe === 1) ? MAT.icc : (sd.tipe === 2) ? MAT.dw : MAT.wip;
+    // Badan berdiri dari lantai sampai permukaan stasiun: tinggi mesin ITU YANG
+    // membedakan ICC dari DW di layar, dan tingginya datang dari pose stasiun -
+    // bukan angka terpisah yang bisa melenceng dari tempat gripper turun.
+    // LANTAI ada di y = -30 (tiga), permukaan stasiun di y = sd.z. Badannya harus
+    // menjangkau keduanya; memakai sd.z sebagai tinggi bikin mesinnya menggantung
+    // 30 mm di atas lantai - kecil, dan justru karena kecil tidak pernah ditanyakan.
+    var tinggi = Math.max(20, sd.z + 30);
+    b.badan.scale.set(300, tinggi, 320);
+    b.badan.position.set(sd.x, sd.z - tinggi / 2, sd.y);
+    b.plat.scale.set(320, 16, 340);
+    b.plat.position.set(sd.x, sd.z, sd.y);
+  }
+
+  bagian.pcb.scale.set(pcb.panjang, pcb.tebal, pcb.lebar);
+  if (st.part === 1) {
+    // Dipegang: duduk tepat di TCP, di antara kedua jari.
+    bagian.pcb.visible = true;
+    bagian.pcb.position.copy(ke3(g.tcp));
+  } else if (st.part >= 2 && st.stasiun[st.part - 2]) {
+    var sp = st.stasiun[st.part - 2];
+    bagian.pcb.visible = true;
+    bagian.pcb.position.set(sp.x, sp.z + pcb.tebal / 2 + 8, sp.y);
+  } else {
+    bagian.pcb.visible = false;
+  }
+
   orbit.tY = d.L1 * 0.8;
   cam.position.set(
     orbit.tX + orbit.jarak * Math.cos(orbit.phi) * Math.sin(orbit.theta),
@@ -428,6 +508,25 @@ function panelTampil() {
   el('beat').textContent = 'heartbeat ' + st.beat
     + (st.err ? '   -   ' + (ERR_TEKS[st.errId] || ('error ' + st.errId)) : '');
 
+  // Siklusnya jalan DI PLC. Waktu offline tombolnya dimatikan, bukan dijalankan
+  // sendiri di halaman: sekuens kedua di JS berarti dua sumber kebenaran, dan yang
+  // di layar bakal terlihat benar justru waktu yang di PLC salah.
+  var ab = el('autoBtn');
+  ab.disabled = !st.plc;
+  ab.textContent = st.auto ? 'Stop' : 'Start';
+  ab.className = st.auto ? '' : 'act';
+  el('autoStat').textContent = !st.plc ? 'butuh PLC - sekuensnya jalan di sana'
+    : (st.auto ? 'jalan' : 'berhenti');
+  el('cFase').textContent = NAMA_FASE[st.fase] || st.fase;
+  el('cStep').textContent = st.langkah;
+  var sd = st.stasiun[st.tujuan];
+  el('cTuju').textContent = sd ? sd.nama : st.tujuan;
+  el('cPart').textContent = st.part === 0 ? 'tidak ada'
+    : st.part === 1 ? 'di gripper'
+    : (st.stasiun[st.part - 2] ? 'di ' + st.stasiun[st.part - 2].nama : 'stasiun ' + (st.part - 2));
+  el('cCount').textContent = st.siklus;
+  el('cWait').textContent = st.tunggu > 0 ? f2(st.tunggu) + ' s' : '-';
+
   el('gripPos').textContent = f2(st.grip.pos) + ' / ' + f2(st.grip.stroke) + ' mm';
   var gb = el('gripBtn');
   gb.textContent = st.grip.cmd ? 'Buka' : 'Tutup';
@@ -445,7 +544,14 @@ function panelTampil() {
     + '<td class="k">stroke</td><td class="v">' + f2(st.grip.stroke) + '</td></tr>';
 }
 
+var NAMA_FASE = ['ambil di WIP IN', 'ICC test', 'DW write', 'lepas di WIP OUT'];
+
 function pasangKontrol() {
+  el('autoBtn').onclick = function () {
+    st.auto = !st.auto;
+    kirim('SIM_AUTO', st.auto);
+    panelTampil();
+  };
   el('mode').onchange = function () {
     st.mode = +this.value;
     kirim('SIM_JOG_MODE', st.mode);
@@ -498,12 +604,22 @@ function muatConfig() {
     st.vel = c.jog.sumbu; st.velW = c.jog.world; st.step = c.jog.langkah;
     st.grip = { pos: c.gripper.bukaan_awal, stroke: c.gripper.stroke, len: c.gripper.panjang,
                 cmd: false, vel: c.gripper.kecepatan };
+    if (c.siklus) {
+      st.stasiun = c.siklus.stasiun.map(x => ({ nama: x.nama, tipe: x.tipe, x: x.x, y: x.y,
+                                                z: x.z, theta: x.theta, proses: x.proses }));
+      st.approach = c.siklus.approach;
+      st.pcb = c.siklus.pcb;
+    }
     st.joint = c.home.sumbu.slice(); st.cmd = c.home.sumbu.slice();
     el('step').value = st.step;
     // Kamera diatur dari UKURAN robot, bukan angka tetap: ganti L1..L4 di config
     // jadi dua kali lipat, dan angka tetap bikin lengannya keluar layar.
+    // Kamera mundur sejauh yang PALING BESAR: jangkauan lengan atau panjang rel.
+    // Sel 3 meter tidak muat di jarak yang pas buat lengan 1 meter, dan yang di luar
+    // layar tidak kelihatan hilang - cuma tidak ada.
     var jangkau = c.link.L1 + c.link.L2 + c.link.L3 + c.link.L4 + c.gripper.panjang;
-    orbit.jarak = jangkau * 2.1;
+    var rel = c.limit.PD1300_001 - c.limit.PD1300_000;
+    orbit.jarak = Math.max(jangkau * 2.1, rel * 1.15);
   }).catch(function () { /* bridge mati: pakai bawaan di st */ });
 }
 

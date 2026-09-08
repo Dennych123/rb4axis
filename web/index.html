@@ -62,6 +62,26 @@
   <div id="status" class="off">memeriksa bridge...</div>
 
   <fieldset>
+    <legend>Siklus otomatis</legend>
+    <div class="jogrow">
+      <button id="autoBtn" class="act">Start</button>
+      <span id="autoStat">berhenti</span>
+    </div>
+    <table>
+      <tr><td class="k">fase</td><td class="v" id="cFase">-</td>
+          <td class="k">langkah</td><td class="v" id="cStep">-</td></tr>
+      <tr><td class="k">tujuan</td><td class="v" id="cTuju">-</td>
+          <td class="k">PCB</td><td class="v" id="cPart">-</td></tr>
+      <tr><td class="k">selesai</td><td class="v" id="cCount">-</td>
+          <td class="k">proses</td><td class="v" id="cWait">-</td></tr>
+    </table>
+    <div class="hint">WIP IN &rarr; ICC (1/2 bergantian) &rarr; DW (1/2 bergantian) &rarr; WIP OUT,
+      lalu PCB-nya hilang. Sekuensnya jalan di PLC; halaman cuma menggambarnya.
+      Selama Start, jog dimatikan &mdash; dua sumber perintah untuk satu lengan
+      selalu berebut.</div>
+  </fieldset>
+
+  <fieldset>
     <legend>Jog</legend>
     <div class="jogrow">
       <span class="lbl">mode</span>

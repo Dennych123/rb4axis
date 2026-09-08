@@ -30,6 +30,21 @@ SIM_GRIP_VEL	LREAL			False	False	Publish Only	kecepatan jari, mm/s
 SIM_GRIP_OPEN	BOOL			False	False	Publish Only	jari sudah terbuka penuh
 SIM_GRIP_CLOSED	BOOL			False	False	Publish Only	jari sudah menutup rapat
 SIM_GRIP_LEN	LREAL			False	False	Publish Only	panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz
+SIM_AUTO	BOOL			False	False	Publish Only	jalankan siklus otomatis. Jog dimatikan selama ini menyala
+SIM_CYCLE_PHASE	INT			False	False	Publish Only	0 ambil di WIP IN, 1 ICC, 2 DW, 3 lepas di WIP OUT
+SIM_CYCLE_STEP	INT			False	False	Publish Only	langkah di dalam fase - buat melihat di mana sekuensnya berhenti
+SIM_CYCLE_COUNT	UDINT			False	False	Publish Only	jumlah PCB yang sudah selesai
+SIM_TARGET_ST	INT			False	False	Publish Only	stasiun yang sedang dituju
+SIM_PART_STATE	INT			False	False	Publish Only	0 tidak ada PCB, 1 dipegang gripper, 2+i ada di stasiun i
+SIM_WAIT	LREAL			False	False	Publish Only	sisa waktu proses mesin, detik
+SIM_APPROACH	LREAL			False	False	Publish Only	tinggi berhenti di atas stasiun sebelum turun, mm
+SIM_ST_N	INT			False	False	Publish Only	jumlah stasiun
+SIM_ST_X	ARRAY[0..5] OF LREAL			False	False	Publish Only	posisi stasiun di sepanjang rel
+SIM_ST_Y	ARRAY[0..5] OF LREAL			False	False	Publish Only	jangkauan mendatar tiap stasiun
+SIM_ST_Z	ARRAY[0..5] OF LREAL			False	False	Publish Only	tinggi permukaan tiap stasiun
+SIM_ST_T	ARRAY[0..5] OF LREAL			False	False	Publish Only	sudut end-effector tiap stasiun
+SIM_ST_TIPE	ARRAY[0..5] OF INT			False	False	Publish Only	0 WIP IN, 1 ICC test, 2 DW, 3 WIP OUT
+SIM_ST_PROSES	ARRAY[0..5] OF LREAL			False	False	Publish Only	lama mesin bekerja, detik
 DEGREE_TO_RAD	LREAL	0.017453292		False	True	Do not publish	
 PD1300_000	REAL			True	False	Publish Only	
 PD1300_001	REAL			True	False	Publish Only	

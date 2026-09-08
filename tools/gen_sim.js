@@ -82,7 +82,26 @@ const GLOBAL_SIM = [
   ['SIM_GRIP_VEL', 'LREAL', 'RW', 'kecepatan jari, mm/s'],
   ['SIM_GRIP_OPEN', 'BOOL', 'R', 'jari sudah terbuka penuh'],
   ['SIM_GRIP_CLOSED', 'BOOL', 'R', 'jari sudah menutup rapat'],
-  ['SIM_GRIP_LEN', 'LREAL', 'R', 'panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz']
+  ['SIM_GRIP_LEN', 'LREAL', 'R', 'panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz'],
+
+  // ---- sel kerja: enam stasiun + siklus pick and place
+  // Pose stasiun ikut dipublikasikan supaya halaman menggambar apa yang PLC pegang,
+  // bukan salinan kedua dari config yang bebas melenceng.
+  ['SIM_AUTO', 'BOOL', 'RW', 'jalankan siklus otomatis. Jog dimatikan selama ini menyala'],
+  ['SIM_CYCLE_PHASE', 'INT', 'R', '0 ambil di WIP IN, 1 ICC, 2 DW, 3 lepas di WIP OUT'],
+  ['SIM_CYCLE_STEP', 'INT', 'R', 'langkah di dalam fase - buat melihat di mana sekuensnya berhenti'],
+  ['SIM_CYCLE_COUNT', 'UDINT', 'R', 'jumlah PCB yang sudah selesai'],
+  ['SIM_TARGET_ST', 'INT', 'R', 'stasiun yang sedang dituju'],
+  ['SIM_PART_STATE', 'INT', 'R', '0 tidak ada PCB, 1 dipegang gripper, 2+i ada di stasiun i'],
+  ['SIM_WAIT', 'LREAL', 'R', 'sisa waktu proses mesin, detik'],
+  ['SIM_APPROACH', 'LREAL', 'RW', 'tinggi berhenti di atas stasiun sebelum turun, mm'],
+  ['SIM_ST_N', 'INT', 'R', 'jumlah stasiun'],
+  ['SIM_ST_X', 'ARRAY[0..5] OF LREAL', 'R', 'posisi stasiun di sepanjang rel'],
+  ['SIM_ST_Y', 'ARRAY[0..5] OF LREAL', 'R', 'jangkauan mendatar tiap stasiun'],
+  ['SIM_ST_Z', 'ARRAY[0..5] OF LREAL', 'R', 'tinggi permukaan tiap stasiun'],
+  ['SIM_ST_T', 'ARRAY[0..5] OF LREAL', 'R', 'sudut end-effector tiap stasiun'],
+  ['SIM_ST_TIPE', 'ARRAY[0..5] OF INT', 'R', '0 WIP IN, 1 ICC test, 2 DW, 3 WIP OUT'],
+  ['SIM_ST_PROSES', 'ARRAY[0..5] OF LREAL', 'R', 'lama mesin bekerja, detik']
 ];
 
 // ------------------------------------------------------ variabel lokal program
@@ -106,6 +125,7 @@ const LOKAL = [
   ['STEP_M', 'LREAL', 'langkah motion model satu scan'],
   ['D', 'LREAL', 'sisa jarak ke target'],
   ['GRIP_TARGET', 'LREAL', 'bukaan gripper yang dituju'],
+  ['ST_IDX', 'INT', 'indeks stasiun yang sedang dikerjakan sekuenser'],
   // Penampung keluaran FB. Studio MENOLAK mengindeks array milik instance FB
   // ("Cannot use an element of array or a member of structure for the reference of
   // function block instance variables"), jadi arraynya disalin UTUH dulu ke sini.
@@ -208,6 +228,23 @@ function blokInit(cfg) {
   L.push('');
   L.push(t('SIM_DT := ' + lreal(cfg.task.periode_ms / 1000) + ';'));
   L.push(t('SIM_JOG_STEP := ' + lreal(cfg.jog.langkah) + ';'));
+  L.push('');
+
+  // Tabel stasiun. Ditulis satu per satu dan bukan lewat FOR: angkanya datang dari
+  // config, dan blok init memang tempat satu-satunya angka itu mendarat di PLC.
+  L.push(t('SIM_APPROACH := ' + lreal(cfg.siklus.approach) + ';'));
+  L.push(t('SIM_ST_N := ' + cfg.siklus.stasiun.length + ';'));
+  cfg.siklus.stasiun.forEach((s, i) => {
+    L.push(t('// ' + s.nama));
+    L.push(t('SIM_ST_X[' + i + '] := ' + lreal(s.x) + ';   SIM_ST_Y[' + i + '] := ' + lreal(s.y) + ';'));
+    L.push(t('SIM_ST_Z[' + i + '] := ' + lreal(s.z) + ';   SIM_ST_T[' + i + '] := ' + lreal(s.theta) + ';'));
+    L.push(t('SIM_ST_TIPE[' + i + '] := ' + s.tipe + ';   SIM_ST_PROSES[' + i + '] := ' + lreal(s.proses) + ';'));
+  });
+  L.push('');
+  L.push(t('SIM_AUTO := FALSE;'));
+  L.push(t('SIM_CYCLE_PHASE := 0;'));
+  L.push(t('SIM_CYCLE_STEP := 0;'));
+  L.push(t('SIM_PART_STATE := 0;'));
   return L;
 }
 

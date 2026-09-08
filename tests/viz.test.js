@@ -142,6 +142,36 @@ const robotSrc = fs.readFileSync(path.join(__dirname, '..', 'web', 'robot.js'), 
 chk('robot.js memakai keArray, bukan Array.from, buat nilai dari PLC',
     !/Array\.from\(v[.[]/.test(robotSrc), 'Array.from(v.SIM_...) mengembalikan [] untuk objek');
 
+// ------------------------------------------------ tiap pose stasiun harus terjangkau
+// Stasiun yang tidak terjangkau baru ketahuan waktu sekuensnya berhenti di langkah 11
+// dan robotnya diam - tanpa galat, karena IK memang menolak dengan benar. Diperiksa
+// di sini: pose permukaan DAN pose approach, keduanya, lewat IK yang sama dengan PLC.
+const siklus = raw.siklus;
+chk('config punya enam stasiun', siklus.stasiun.length === 6, siklus.stasiun.map(s => s.nama).join(' '));
+const takTerjangkau = [];
+for (const s of siklus.stasiun) {
+  for (const [label, z] of [['pose', s.z], ['approach', s.z + siklus.approach]]) {
+    const ik = K.inverseKinematicV2([s.x, s.y, z, s.theta], cfg, false);
+    if (!ik.done) takTerjangkau.push(s.nama + ' ' + label + ' (errId ' + ik.errorId + ')');
+  }
+}
+chk('12 pose stasiun+approach terjangkau dan di dalam soft limit', takTerjangkau.length === 0,
+    takTerjangkau.join(', '));
+chk('stasiun ada di dalam rel', siklus.stasiun.every(s =>
+      s.x > raw.limit.PD1300_000 && s.x < raw.limit.PD1300_001),
+    'rel ' + raw.limit.PD1300_000 + '..' + raw.limit.PD1300_001);
+chk('ICC dan DW beda tinggi', (() => {
+  const icc = siklus.stasiun.filter(s => s.tipe === 1).map(s => s.z);
+  const dw = siklus.stasiun.filter(s => s.tipe === 2).map(s => s.z);
+  return icc.length === 2 && dw.length === 2 && Math.abs(icc[0] - dw[0]) > 50;
+})(), 'ICC z=' + siklus.stasiun.filter(s => s.tipe === 1)[0].z
+    + ' DW z=' + siklus.stasiun.filter(s => s.tipe === 2)[0].z);
+
+// Halaman menggambar stasiun dari tag PLC, bukan dari config: kalau keduanya beda,
+// yang salah harus kelihatan sebagai gripper turun di sebelah mesin - bukan tersembunyi
+// karena gambar dan sekuens membaca angka yang berbeda.
+chk('robot.js membaca pose stasiun dari tag PLC', /v\.SIM_ST_X/.test(robot));
+
 // --------------------------------------------- panjang ruas = jarak, bukan kelipatan
 // SUDAH KEJADIAN: `kotak(58, 1, 46)` menaruh tebal 1 di y dan kedalaman 46 di z,
 // sementara ruasKe menyetel scale.z = panjang. Hasilnya tiap ruas tergambar 46 KALI

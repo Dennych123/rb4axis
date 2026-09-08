@@ -668,6 +668,81 @@ END_IF;</ST>
           <Variable name="SIM_GRIP_LEN">
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
+          <Variable name="SIM_AUTO">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_CYCLE_PHASE">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_CYCLE_STEP">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_CYCLE_COUNT">
+            <Type><TypeName>UDINT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_TARGET_ST">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_PART_STATE">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_WAIT">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_APPROACH">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ST_N">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ST_X">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_Y">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_Z">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_T">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_TIPE">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>INT</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_PROSES">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
           <Variable name="DEGREE_TO_RAD">
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
@@ -771,6 +846,10 @@ END_IF;</ST>
           <Variable name="GRIP_TARGET">
             <Documentation xsi:type="SimpleText">bukaan gripper yang dituju</Documentation>
             <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ST_IDX">
+            <Documentation xsi:type="SimpleText">indeks stasiun yang sedang dikerjakan sekuenser</Documentation>
+            <Type><TypeName>INT</TypeName></Type>
           </Variable>
           <Variable name="IK_OUT">
             <Documentation xsi:type="SimpleText">salinan ROBOT_POS_OUTPUT milik IK2</Documentation>
@@ -910,8 +989,8 @@ IF NOT SIM_INIT_DONE THEN
 	ROBOT_ROBOT_ORG_OFFSET_LREAL[3] := 0.0;
 	ROBOT_ROBOT_ORG_OFFSET_LREAL[4] := 0.0;
 
-	PD1300_000 := -500.0;
-	PD1300_001 := 500.0;
+	PD1300_000 := -1500.0;
+	PD1300_001 := 1500.0;
 	PD1300_002 := -90.0;
 	PD1300_003 := 180.0;
 	PD1300_004 := -150.0;
@@ -936,6 +1015,38 @@ IF NOT SIM_INIT_DONE THEN
 
 	SIM_DT := 0.004;
 	SIM_JOG_STEP := 10.0;
+
+	SIM_APPROACH := 140.0;
+	SIM_ST_N := 6;
+	// WIP IN
+	SIM_ST_X[0] := -1400.0;   SIM_ST_Y[0] := 420.0;
+	SIM_ST_Z[0] := 250.0;   SIM_ST_T[0] := 0.0;
+	SIM_ST_TIPE[0] := 0;   SIM_ST_PROSES[0] := 0.0;
+	// ICC 1
+	SIM_ST_X[1] := -700.0;   SIM_ST_Y[1] := 450.0;
+	SIM_ST_Z[1] := 620.0;   SIM_ST_T[1] := 0.0;
+	SIM_ST_TIPE[1] := 1;   SIM_ST_PROSES[1] := 3.0;
+	// ICC 2
+	SIM_ST_X[2] := -300.0;   SIM_ST_Y[2] := 450.0;
+	SIM_ST_Z[2] := 620.0;   SIM_ST_T[2] := 0.0;
+	SIM_ST_TIPE[2] := 1;   SIM_ST_PROSES[2] := 3.0;
+	// DW 1
+	SIM_ST_X[3] := 300.0;   SIM_ST_Y[3] := 430.0;
+	SIM_ST_Z[3] := 300.0;   SIM_ST_T[3] := 0.0;
+	SIM_ST_TIPE[3] := 2;   SIM_ST_PROSES[3] := 2.0;
+	// DW 2
+	SIM_ST_X[4] := 700.0;   SIM_ST_Y[4] := 430.0;
+	SIM_ST_Z[4] := 300.0;   SIM_ST_T[4] := 0.0;
+	SIM_ST_TIPE[4] := 2;   SIM_ST_PROSES[4] := 2.0;
+	// WIP OUT
+	SIM_ST_X[5] := 1400.0;   SIM_ST_Y[5] := 420.0;
+	SIM_ST_Z[5] := 250.0;   SIM_ST_T[5] := 0.0;
+	SIM_ST_TIPE[5] := 3;   SIM_ST_PROSES[5] := 0.0;
+
+	SIM_AUTO := FALSE;
+	SIM_CYCLE_PHASE := 0;
+	SIM_CYCLE_STEP := 0;
+	SIM_PART_STATE := 0;
 	// &gt;&gt;&gt; DIBANGKITKAN
 
 	FOR i := 0 TO 3 DO
@@ -992,11 +1103,110 @@ FOR i := 0 TO 3 DO
 END_FOR;
 
 // ------------------------------------------------------------ pose yang diminta
-// POSE_REQ diisi kalau ada permintaan berbasis WORLD (jog world/tool atau move
-// point). NEED_IK menandai bahwa IK perlu dijalankan scan ini.
+// POSE_REQ diisi kalau ada permintaan berbasis WORLD (jog world/tool, move point,
+// atau sekuenser siklus). NEED_IK menandai bahwa IK perlu dijalankan scan ini.
 NEED_IK := FALSE;
 
-IF (AX &gt;= 0) AND (SIM_JOG_MODE = 0) THEN
+// Sekuenser dan jog TIDAK PERNAH jalan berbarengan. Dua sumber perintah untuk satu
+// lengan berarti pose yang ditulis belakangan menang, dan siapa yang menang berubah
+// tiap scan - gerakannya jadi tersendat tanpa ada yang salah di kedua sisinya.
+IF SIM_AUTO THEN
+
+	// ============================================================ siklus otomatis
+	// WIP IN -&gt; ICC (1/2 bergantian) -&gt; DW (1/2 bergantian) -&gt; WIP OUT.
+	//
+	// Tiap fase bentuknya sama: berhenti DI ATAS stasiun, turun, kerjakan gripper,
+	// (tunggu mesin), naik lagi. Approach itu bukan hiasan: tanpa berhenti di atas,
+	// lengan mendekati stasiun dari samping dan menabrak badan mesin - di layar
+	// terlihat sebagai gripper yang menembus kotak.
+	//
+	// Nomor langkah dipublikasikan (SIM_CYCLE_STEP) supaya waktu sekuensnya berhenti,
+	// yang kelihatan langkah mana - bukan cuma &quot;robotnya diam&quot;.
+	CASE SIM_CYCLE_STEP OF
+
+		0:	// tentukan stasiun untuk fase ini
+			CASE SIM_CYCLE_PHASE OF
+				0: ST_IDX := 0;
+				1: ST_IDX := 1 + UDINT_TO_INT(SIM_CYCLE_COUNT MOD 2);
+				2: ST_IDX := 3 + UDINT_TO_INT(SIM_CYCLE_COUNT MOD 2);
+			ELSE
+				ST_IDX := 5;
+			END_CASE;
+			SIM_TARGET_ST := ST_IDX;
+			SIM_CYCLE_STEP := 10;
+
+		10:	// ke atas stasiun
+			POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX] + SIM_APPROACH;
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 11;
+
+		11:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 12; END_IF;
+
+		12:	// turun ke permukaan stasiun
+			POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX];
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 13;
+
+		13:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 14; END_IF;
+
+		14:	// di WIP IN gripper MENUTUP (ambil); di stasiun lain MEMBUKA (menaruh)
+			IF SIM_CYCLE_PHASE = 0 THEN SIM_GRIP_CMD := TRUE; ELSE SIM_GRIP_CMD := FALSE; END_IF;
+			SIM_CYCLE_STEP := 15;
+
+		15:	IF (SIM_CYCLE_PHASE = 0) AND SIM_GRIP_CLOSED THEN
+				SIM_PART_STATE := 1;                       // PCB ikut gripper
+				SIM_CYCLE_STEP := 18;
+			ELSIF (SIM_CYCLE_PHASE &lt;&gt; 0) AND SIM_GRIP_OPEN THEN
+				SIM_PART_STATE := 2 + ST_IDX;              // PCB tinggal di stasiun
+				SIM_WAIT := SIM_ST_PROSES[ST_IDX];
+				IF SIM_CYCLE_PHASE = 3 THEN SIM_CYCLE_STEP := 18; ELSE SIM_CYCLE_STEP := 16; END_IF;
+			END_IF;
+
+		16:	// mesin bekerja. Hitung mundur pakai SIM_DT, bukan TON: satu sumber waktu
+			// di seluruh program, dan yang dipakai motion model juga ini.
+			SIM_WAIT := SIM_WAIT - SIM_DT;
+			IF SIM_WAIT &lt;= 0.0 THEN
+				SIM_WAIT := 0.0;
+				SIM_GRIP_CMD := TRUE;                      // ambil lagi
+				SIM_CYCLE_STEP := 17;
+			END_IF;
+
+		17:	IF SIM_GRIP_CLOSED THEN
+				SIM_PART_STATE := 1;
+				SIM_CYCLE_STEP := 18;
+			END_IF;
+
+		18:	// naik lagi ke ketinggian approach
+			POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX] + SIM_APPROACH;
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 19;
+
+		19:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 20; END_IF;
+
+		20:	// fase berikutnya
+			IF SIM_CYCLE_PHASE &gt;= 3 THEN
+				// Di WIP OUT PCB-nya ditinggal, lalu hilang - itu ujung sel ini.
+				SIM_PART_STATE := 0;
+				SIM_CYCLE_COUNT := SIM_CYCLE_COUNT + 1;
+				SIM_CYCLE_PHASE := 0;
+			ELSE
+				SIM_CYCLE_PHASE := SIM_CYCLE_PHASE + 1;
+			END_IF;
+			SIM_CYCLE_STEP := 0;
+	ELSE
+		SIM_CYCLE_STEP := 0;
+	END_CASE;
+
+ELSIF (AX &gt;= 0) AND (SIM_JOG_MODE = 0) THEN
 	// Jog JOINT: tidak lewat IK sama sekali.
 	SIM_JOINT_CMD[AX] := SIM_JOINT_CMD[AX] + DELTA;
 
@@ -1349,6 +1559,111 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
             <Documentation xsi:type="SimpleText">panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz</Documentation>
             <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_AUTO">
+            <Documentation xsi:type="SimpleText">jalankan siklus otomatis. Jog dimatikan selama ini menyala</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_CYCLE_PHASE">
+            <Documentation xsi:type="SimpleText">0 ambil di WIP IN, 1 ICC, 2 DW, 3 lepas di WIP OUT</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_CYCLE_STEP">
+            <Documentation xsi:type="SimpleText">langkah di dalam fase - buat melihat di mana sekuensnya berhenti</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_CYCLE_COUNT">
+            <Documentation xsi:type="SimpleText">jumlah PCB yang sudah selesai</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>UDINT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_TARGET_ST">
+            <Documentation xsi:type="SimpleText">stasiun yang sedang dituju</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_PART_STATE">
+            <Documentation xsi:type="SimpleText">0 tidak ada PCB, 1 dipegang gripper, 2+i ada di stasiun i</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_WAIT">
+            <Documentation xsi:type="SimpleText">sisa waktu proses mesin, detik</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_APPROACH">
+            <Documentation xsi:type="SimpleText">tinggi berhenti di atas stasiun sebelum turun, mm</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ST_N">
+            <Documentation xsi:type="SimpleText">jumlah stasiun</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ST_X">
+            <Documentation xsi:type="SimpleText">posisi stasiun di sepanjang rel</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_Y">
+            <Documentation xsi:type="SimpleText">jangkauan mendatar tiap stasiun</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_Z">
+            <Documentation xsi:type="SimpleText">tinggi permukaan tiap stasiun</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_T">
+            <Documentation xsi:type="SimpleText">sudut end-effector tiap stasiun</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_TIPE">
+            <Documentation xsi:type="SimpleText">0 WIP IN, 1 ICC test, 2 DW, 3 WIP OUT</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>INT</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ST_PROSES">
+            <Documentation xsi:type="SimpleText">lama mesin bekerja, detik</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
           </Variable>
           <Variable name="ROBOT_L1_LREAL">
             <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
