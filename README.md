@@ -43,6 +43,16 @@ node blurobot/tests/run.js         # 5 suite, tanpa Studio dan tanpa PLC
 node blurobot/bridge/bridge.js     # OPC UA <-> halaman, http://127.0.0.1:7656
 ```
 
+Bridge butuh paket OPC UA - dipasang sekali, dan itu satu-satunya dependensi di
+seluruh repo ini:
+
+```bash
+cd blurobot/bridge && npm install
+node bridge.js --list SIM_                       # periksa simulator dari terminal
+node bridge.js --write SIM_JOG_MODE=0            # tekan tombol dari luar
+node bridge.js --watch SIM_JOINT_POS             # pantau perubahan
+```
+
 Langkah di Studio yang tidak bisa diotomatiskan ada di [`sim/SETUP.md`](sim/SETUP.md).
 
 ## Alurnya
@@ -87,7 +97,8 @@ sim/*.st + *.tsv    --gen_xml.js-->  sim/BlurobotSim.xml   (satu berkas, di-impo
 | `sim/*_V2.st` + `*.vars.tsv` | FB kinematik yang sudah dibetulkan + tabel variabelnya |
 | `sim/PRG_SIM_ROBOT.st` | program sim: jog, move point, motion model, gripper, FK tiap scan |
 | `sim/SETUP.md` | langkah Studio sampai OPC UA hidup, plus tabel gejala→sebab |
-| `bridge/bridge.js` | satu sesi OPC UA, SSE ke halaman, POST buat menulis |
+| `bridge/bridge.js` | satu sesi OPC UA, SSE ke halaman, POST buat menulis, plus mode CLI (`--list`/`--write`/`--watch`) yang memakai sesi yang sama |
+| `bridge/package.json` | satu-satunya dependensi di repo ini; sisanya jalan tanpa `npm install` |
 | `web/kin.js` | port JS FK/IK + `chainPoints()`. Dipakai tes DAN mode offline halaman |
 | `web/index.html`, `web/robot.js` | viz 3D + panel jog/move |
 | `tests/*.test.js` | 5 suite: extract, kin (V1 + V2), sim, viz (rantai + gripper), xml (bentuk + XSD resmi) |

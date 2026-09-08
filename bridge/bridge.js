@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 // Jembatan simulator NX <-> halaman viz 3D.
 //
-//   node blurobot/bridge/bridge.js                       lalu buka http://127.0.0.1:7656
-//   node blurobot/bridge/bridge.js --endpoint opc.tcp://127.0.0.1:4840
-//   node blurobot/bridge/bridge.js --user <nama> --pass <sandi>    kalau anonymous Prohibit
+//   node bridge/bridge.js                        lalu buka http://127.0.0.1:7656
+//   node bridge/bridge.js --endpoint opc.tcp://127.0.0.1:4840
+//   node bridge/bridge.js --user <nama> --pass <sandi>   kalau anonymous Prohibit
+//
+// Tanpa halaman, buat memeriksa simulator dari terminal (sesi dan peta tag YANG SAMA):
+//
+//   node bridge/bridge.js --list SIM_
+//   node bridge/bridge.js --write SIM_JOG_MODE=0 "SIM_JOG_P[1]=true"
+//   node bridge/bridge.js --watch SIM_JOINT_POS SIM_WORLD_POS
+//
+// Paketnya dipasang sekali:  cd bridge && npm install
 //
 // Satu sesi OPC UA dipegang proses ini dan dipakai bersama semua tab yang terbuka.
 // Sesi baru tiap klik berarti menunggu handshake berkali-kali dan simulator melihat
@@ -14,23 +22,49 @@
 // tidak memuat `ws`; menulis framing WebSocket sendiri cuma buat aliran SATU ARAH
 // itu kerja tambahan tanpa imbalan. Perintah dari halaman lewat POST biasa.
 //
-// Dependensi diambil dari tools/opcua/node_modules - repo utama tetap tanpa
-// dependensi, dan tidak ada node_modules kedua yang harus dipasang.
+// Dependensinya cuma milik folder ini. Seluruh isi repo yang lain - generator, tes,
+// halaman viz - jalan tanpa satu pun paket luar, dan itu yang dijaga: `npm install`
+// yang gagal di mesin orang tidak boleh mematikan alat yang tidak membutuhkannya.
 'use strict';
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
-const UA = path.join(__dirname, '..', '..', 'tools', 'opcua', 'node_modules');
+// Paket OPC UA dicari di DUA tempat, dan urutannya penting:
+//
+//   1. node_modules milik folder ini (`cd bridge && npm install`). Repo rb4axis bisa
+//      di-klon sendirian, dan waktu itu ini satu-satunya yang ada.
+//   2. tools/opcua/node_modules milik repo alat sysmac-generator, kalau repo ini
+//      kebetulan tinggal di dalamnya - supaya tidak perlu memasang paket yang sama
+//      dua kali di mesin yang sudah punya.
+//
+// Dulu cuma nomor 2 yang dicoba, dan di klon berdiri sendiri hasilnya
+// "Cannot find module" dari kedalaman loader Node - pesan yang tidak menyebut sebab
+// maupun jalan keluarnya.
+const UA_ALT = path.join(__dirname, '..', '..', 'tools', 'opcua', 'node_modules');
 let OPCUAClient, AttributeIds, MessageSecurityMode, SecurityPolicy, TimestampsToReturn, OPCUACertificateManager;
-try {
-  ({ OPCUAClient, AttributeIds, MessageSecurityMode, SecurityPolicy, TimestampsToReturn }
-    = require(path.join(UA, 'node-opcua-client')));
-  // Kelasnya ada di paketnya sendiri, BUKAN diekspor ulang node-opcua-client.
-  ({ OPCUACertificateManager } = require(path.join(UA, 'node-opcua-certificate-manager')));
-} catch (e) {
-  console.error('GAGAL: paket OPC UA tidak ketemu di ' + UA);
-  console.error('       pasang dulu:  cd tools/opcua && npm install');
+function muatUa() {
+  const coba = [
+    n => require(n),                                   // node_modules folder ini
+    n => require(path.join(UA_ALT, n))                 // punya repo alat
+  ];
+  for (const cara of coba) {
+    try {
+      ({ OPCUAClient, AttributeIds, MessageSecurityMode, SecurityPolicy, TimestampsToReturn }
+        = cara('node-opcua-client'));
+      // Kelasnya ada di paketnya sendiri, BUKAN diekspor ulang node-opcua-client.
+      ({ OPCUACertificateManager } = cara('node-opcua-certificate-manager'));
+      return true;
+    } catch (e) { /* coba tempat berikutnya */ }
+  }
+  return false;
+}
+if (!muatUa()) {
+  console.error('GAGAL: paket OPC UA belum terpasang.');
+  console.error('       pasang sekali:   cd blurobot/bridge  &&  npm install');
+  console.error('       (butuh internet; ~120 paket, semuanya cuma dipakai bridge ini)');
+  console.error('       Dicari di: ' + path.join(__dirname, 'node_modules'));
+  console.error('              dan: ' + UA_ALT);
   process.exit(2);
 }
 
@@ -110,10 +144,13 @@ async function petaNode() {
 async function sambung() {
   await putus();
   plc.percobaan++;
-  // Sertifikat di folder tetap. Dibiarkan implisit, node-opcua berhenti selamanya
-  // di "Creating default certificate" - dua kali 150 detik tanpa hasil.
+  // Sertifikat di folder tetap MILIK SENDIRI. Dibiarkan implisit, node-opcua berhenti
+  // selamanya di "Creating default certificate" - dua kali 150 detik tanpa hasil.
+  // Ditaruh di dalam bridge/ (bukan di repo sebelah) supaya klon berdiri sendiri tidak
+  // menulis kunci privat ke folder di LUAR repo, tempat yang tidak ada yang mengira.
+  // bridge/pki/ di-gitignore: isinya kunci privat.
   const cm = new OPCUACertificateManager({
-    rootFolder: path.join(__dirname, '..', '..', 'tools', 'opcua', 'pki'),
+    rootFolder: path.join(__dirname, 'pki'),
     automaticallyAcceptUnknownCertificate: true
   });
   await cm.initialize();
@@ -312,12 +349,76 @@ server.on('error', e => {
   throw e;
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log('bridge     : http://127.0.0.1:' + PORT);
-  console.log('endpoint   : ' + ENDPOINT);
-  console.log('tag        : ' + TAGS.baca.length + ' dibaca, ' + TAGS.tulis.length + ' boleh ditulis');
-  console.log('');
-  console.log('Halaman tetap jalan walau simulator belum hidup - dia pindah ke kinematik JS');
-  console.log('dan menandainya di layar. Bridge menyambung sendiri begitu simulator ada.');
-  jagaSambungan();
-});
+// --------------------------------------------------------------------- CLI
+// Mode baris perintah memakai SESI DAN PETA TAG YANG SAMA dengan halaman - bukan
+// klien kedua. Alat terpisah buat "cek cepat" selalu berakhir jadi jalur yang
+// berbeda perilakunya, dan yang berbeda diam-diam itu yang paling mahal.
+//
+//   --list [saring]              daftar tag + nilainya
+//   --write NAMA=nilai ...       tulis (NAMA[i]=nilai buat elemen array)
+//   --watch NAMA ...             pantau perubahan sampai Ctrl+C
+function nilaiDari(teks) {
+  if (/^(true|false)$/i.test(teks)) return /^true$/i.test(teks);
+  const n = Number(teks);
+  if (!isFinite(n)) throw new Error('nilai tidak dikenal: ' + teks);
+  return n;
+}
+
+async function cli(mode, sisa) {
+  try { await sambung(); } catch (e) {
+    console.error('GAGAL menyambung ke ' + ENDPOINT);
+    console.error(String(e.message || e).split('\n')[0]);
+    console.error('Jalankan simulasinya DULU (F5), lalu Simulation -> Use the OPC UA Server.');
+    process.exit(2);
+  }
+
+  if (mode === '--list') {
+    const saring = sisa[0] || '';
+    const nama = Object.keys(meta).filter(n => n.indexOf(saring) >= 0).sort();
+    for (const n of nama) console.log('  ' + n.padEnd(22) + ' = ' + JSON.stringify(nilai[n]));
+    console.log(nama.length + ' tag' + (saring ? ' cocok "' + saring + '"' : ''));
+  } else if (mode === '--write') {
+    for (const pasangan of sisa) {
+      const k = pasangan.indexOf('=');
+      if (k < 0) { console.error('  lewati (bukan NAMA=nilai): ' + pasangan); continue; }
+      const kiri = pasangan.slice(0, k).trim();
+      const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*(\d+)\s*\]$/.exec(kiri);
+      try {
+        await tulis(m ? m[1] : kiri, nilaiDari(pasangan.slice(k + 1).trim()), m ? +m[2] : undefined);
+        console.log('  ditulis: ' + pasangan);
+      } catch (e) { console.error('  GAGAL ' + pasangan + ': ' + (e.message || e)); }
+    }
+  } else {
+    const pantau = sisa.length ? sisa : dibaca;
+    const akhir = {};
+    console.log('memantau ' + pantau.length + ' tag. Ctrl+C buat berhenti.');
+    setInterval(() => {
+      for (const n of pantau) {
+        const s = JSON.stringify(nilai[n]);
+        if (s !== akhir[n]) {
+          akhir[n] = s;
+          console.log(new Date().toISOString().slice(11, 19) + '  ' + n.padEnd(22) + ' = ' + s);
+        }
+      }
+    }, 100);
+    return;                                   // sengaja tidak menutup sesi
+  }
+  await putus();
+  process.exit(0);
+}
+
+const MODE = process.argv.find(a => a === '--list' || a === '--write' || a === '--watch');
+if (MODE) {
+  const i = process.argv.indexOf(MODE);
+  cli(MODE, process.argv.slice(i + 1).filter(a => !a.startsWith('--')));
+} else {
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log('bridge     : http://127.0.0.1:' + PORT);
+    console.log('endpoint   : ' + ENDPOINT);
+    console.log('tag        : ' + TAGS.baca.length + ' dibaca, ' + TAGS.tulis.length + ' boleh ditulis');
+    console.log('');
+    console.log('Halaman tetap jalan walau simulator belum hidup - dia pindah ke kinematik JS');
+    console.log('dan menandainya di layar. Bridge menyambung sendiri begitu simulator ada.');
+    jagaSambungan();
+  });
+}

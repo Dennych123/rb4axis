@@ -150,8 +150,11 @@ Endpointnya `opc.tcp://127.0.0.1:4840`.
 
 ## 6. Bukti bahwa jalan
 
+Paketnya dipasang sekali (ini SATU-SATUNYA bagian repo ini yang punya dependensi):
+
 ```bash
-node tools/opcua/browse.js --anon --filter SIM_
+cd blurobot/bridge && npm install && cd ../..
+node blurobot/bridge/bridge.js --list SIM_
 ```
 
 Yang dicari bukan "daftarnya keluar", tapi tiga hal:
@@ -167,10 +170,17 @@ Yang dicari bukan "daftarnya keluar", tapi tiga hal:
 Lalu tekan tombol dari luar:
 
 ```bash
-node tools/opcua/browse.js --anon --write SIM_JOG_MODE=0
-node tools/opcua/browse.js --anon --write "SIM_JOG_P[1]=true"
-node tools/opcua/browse.js --anon --watch SIM_JOINT_POS SIM_WORLD_POS
+node blurobot/bridge/bridge.js --write SIM_JOG_MODE=0
+node blurobot/bridge/bridge.js --write "SIM_JOG_P[1]=true"
+node blurobot/bridge/bridge.js --watch SIM_JOINT_POS SIM_WORLD_POS
 ```
+
+Perintah itu memakai **sesi dan peta tag yang sama** dengan halaman viz - bukan klien
+kedua. Alat terpisah buat "cek cepat" selalu berakhir jadi jalur yang perilakunya
+berbeda, dan yang berbeda diam-diam itu yang paling mahal.
+
+`tools/opcua/browse.js` yang disebut di catatan lama itu milik repo ALAT
+(sysmac-generator). Di klon rb4axis yang berdiri sendiri berkas itu memang tidak ada.
 
 Sesudah itu baru jalankan bridge + halaman viz — lihat [`../README.md`](../README.md).
 

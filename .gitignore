@@ -1,3 +1,6 @@
 node_modules/
 three.min.js
 *.bak
+
+# Kunci privat klien OPC UA. Pernah ikut ter-commit sekali di repo alat.
+pki/

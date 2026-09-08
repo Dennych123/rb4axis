@@ -1,0 +1,13 @@
+{
+  "name": "blurobot-bridge",
+  "private": true,
+  "description": "Jembatan OPC UA simulator NX <-> halaman viz 3D. Dipisah dari repo supaya 120-an paketnya tidak ikut ke mana-mana: seluruh isi rb4axis yang lain jalan tanpa satu pun dependensi.",
+  "scripts": {
+    "start": "node bridge.js",
+    "list": "node bridge.js --list SIM_"
+  },
+  "dependencies": {
+    "node-opcua-client": "^2.177.0",
+    "node-opcua-certificate-manager": "^2.177.0"
+  }
+}
