@@ -28,9 +28,24 @@ terbukti ter-import. Kuadrannya dibetulkan lewat `ATAN` + koreksi eksplisit, dan
 JS-nya melakukan hal yang sama supaya hasil PLC dan hasil JS tetap bisa diadu.
 
 **Sel kerja + siklus pick and place.** Rel 3 m, enam stasiun: WIP IN, dua ICC test
-(tinggi), dua DW data writer (rendah), WIP OUT. Siklusnya
-`WIP IN -> ICC (1/2 bergantian) -> DW (1/2 bergantian) -> WIP OUT`, lalu PCB-nya
-hilang dan pencacah naik.
+(17 detik), dua DW data writer (15 detik), WIP OUT. Bedanya tinggi ICC dan DW cuma
+35 mm - mesin nyata berdiri di satu lantai, dan beda ratusan mm memaksa lengan
+mengambil pose yang tidak pernah terjadi di sel aslinya.
+
+**Robot mengisi buffer ICC dulu sampai dua-duanya penuh**, baru mengurus yang lain.
+Urutan pencarian pekerjaannya - dan urutan itu yang menentukan perilaku selnya:
+
+1. ICC yang **kosong** diisi dari WIP IN. Mesin tes 17 detik tidak boleh menganggur
+   menunggu robot selesai mengurus DW.
+2. DW yang **selesai** dikosongkan ke WIP OUT. Didahulukan dari nomor 3 supaya selalu
+   ada DW kosong buat produk ICC berikutnya - kalau tidak, dua DW penuh + dua ICC
+   selesai bikin sel macet, dan macetnya tidak kelihatan sebagai kesalahan, cuma
+   sebagai robot yang berhenti.
+3. ICC yang **selesai** dipindah ke DW yang kosong.
+
+Tiap mesin menghitung waktunya sendiri, berbarengan - itu inti buffer-nya. Satu
+penghitung bersama berarti satu produk di seluruh sel, dan buffer jadi tidak ada
+artinya.
 
 Sekuensnya jalan **di PLC** (`PRG_SIM_ROBOT.st`), bukan di halaman. Halaman cuma
 menggambar, dan pose stasiun yang digambarnya dibaca dari tag PLC (`SIM_ST_*`) -
@@ -39,12 +54,48 @@ gripper yang turun di sebelah mesin, bukan tersembunyi di balik dua angka yang
 masing-masing benar. Selama siklus jalan, jog dimatikan: dua sumber perintah untuk
 satu lengan berebut tiap scan.
 
-Tiap fase bentuknya sama - berhenti di ATAS stasiun, turun, gripper bekerja,
-(tunggu mesin), naik. Approach itu yang menjaga lengan tidak mendekat dari samping
-dan menembus badan mesin.
+Tiap pekerjaan bentuknya sama: **lipat ke pose jalan -> geser rel -> turun tegak ->
+gripper -> naik -> lipat -> geser rel -> turun -> gripper -> naik -> lipat.** Rel cuma
+dilewati dalam pose jalan (= pose home, TCP di 700 mm): lengan yang bergeser sambil
+menjulur ke bawah menyapu tiap mesin yang dilewatinya, dan di layar itu mulus sampai
+ada yang memperhatikan.
 
-**Gripper dua jari** di ujung tool. Panjangnya masuk TCP: `gen_sim.js` menulis
-`ROBOT_TOOL_Y_LREAL = tool.Y + gripper.panjang` — satu kali, satu tempat.
+**Panel sel: selector AUTO/MANUAL, E-STOP, Autorun, Cycle stop.** Selector diubah SAAT
+robot jalan, atau E-STOP ditekan, atau lengan menabrak → berhenti di tempat dan
+**wajib Home dulu** sebelum Autorun mau jalan lagi. Itu bukan kerewelan: posisi sumbu
+sesudah berhenti mendadak tidak diketahui sekuenser, dan melanjutkan dari situ berarti
+langkah pertama dijalankan dari pose yang tidak pernah direncanakan. Cycle stop beda -
+pekerjaan yang sedang dipegang diselesaikan dulu (produk tidak ditinggal di udara),
+lengan kembali ke pose jalan, dan karena berhentinya terkendali Autorun bisa langsung
+dipakai lagi.
+
+Syaratnya ditegakkan **di PLC**, bukan di halaman: halaman cuma mengirim tepi tombol
+(`SIM_AUTORUN`, `SIM_CYCLE_STOP`, `SIM_HOME_EXEC`) dan tidak pernah menulis `SIM_AUTO`
+sendiri. Syarat yang ditegakkan di browser tidak ikut waktu tombol yang sama ditekan
+dari tempat lain.
+
+**Tabrakan diperiksa PLC, dan perintahnya ditolak sebelum sumbu bergerak.** Badan mesin
+diperlakukan sebagai kotak (ukuran yang SAMA dengan yang digambar halaman), plus lantai.
+Yang diperiksa TCP dan pangkal gripper, dan jangkauan jari ikut dihitung - yang menabrak
+duluan biasanya jari yang menjulur ke samping, bukan titik TCP-nya. Pose yang menabrak
+ditolak (`SIM_ERROR_ID` 5); kalau lengan sudah terlanjur menyentuh, gerakan dihentikan
+di TEPI sentuhan - bukan ditahan terus, karena menahan berarti terkunci di dalam benda
+yang ditabraknya tanpa arah keluar.
+
+**Gripper dua jari yang menyumpit dari ATAS.** Pose stasiun `theta_EE = -90`, jadi tool
+tegak menghadap bawah, dan jarinya membuka **sepanjang sumbu X (arah rel)** - menjepit
+sisi kiri-kanan produk. Jari yang membuka di bidang lengan menjepit sisi depan-belakang,
+dan dari kamera mana pun itu tetap terlihat "menjepit", cuma bukan sisi yang benar.
+Menutupnya berhenti di **lebar produk**, bukan di nol: jari yang bertemu di nol menembus
+barang yang sedang dipegangnya. Panjang gripper masuk TCP - `gen_sim.js` menulis
+`ROBOT_TOOL_Y_LREAL = tool.Y + gripper.panjang`, satu kali, satu tempat.
+
+**Gerakannya dihaluskan di dua tempat, dan keduanya perlu.** Di PLC: profil trapesium
+per sumbu (akselerasi + jarak rem), jadi sumbu tidak lagi berangkat dan berhenti pada
+kecepatan penuh dalam satu scan. Di halaman: yang DIGAMBAR dikejar ke nilai PLC terakhir
+tiap frame, karena bridge mengirim tiap ~50 ms sementara layar menggambar tiap ~16 ms.
+Yang dihaluskan cuma gambarnya - **panel tetap menampilkan angka PLC apa adanya**, jadi
+masih ada tempat untuk membandingkan layar dengan simulator.
 
 Project mesinnya **hanya dibaca**. Tidak ada satu pun berkas di
 `C:\Users\denny\Downloads\Blurobot ECU\` yang ditulis alat di folder ini.
@@ -131,14 +182,19 @@ sim/*.st + *.tsv    --gen_xml.js-->  sim/BlurobotSim.xml   (satu berkas, di-impo
 * **Dimensi masih placeholder.** `L1..L4` dan tool tidak ada di project mesin
   (diisi dari HMI Pro-face). Angka di `robot.config.json` cuma supaya ada yang
   digambar.
-* **Motion model bukan dinamika.** Sumbu dan jari gripper didorong ke target dengan
-  batas kecepatan, tanpa profil trapesium, tanpa massa. Yang dinilai kinematiknya.
-* **PCB-nya penanda, bukan benda fisik.** Dia mengikuti gripper waktu dipegang dan
-  duduk di stasiun waktu ditinggal, tapi tidak ada tabrakan, tidak ada gaya jepit,
-  dan tidak ada yang mencegah gripper menembus mesin kalau pose stasiunnya salah.
+* **Motion model bukan dinamika.** Profil trapesium per sumbu (kecepatan +
+  akselerasi), tanpa massa, tanpa inersia, tanpa jerk. Yang dinilai kinematiknya.
+* **Tabrakan cuma TCP + pangkal gripper vs kotak mesin dan lantai.** Siku dan ruas
+  lengan TIDAK diperiksa, dan begitu juga PCB yang sedang dipegang. Pose yang
+  menabrak dengan sikunya sendiri lolos - jadi ini penjaga terhadap perintah yang
+  salah, bukan mesin fisika.
+* **PCB-nya penanda, bukan benda fisik.** Tidak ada gaya jepit: dia ikut gripper
+  karena sekuenser bilang begitu, bukan karena dijepit. Jatuh, selip, atau terjepit
+  miring tidak ada di model ini.
 * **Mesin ICC dan DW tidak mensimulasikan apa pun.** Yang ada cuma penundaan
-  (`proses` detik di config) - tidak ada hasil tes, tidak ada data yang ditulis.
-* **Siklusnya butuh PLC.** Waktu offline tombol Start dimatikan, bukan dijalankan di
+  (`proses` detik di config) - tidak ada hasil tes, tidak ada data yang ditulis, dan
+  tidak ada yang bisa GAGAL tes.
+* **Siklusnya butuh PLC.** Waktu offline tombol Autorun dimatikan, bukan dijalankan di
   halaman: sekuens kedua di JS berarti dua sumber kebenaran, dan yang di layar bakal
   terlihat benar justru waktu yang di PLC salah.
 * **Round-trip tidak bisa lebih rapat dari ~5e-6 derajat.** `DEGREE_TO_RAD` dan

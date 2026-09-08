@@ -28,13 +28,19 @@
       "ROBOT_TOOL_Y_LREAL = tool.Y + gripper.panjang, jadi FK/IK memang menghitung sampai",
       "ujung jari. Dijumlahkan di SATU tempat itu supaya tidak pernah terhitung dua kali -",
       "jangan menambahkannya lagi ke tool.Y.",
-      "stroke = bukaan penuh (jarak antar jari) dalam mm; 0 berarti menutup rapat."
+      "JARI MEMBUKA SEPANJANG SUMBU X (arah rel), bukan di bidang lengan: gripper turun",
+      "tegak dari atas (theta_EE -90) dan menjepit sisi KIRI-KANAN produk. Kalau jari",
+      "dibuka di bidang Y-Z, dia menjepit sisi depan-belakang - dan dari kamera mana pun",
+      "itu tetap kelihatan 'menjepit', cuma bukan sisi yang dipegang mesin aslinya.",
+      "stroke = bukaan penuh, tutup = bukaan waktu menjepit produk. Menutup ke 0 berarti",
+      "jari saling bertemu MENEMBUS produk; yang benar dia berhenti di lebar produk."
     ],
     "panjang": 90.0,
-    "stroke": 80.0,
-    "bukaan_awal": 80.0,
-    "kecepatan": 120.0,
-    "tebal_jari": 12.0
+    "stroke": 180.0,
+    "tutup": 120.0,
+    "bukaan_awal": 180.0,
+    "kecepatan": 160.0,
+    "tebal_jari": 14.0
   },
 
   "offset": {
@@ -55,8 +61,16 @@
   },
 
   "jog": {
-    "_catatan": "Kecepatan per sumbu untuk motion model ST (sumbu 0 mm/s, sumbu 1-3 derajat/s), kecepatan world dipakai mode jog 1/2 waktu SIM_JOG_HOLD menyala, dan langkah = besar satu tekan jog - 10 sama dengan JOG_WORLD_STEP di mesin asli.",
-    "sumbu": [200.0, 30.0, 30.0, 45.0],
+    "_catatan": [
+      "Kecepatan per sumbu untuk motion model ST (sumbu 0 mm/s, sumbu 1-3 derajat/s),",
+      "kecepatan world dipakai mode jog 1/2 waktu SIM_JOG_HOLD menyala, dan langkah =",
+      "besar satu tekan jog - 10 sama dengan JOG_WORLD_STEP di mesin asli.",
+      "AKSELERASI bukan hiasan: tanpa itu tiap sumbu berangkat dan berhenti pada",
+      "kecepatan penuh dalam satu scan, dan yang terlihat di layar patah-patah walau",
+      "angkanya mulus. Satuannya mm/s2 dan derajat/s2."
+    ],
+    "sumbu": [900.0, 90.0, 90.0, 120.0],
+    "akselerasi": [1800.0, 240.0, 240.0, 320.0],
     "world": [100.0, 100.0, 100.0, 30.0],
     "langkah": 10.0
   },
@@ -74,26 +88,47 @@
       "dan yang di layar tidak bisa beda.",
       "tipe: 0 = WIP IN, 1 = ICC test, 2 = DW data writer, 3 = WIP OUT.",
       "x mm di sepanjang rel, y jangkauan mendatar, z tinggi permukaan tempat PCB diletakkan,",
-      "proses = lama mesin bekerja (detik). approach = berapa mm di ATAS pose stasiun tempat",
-      "lengan berhenti sebelum turun - tanpa itu gripper menabrak mesin dari samping.",
+      "proses = lama mesin bekerja (detik). theta -90 = gripper TEGAK menghadap bawah:",
+      "dia menyumpit dari atas, bukan menjulur dari samping.",
+      "BEDA TINGGI ICC vs DW cuma puluhan mm - mesin nyata sejajar di satu lantai, dan",
+      "beda ratusan mm bikin lengan mengambil pose yang tidak pernah terjadi di sel asli.",
+      "approach = berapa mm di ATAS pose stasiun tempat lengan berhenti sebelum turun.",
       "SEMUA pose (stasiun DAN approach) wajib terjangkau; tests/viz.test.js mengadu tiap",
       "pose ke INVERSE_KINEMATIC_V2 dan menolak yang di luar jangkauan atau di luar soft limit."
     ],
     "approach": 140.0,
-    "urutan": "WIP IN -> ICC (bergantian 1/2) -> DW (bergantian 1/2) -> WIP OUT",
+    "urutan": "isi buffer ICC dulu (dua-duanya), baru DW, baru WIP OUT",
     "stasiun": [
-      { "nama": "WIP IN",  "tipe": 0, "x": -1400.0, "y": 420.0, "z": 250.0, "theta": 0.0, "proses": 0.0 },
-      { "nama": "ICC 1",   "tipe": 1, "x":  -700.0, "y": 450.0, "z": 620.0, "theta": 0.0, "proses": 3.0 },
-      { "nama": "ICC 2",   "tipe": 1, "x":  -300.0, "y": 450.0, "z": 620.0, "theta": 0.0, "proses": 3.0 },
-      { "nama": "DW 1",    "tipe": 2, "x":   300.0, "y": 430.0, "z": 300.0, "theta": 0.0, "proses": 2.0 },
-      { "nama": "DW 2",    "tipe": 2, "x":   700.0, "y": 430.0, "z": 300.0, "theta": 0.0, "proses": 2.0 },
-      { "nama": "WIP OUT", "tipe": 3, "x":  1400.0, "y": 420.0, "z": 250.0, "theta": 0.0, "proses": 0.0 }
+      { "nama": "WIP IN",  "tipe": 0, "x": -1400.0, "y": 430.0, "z": 250.0, "theta": -90.0, "proses": 0.0 },
+      { "nama": "ICC 1",   "tipe": 1, "x":  -700.0, "y": 430.0, "z": 285.0, "theta": -90.0, "proses": 17.0 },
+      { "nama": "ICC 2",   "tipe": 1, "x":  -300.0, "y": 430.0, "z": 285.0, "theta": -90.0, "proses": 17.0 },
+      { "nama": "DW 1",    "tipe": 2, "x":   300.0, "y": 430.0, "z": 250.0, "theta": -90.0, "proses": 15.0 },
+      { "nama": "DW 2",    "tipe": 2, "x":   700.0, "y": 430.0, "z": 250.0, "theta": -90.0, "proses": 15.0 },
+      { "nama": "WIP OUT", "tipe": 3, "x":  1400.0, "y": 430.0, "z": 250.0, "theta": -90.0, "proses": 0.0 }
     ],
-    "pcb": { "_catatan": "ukuran PCB buat digambar, mm", "panjang": 120.0, "lebar": 80.0, "tebal": 8.0 }
+    "mesin": {
+      "_catatan": [
+        "Kotak badan mesin - dipakai DUA hal, dan itu sengaja: viz menggambarnya, dan",
+        "PLC memakainya sebagai badan tabrakan. Satu ukuran, satu tempat; kalau gambar dan",
+        "penjaga tabrakan punya angkanya masing-masing, gripper bisa berhenti di udara",
+        "atau menembus kotak - dua-duanya terlihat seperti bug yang lain.",
+        "margin = jarak aman di sekeliling kotak, mm."
+      ],
+      "lebar": 300.0,
+      "dalam": 320.0,
+      "margin": 12.0
+    },
+    "pcb": { "_catatan": "ukuran PCB, mm. panjang = sisi yang dijepit gripper (searah rel)", "panjang": 120.0, "lebar": 80.0, "tebal": 8.0 }
   },
 
   "home": {
-    "_catatan": "Pose sumbu yang dituju SIM_HOME_EXEC.",
+    "_catatan": [
+      "Pose sumbu yang dituju SIM_HOME_EXEC. Ini JUGA pose jalan (travel): lengan cuma",
+      "boleh menyusuri rel dalam pose ini, tidak pernah dalam pose apa pun yang sedang",
+      "menjulur ke bawah. Lengan yang bergeser sambil menjulur menyapu tiap mesin yang",
+      "dilewatinya, dan di layar itu terlihat mulus sampai ada yang memperhatikan.",
+      "Pose ini WAJIB lebih tinggi dari mesin tertinggi - dijaga tests/viz.test.js."
+    ],
     "sumbu": [0.0, 90.0, -90.0, 0.0]
   }
 }

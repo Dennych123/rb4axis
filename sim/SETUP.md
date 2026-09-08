@@ -177,7 +177,7 @@ Yang dicari bukan "daftarnya keluar", tapi tiga hal:
 |---|---|
 | `GlobalVars.SIM_HEARTBEAT` naik | program benar-benar dieksekusi task, bukan cuma ada di project |
 | `GlobalVars.SIM_JOINT_POS` = pose home (`0, 90, -90, 0`) | blok init jalan, config sampai ke controller |
-| `GlobalVars.SIM_GRIP_POS` = 80 lalu 0 waktu `SIM_GRIP_CMD` ditulis TRUE | gripper hidup |
+| `GlobalVars.SIM_GRIP_POS` = 180 lalu 120 waktu `SIM_GRIP_CMD` ditulis TRUE | gripper hidup - menutupnya berhenti di lebar produk, bukan di 0 |
 | `GlobalVars.ROBOT_TOOL_Y_LREAL` = 140 (50 tool + 90 gripper) | TCP di ujung jari, dijumlahkan sekali |
 | `GlobalVars.SIM_WORLD_POS` masuk akal | FK dipanggil dan hasilnya keluar |
 
@@ -196,6 +196,23 @@ berbeda, dan yang berbeda diam-diam itu yang paling mahal.
 `tools/opcua/browse.js` yang disebut di catatan lama itu milik repo ALAT
 (sysmac-generator). Di klon rb4axis yang berdiri sendiri berkas itu memang tidak ada.
 
+Panel selnya juga bisa dijalankan dari terminal, dan urutannya sekaligus menguji
+gerbangnya:
+
+```bash
+node bridge/bridge.js --write SIM_AUTORUN=true        # DITOLAK: selector masih MANUAL
+node bridge/bridge.js --write SIM_SEL_AUTO=true
+node bridge/bridge.js --write SIM_AUTORUN=false SIM_AUTORUN=true   # jalan
+node bridge/bridge.js --watch SIM_STATE SIM_CYCLE_STEP SIM_ST_STATE SIM_ST_TIMER
+node bridge/bridge.js --write SIM_CYCLE_STOP=false SIM_CYCLE_STOP=true  # berhenti di akhir
+node bridge/bridge.js --write SIM_ESTOP=true          # berhenti total, SIM_HOMED padam
+```
+
+Yang dibuktikan tiga hal: `SIM_AUTORUN` yang ditolak selama selector MANUAL,
+`SIM_HOMED` yang PADAM sesudah emergency (dan `SIM_AUTORUN` yang tetap ditolak sampai
+`SIM_HOME_EXEC` dijalankan), dan `SIM_ST_TIMER` empat mesin yang menghitung
+BERBARENGAN - itu buffer-nya.
+
 Sesudah itu baru jalankan bridge + halaman viz — lihat [`../README.md`](../README.md).
 
 ## Kalau salah
@@ -210,6 +227,10 @@ Sesudah itu baru jalankan bridge + halaman viz — lihat [`../README.md`](../REA
 | `Cannot use an element of array or a member of structure for the reference of function block instance variables` | ada `FK2.ARRAY[i]` — array milik instance FB tidak boleh diindeks. Salin arraynya UTUH dulu ke variabel lokal. Anggota skalar (`IK2.DONE`) tidak kena |
 | nama program di daftar error bukan yang kamu import | Studio menamai ulang POU yang awalannya `P_` (awalan itu milik variabel sistem: `P_On`, `P_First_Run`) — **tanpa satu pun pesan**. Karena itu programnya `PRG_SIM_ROBOT`, bukan `P_SIM_ROBOT` |
 | gripper tidak bergerak | `SIM_GRIP_VEL` 0, atau `SIM_GRIP_STROKE` 0 — dua-duanya diisi blok init |
+| Autorun ditekan, tidak terjadi apa-apa | `SIM_STATE` menjawabnya: 5 = perlu Home dulu, 6 = emergency masih ditekan, 0 = selector masih MANUAL |
+| robot berhenti sendiri di tengah jalan | `SIM_ABORT_ID`: 1 emergency, 2 selector diubah saat jalan, 3 menabrak. Sesudah itu WAJIB Home |
+| robot diam padahal AUTO dan sudah home | biasanya benar: kedua ICC masih menghitung. Lihat `SIM_ST_TIMER` |
+| perintah jog/move ditolak dengan `SIM_ERROR_ID` = 5 | pose itu menembus badan mesin atau lantai — penjaga tabrakan, bukan kinematik |
 | TCP meleset sepanjang gripper | panjang gripper dijumlahkan dua kali; di ST harus muncul TEPAT SEKALI, di `ROBOT_TOOL_Y_LREAL` |
 | Build gagal "cannot assign to constant" | `PI`/`DEGREE_TO_RAD`/`RAD_TO_DEGREE` ikut ditempel tanpa kolom Constant |
 | menu OPC UA abu-abu | simulator belum Run |

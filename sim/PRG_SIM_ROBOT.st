@@ -10,10 +10,9 @@
 // menyunting berkas ini:
 //
 //   * Rumus kinematiknya TIDAK ada di sini - semuanya di dua FB itu. Program ini
-//     cuma PEMANGGIL: tombol, target, motion model, gripper.
+//     cuma PEMANGGIL: tombol, target, motion model, gripper, sekuens sel.
 //   * FB yang dipakai versi V2 (sudah dibetulkan). Yang verbatim dari mesin ada di
 //     ../extract/ dan sengaja TIDAK di-instance - dia catatan, bukan bagian sim.
-//     Daftar bedanya di ../extract/ANALYSIS.md dan di kepala kedua berkas V2.
 //   * Penjaga jangkauan ADA DI DALAM IK V2, bukan di sini. Program cuma membaca
 //     DONE dan ERROR_ID-nya. Dua penjaga untuk satu hal pasti berbeda pendapat.
 //   * TIDAK ada MC_* sama sekali. Posisi sumbu diintegrasi sendiri, jadi project
@@ -22,6 +21,24 @@
 //     ROBOT_TOOL_Y_LREAL waktu blok init dibangkitkan. Jangan menjumlahkannya lagi.
 //
 // Satuan: sumbu 0 mm (rel linear), sumbu 1-3 derajat (rantai planar di bidang Y-Z).
+//
+// ---------------------------------------------------------------- mode & keamanan
+// Empat hal menentukan robot boleh bergerak sendiri atau tidak, dan ketiganya
+// meniru panel mesin sungguhan:
+//
+//   SIM_SEL_AUTO   selector AUTO/MANUAL. Diubah SAAT robot jalan = berhenti total.
+//   SIM_ESTOP      emergency. Sama: berhenti total.
+//   SIM_HOMED      sesudah berhenti total, robot WAJIB di-home dulu. Ini bukan
+//                  kerewelan: posisi sumbu setelah berhenti mendadak tidak diketahui
+//                  sekuenser, dan melanjutkan dari situ berarti langkah pertama
+//                  dijalankan dari pose yang tidak pernah direncanakan.
+//   SIM_AUTORUN    tombol start. Cuma jalan kalau selector AUTO, sudah home, tidak
+//                  emergency.
+//
+// SIM_CYCLE_STOP beda dari ketiganya: dia BUKAN berhenti darurat. Robot menyelesaikan
+// pekerjaan yang sedang dipegang (produk tidak ditinggal di udara), balik ke pose
+// jalan, baru berhenti - dan karena berhentinya terkendali, SIM_HOMED tetap menyala
+// dan tombol Autorun bisa langsung dipakai lagi.
 
 // ---------------------------------------------------------------- inisialisasi
 // Nilai dari blurobot/sim/robot.config.json. Sengaja hanya scan pertama: sesudah
@@ -44,9 +61,12 @@ IF NOT SIM_INIT_DONE THEN
 	ROBOT_TOOL_Z_LREAL := 0.0;
 
 	SIM_GRIP_LEN := 90.0;
-	SIM_GRIP_STROKE := 80.0;
-	SIM_GRIP_VEL := 120.0;
-	SIM_GRIP_POS := 80.0;
+	SIM_GRIP_STROKE := 180.0;
+	// jari berhenti di lebar produk, bukan di 0 - kalau 0, jari menembus PCB
+	SIM_GRIP_TUTUP := 120.0;
+	SIM_GRIP_JARI := 14.0;
+	SIM_GRIP_VEL := 160.0;
+	SIM_GRIP_POS := 180.0;
 
 	ROBOT_ROBOT_ORG_OFFSET_LREAL[0] := 0.0;
 	ROBOT_ROBOT_ORG_OFFSET_LREAL[1] := 0.0;
@@ -63,10 +83,15 @@ IF NOT SIM_INIT_DONE THEN
 	PD1300_006 := -120.0;
 	PD1300_007 := 120.0;
 
-	SIM_VEL[0] := 200.0;
-	SIM_VEL[1] := 30.0;
-	SIM_VEL[2] := 30.0;
-	SIM_VEL[3] := 45.0;
+	SIM_VEL[0] := 900.0;
+	SIM_VEL[1] := 90.0;
+	SIM_VEL[2] := 90.0;
+	SIM_VEL[3] := 120.0;
+
+	SIM_ACC[0] := 1800.0;
+	SIM_ACC[1] := 240.0;
+	SIM_ACC[2] := 240.0;
+	SIM_ACC[3] := 320.0;
 
 	SIM_VEL_W[0] := 100.0;
 	SIM_VEL_W[1] := 100.0;
@@ -83,42 +108,62 @@ IF NOT SIM_INIT_DONE THEN
 
 	SIM_APPROACH := 140.0;
 	SIM_ST_N := 6;
+	SIM_ST_W := 300.0;
+	SIM_ST_D := 320.0;
+	SIM_ST_MARGIN := 12.0;
 	// WIP IN
-	SIM_ST_X[0] := -1400.0;   SIM_ST_Y[0] := 420.0;
-	SIM_ST_Z[0] := 250.0;   SIM_ST_T[0] := 0.0;
+	SIM_ST_X[0] := -1400.0;   SIM_ST_Y[0] := 430.0;
+	SIM_ST_Z[0] := 250.0;   SIM_ST_T[0] := -90.0;
 	SIM_ST_TIPE[0] := 0;   SIM_ST_PROSES[0] := 0.0;
+	SIM_ST_STATE[0] := 0;   SIM_ST_TIMER[0] := 0.0;
 	// ICC 1
-	SIM_ST_X[1] := -700.0;   SIM_ST_Y[1] := 450.0;
-	SIM_ST_Z[1] := 620.0;   SIM_ST_T[1] := 0.0;
-	SIM_ST_TIPE[1] := 1;   SIM_ST_PROSES[1] := 3.0;
+	SIM_ST_X[1] := -700.0;   SIM_ST_Y[1] := 430.0;
+	SIM_ST_Z[1] := 285.0;   SIM_ST_T[1] := -90.0;
+	SIM_ST_TIPE[1] := 1;   SIM_ST_PROSES[1] := 17.0;
+	SIM_ST_STATE[1] := 0;   SIM_ST_TIMER[1] := 0.0;
 	// ICC 2
-	SIM_ST_X[2] := -300.0;   SIM_ST_Y[2] := 450.0;
-	SIM_ST_Z[2] := 620.0;   SIM_ST_T[2] := 0.0;
-	SIM_ST_TIPE[2] := 1;   SIM_ST_PROSES[2] := 3.0;
+	SIM_ST_X[2] := -300.0;   SIM_ST_Y[2] := 430.0;
+	SIM_ST_Z[2] := 285.0;   SIM_ST_T[2] := -90.0;
+	SIM_ST_TIPE[2] := 1;   SIM_ST_PROSES[2] := 17.0;
+	SIM_ST_STATE[2] := 0;   SIM_ST_TIMER[2] := 0.0;
 	// DW 1
 	SIM_ST_X[3] := 300.0;   SIM_ST_Y[3] := 430.0;
-	SIM_ST_Z[3] := 300.0;   SIM_ST_T[3] := 0.0;
-	SIM_ST_TIPE[3] := 2;   SIM_ST_PROSES[3] := 2.0;
+	SIM_ST_Z[3] := 250.0;   SIM_ST_T[3] := -90.0;
+	SIM_ST_TIPE[3] := 2;   SIM_ST_PROSES[3] := 15.0;
+	SIM_ST_STATE[3] := 0;   SIM_ST_TIMER[3] := 0.0;
 	// DW 2
 	SIM_ST_X[4] := 700.0;   SIM_ST_Y[4] := 430.0;
-	SIM_ST_Z[4] := 300.0;   SIM_ST_T[4] := 0.0;
-	SIM_ST_TIPE[4] := 2;   SIM_ST_PROSES[4] := 2.0;
+	SIM_ST_Z[4] := 250.0;   SIM_ST_T[4] := -90.0;
+	SIM_ST_TIPE[4] := 2;   SIM_ST_PROSES[4] := 15.0;
+	SIM_ST_STATE[4] := 0;   SIM_ST_TIMER[4] := 0.0;
 	// WIP OUT
-	SIM_ST_X[5] := 1400.0;   SIM_ST_Y[5] := 420.0;
-	SIM_ST_Z[5] := 250.0;   SIM_ST_T[5] := 0.0;
+	SIM_ST_X[5] := 1400.0;   SIM_ST_Y[5] := 430.0;
+	SIM_ST_Z[5] := 250.0;   SIM_ST_T[5] := -90.0;
 	SIM_ST_TIPE[5] := 3;   SIM_ST_PROSES[5] := 0.0;
+	SIM_ST_STATE[5] := 0;   SIM_ST_TIMER[5] := 0.0;
 
+	SIM_SEL_AUTO := FALSE;
+	SIM_ESTOP := FALSE;
 	SIM_AUTO := FALSE;
-	SIM_CYCLE_PHASE := 0;
+	SIM_STOP_REQ := FALSE;
+	SIM_ABORT_ID := 0;
+	SIM_COLLIDE := FALSE;
+	SIM_COLLIDE_ST := -1;
 	SIM_CYCLE_STEP := 0;
 	SIM_PART_STATE := 0;
+	SIM_JOB_SRC := -1;
+	SIM_JOB_DST := -1;
+	SIM_GRIP_CMD := FALSE;
 	// >>> DIBANGKITKAN
 
 	FOR i := 0 TO 3 DO
 		SIM_JOINT_POS[i] := SIM_HOME[i];
 		SIM_JOINT_CMD[i] := SIM_HOME[i];
+		SIM_JOINT_VEL[i] := 0.0;
 	END_FOR;
 
+	// Init menaruh sumbu TEPAT di pose home, jadi robot memang sedang home.
+	SIM_HOMED := TRUE;
 	SIM_ERROR := FALSE;
 	SIM_ERROR_ID := 0;
 	SIM_INIT_DONE := TRUE;
@@ -140,29 +185,123 @@ EDGE_MOVE := SIM_MOVE_EXEC AND NOT LAST_MOVE;
 LAST_MOVE := SIM_MOVE_EXEC;
 EDGE_HOME := SIM_HOME_EXEC AND NOT LAST_HOME;
 LAST_HOME := SIM_HOME_EXEC;
+EDGE_RUN := SIM_AUTORUN AND NOT LAST_RUN;
+LAST_RUN := SIM_AUTORUN;
+EDGE_CSTOP := SIM_CYCLE_STOP AND NOT LAST_CSTOP;
+LAST_CSTOP := SIM_CYCLE_STOP;
+// Selector: yang menghentikan robot bukan posisi selectornya, tapi PERUBAHANNYA.
+// Memakai posisi ("kalau MANUAL maka berhenti") berarti robot tidak akan pernah bisa
+// dijalankan dari selector AUTO yang memang sudah di situ sejak awal.
+SEL_UBAH := SIM_SEL_AUTO <> LAST_SEL;
+LAST_SEL := SIM_SEL_AUTO;
 
-// Sumbu mana yang ditekan, dan sebesar apa langkahnya. Satu sumbu sekali jalan:
-// dua tombol sekaligus di mesin asli juga saling mengunci lewat latch START_*.
-AX := -1;
-DELTA := 0.0;
-FOR i := 0 TO 3 DO
-	IF SIM_JOG_P[i] AND (EDGE_P[i] OR SIM_JOG_HOLD) THEN
-		AX := i;
-		DELTA := SIM_JOG_STEP;
-		IF SIM_JOG_HOLD THEN
-			// Mode tahan: kecepatan x dt. DUA daftar, karena satuannya memang beda -
-			// SIM_VEL derajat/s pada SUMBU, SIM_VEL_W mm/s pada KOORDINAT world.
-			// Satu daftar buat dua-duanya bikin jog world kecepatannya ikut sumbu yang
-			// kebetulan senomor, dan itu angka yang tidak ada artinya.
-			IF SIM_JOG_MODE = 0 THEN DELTA := SIM_VEL[i] * SIM_DT;
-			ELSE DELTA := SIM_VEL_W[i] * SIM_DT; END_IF;
-		END_IF;
-	ELSIF SIM_JOG_N[i] AND (EDGE_N[i] OR SIM_JOG_HOLD) THEN
-		AX := i;
-		DELTA := -SIM_JOG_STEP;
-		IF SIM_JOG_HOLD THEN
-			IF SIM_JOG_MODE = 0 THEN DELTA := -SIM_VEL[i] * SIM_DT;
-			ELSE DELTA := -SIM_VEL_W[i] * SIM_DT; END_IF;
+// -------------------------------------------------------- berhenti total (abort)
+// Emergency, selector diubah saat jalan, atau tabrakan. Ketiganya berakhir sama:
+// perintah disamakan dengan posisi sekarang (sumbu berhenti di tempat), siklus
+// dibatalkan, dan SIM_HOMED dipadamkan - robot tidak boleh jalan lagi sebelum home.
+ABORT := FALSE;
+IF SIM_ESTOP THEN
+	ABORT := TRUE;
+	SIM_ABORT_ID := 1;
+ELSIF SEL_UBAH AND SIM_AUTO THEN
+	ABORT := TRUE;
+	SIM_ABORT_ID := 2;
+ELSIF SIM_COLLIDE AND NOT LAST_COLLIDE THEN
+	// Cuma di TEPI-nya. Menahan selama masih menempel bikin robot terkunci di dalam
+	// benda yang ditabraknya: tiap scan perintahnya ditimpa posisi sekarang, jadi
+	// tidak ada arah yang bisa dipakai keluar.
+	ABORT := TRUE;
+	SIM_ABORT_ID := 3;
+END_IF;
+LAST_COLLIDE := SIM_COLLIDE;
+
+IF ABORT THEN
+	SIM_AUTO := FALSE;
+	SIM_STOP_REQ := FALSE;
+	SIM_CYCLE_STEP := 0;
+	SIM_HOMED := FALSE;
+	HOMING := FALSE;
+	FOR i := 0 TO 3 DO
+		SIM_JOINT_CMD[i] := SIM_JOINT_POS[i];
+		SIM_JOINT_VEL[i] := 0.0;
+	END_FOR;
+END_IF;
+
+// ------------------------------------------------------------------- home return
+// Home dipakai DUA hal sekaligus: pose istirahat, dan pose JALAN. Lengan cuma boleh
+// menyusuri rel dalam pose ini - lihat sekuenser di bawah.
+IF EDGE_HOME AND NOT SIM_ESTOP AND NOT SIM_AUTO THEN
+	FOR i := 0 TO 3 DO
+		SIM_JOINT_CMD[i] := SIM_HOME[i];
+	END_FOR;
+	HOMING := TRUE;
+	SIM_ABORT_ID := 0;
+	// WAJIB. SIM_MOVE_DONE dihitung motion model di AKHIR scan, jadi di sini isinya
+	// masih jawaban scan sebelumnya - dan sesudah berhenti total jawabannya TRUE.
+	// Tanpa baris ini, pemeriksaan tepat di bawah melihat "sudah sampai" pada scan
+	// yang sama waktu perintahnya baru saja diberikan: SIM_HOMED menyala tanpa
+	// lengannya bergerak satu milimeter pun, dan itu justru syarat yang mau ditegakkan.
+	// Sekuenser tidak kena masalah ini karena perintah dan penungguannya di langkah
+	// (dan scan) yang berbeda.
+	SIM_MOVE_DONE := FALSE;
+END_IF;
+IF HOMING AND SIM_MOVE_DONE THEN
+	HOMING := FALSE;
+	SIM_HOMED := TRUE;
+	// Produk yang masih terjepit waktu robot dihentikan dianggap diambil operator
+	// selama pemulihan - itu yang memang terjadi di mesin. Dibiarkan, robot berangkat
+	// mengambil produk berikutnya sambil masih memegang yang lama, dan yang kelihatan
+	// cuma satu PCB yang menempel di gripper selamanya.
+	IF SIM_PART_STATE = 1 THEN
+		SIM_PART_STATE := 0;
+		SIM_GRIP_CMD := FALSE;
+	END_IF;
+END_IF;
+
+// -------------------------------------------------------- start / cycle stop
+IF EDGE_RUN AND SIM_SEL_AUTO AND SIM_HOMED AND NOT SIM_ESTOP AND NOT HOMING THEN
+	SIM_AUTO := TRUE;
+	SIM_STOP_REQ := FALSE;
+	SIM_ABORT_ID := 0;
+END_IF;
+IF EDGE_CSTOP AND SIM_AUTO THEN
+	SIM_STOP_REQ := TRUE;
+END_IF;
+
+// Keadaan yang dilaporkan ke layar. Satu angka, dibaca halaman - bukan halaman yang
+// menyimpulkan sendiri dari empat bit, karena kesimpulannya bisa beda dari yang
+// dipakai PLC memutuskan.
+IF SIM_ESTOP THEN SIM_STATE := 6;
+ELSIF HOMING THEN SIM_STATE := 1;
+ELSIF NOT SIM_HOMED THEN SIM_STATE := 5;
+ELSIF SIM_AUTO AND SIM_STOP_REQ THEN SIM_STATE := 4;
+ELSIF SIM_AUTO THEN SIM_STATE := 3;
+ELSIF SIM_SEL_AUTO THEN SIM_STATE := 2;
+ELSE SIM_STATE := 0;
+END_IF;
+
+// ------------------------------------------------------------- mesin tiap stasiun
+// Tiap mesin menghitung waktunya SENDIRI, berbarengan - itu inti buffer: ICC 1 dan
+// ICC 2 memang harus bisa memproses bersamaan sementara robot pergi mengerjakan
+// yang lain. Satu penghitung waktu bersama (SIM_WAIT yang lama) memaksa satu produk
+// di seluruh sel, dan buffer jadi tidak ada artinya.
+//
+// WIP IN dianggap selalu berisi (stok masuk tidak disimulasikan), WIP OUT selalu
+// kosong (produk keluar dari sel).
+WIP_IN := 0;
+WIP_OUT := 0;
+FOR i := 0 TO SIM_ST_N - 1 DO
+	IF SIM_ST_TIPE[i] = 0 THEN
+		WIP_IN := i;
+		SIM_ST_STATE[i] := 2;
+	ELSIF SIM_ST_TIPE[i] = 3 THEN
+		WIP_OUT := i;
+		SIM_ST_STATE[i] := 0;
+	ELSIF SIM_ST_STATE[i] = 1 THEN
+		SIM_ST_TIMER[i] := SIM_ST_TIMER[i] - SIM_DT;
+		IF SIM_ST_TIMER[i] <= 0.0 THEN
+			SIM_ST_TIMER[i] := 0.0;
+			SIM_ST_STATE[i] := 2;
 		END_IF;
 	END_IF;
 END_FOR;
@@ -172,33 +311,110 @@ END_FOR;
 // atau sekuenser siklus). NEED_IK menandai bahwa IK perlu dijalankan scan ini.
 NEED_IK := FALSE;
 
-// Sekuenser dan jog TIDAK PERNAH jalan berbarengan. Dua sumber perintah untuk satu
-// lengan berarti pose yang ditulis belakangan menang, dan siapa yang menang berubah
-// tiap scan - gerakannya jadi tersendat tanpa ada yang salah di kedua sisinya.
+// Sumbu mana yang ditekan, dan sebesar apa langkahnya. Satu sumbu sekali jalan:
+// dua tombol sekaligus di mesin asli juga saling mengunci lewat latch START_*.
+// Jog cuma hidup di MANUAL: selector di AUTO sambil tombol jog bisa ditekan berarti
+// dua sumber perintah untuk satu lengan, dan yang menang berubah tiap scan.
+AX := -1;
+DELTA := 0.0;
+IF NOT SIM_AUTO AND NOT SIM_SEL_AUTO AND NOT SIM_ESTOP THEN
+	FOR i := 0 TO 3 DO
+		IF SIM_JOG_P[i] AND (EDGE_P[i] OR SIM_JOG_HOLD) THEN
+			AX := i;
+			DELTA := SIM_JOG_STEP;
+			IF SIM_JOG_HOLD THEN
+				// Mode tahan: kecepatan x dt. DUA daftar, karena satuannya memang beda -
+				// SIM_VEL derajat/s pada SUMBU, SIM_VEL_W mm/s pada KOORDINAT world.
+				IF SIM_JOG_MODE = 0 THEN DELTA := SIM_VEL[i] * SIM_DT;
+				ELSE DELTA := SIM_VEL_W[i] * SIM_DT; END_IF;
+			END_IF;
+		ELSIF SIM_JOG_N[i] AND (EDGE_N[i] OR SIM_JOG_HOLD) THEN
+			AX := i;
+			DELTA := -SIM_JOG_STEP;
+			IF SIM_JOG_HOLD THEN
+				IF SIM_JOG_MODE = 0 THEN DELTA := -SIM_VEL[i] * SIM_DT;
+				ELSE DELTA := -SIM_VEL_W[i] * SIM_DT; END_IF;
+			END_IF;
+		END_IF;
+	END_FOR;
+END_IF;
+
+// Sekuenser dan jog TIDAK PERNAH jalan berbarengan.
 IF SIM_AUTO THEN
 
 	// ============================================================ siklus otomatis
-	// WIP IN -> ICC (1/2 bergantian) -> DW (1/2 bergantian) -> WIP OUT.
+	// Aturan sel, dan urutannya ITU yang menentukan perilakunya:
 	//
-	// Tiap fase bentuknya sama: berhenti DI ATAS stasiun, turun, kerjakan gripper,
-	// (tunggu mesin), naik lagi. Approach itu bukan hiasan: tanpa berhenti di atas,
-	// lengan mendekati stasiun dari samping dan menabrak badan mesin - di layar
-	// terlihat sebagai gripper yang menembus kotak.
+	//   1. ICC yang KOSONG diisi dulu - dua-duanya - sebelum apa pun yang lain.
+	//      Itu arti "buffer": mesin tes yang lama (17 s) tidak boleh menganggur
+	//      menunggu robot selesai mengurus DW.
+	//   2. DW yang SELESAI dikosongkan ke WIP OUT. Didahulukan dari nomor 3 supaya
+	//      selalu ada DW kosong buat produk ICC berikutnya - kalau tidak, dua DW
+	//      penuh + dua ICC selesai = sel macet, dan macetnya tidak kelihatan sebagai
+	//      kesalahan, cuma sebagai robot yang berhenti.
+	//   3. ICC yang SELESAI dipindah ke DW yang kosong.
+	//
+	// Tiap pekerjaan bentuknya sama: lipat ke pose jalan -> geser rel -> turun ->
+	// gripper -> naik -> lipat -> geser rel -> turun -> gripper -> naik -> lipat.
 	//
 	// Nomor langkah dipublikasikan (SIM_CYCLE_STEP) supaya waktu sekuensnya berhenti,
 	// yang kelihatan langkah mana - bukan cuma "robotnya diam".
 	CASE SIM_CYCLE_STEP OF
 
-		0:	// tentukan stasiun untuk fase ini
-			CASE SIM_CYCLE_PHASE OF
-				0: ST_IDX := 0;
-				1: ST_IDX := 1 + UDINT_TO_INT(SIM_CYCLE_COUNT MOD 2);
-				2: ST_IDX := 3 + UDINT_TO_INT(SIM_CYCLE_COUNT MOD 2);
-			ELSE
-				ST_IDX := 5;
-			END_CASE;
-			SIM_TARGET_ST := ST_IDX;
-			SIM_CYCLE_STEP := 10;
+		0:	// pilih pekerjaan
+			SIM_JOB_SRC := -1;
+			SIM_JOB_DST := -1;
+			FOR i := 0 TO SIM_ST_N - 1 DO
+				IF (SIM_JOB_DST < 0) AND (SIM_ST_TIPE[i] = 1) AND (SIM_ST_STATE[i] = 0) THEN
+					SIM_JOB_SRC := WIP_IN;
+					SIM_JOB_DST := i;
+				END_IF;
+			END_FOR;
+			IF SIM_JOB_DST < 0 THEN
+				FOR i := 0 TO SIM_ST_N - 1 DO
+					IF (SIM_JOB_DST < 0) AND (SIM_ST_TIPE[i] = 2) AND (SIM_ST_STATE[i] = 2) THEN
+						SIM_JOB_SRC := i;
+						SIM_JOB_DST := WIP_OUT;
+					END_IF;
+				END_FOR;
+			END_IF;
+			IF SIM_JOB_DST < 0 THEN
+				FOR i := 0 TO SIM_ST_N - 1 DO
+					IF (SIM_JOB_DST < 0) AND (SIM_ST_TIPE[i] = 1) AND (SIM_ST_STATE[i] = 2) THEN
+						FOR j := 0 TO SIM_ST_N - 1 DO
+							IF (SIM_JOB_DST < 0) AND (SIM_ST_TIPE[j] = 2) AND (SIM_ST_STATE[j] = 0) THEN
+								SIM_JOB_SRC := i;
+								SIM_JOB_DST := j;
+							END_IF;
+						END_FOR;
+					END_IF;
+				END_FOR;
+			END_IF;
+			IF SIM_JOB_DST >= 0 THEN
+				ST_IDX := SIM_JOB_SRC;
+				SIM_TARGET_ST := ST_IDX;
+				SIM_CYCLE_STEP := 5;
+			ELSIF SIM_STOP_REQ THEN
+				// Tidak ada pekerjaan DAN diminta berhenti: berhenti sekarang, robot
+				// memang sedang tidak memegang apa-apa.
+				SIM_AUTO := FALSE;
+				SIM_STOP_REQ := FALSE;
+			END_IF;
+
+		5:	// lipat ke pose jalan - sumbu 1-3 saja, rel tidak disentuh
+			SIM_JOINT_CMD[1] := SIM_HOME[1];
+			SIM_JOINT_CMD[2] := SIM_HOME[2];
+			SIM_JOINT_CMD[3] := SIM_HOME[3];
+			SIM_CYCLE_STEP := 6;
+
+		6:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 7; END_IF;
+
+		7:	// geser rel. Lengan HARUS sudah terlipat: menyusuri rel sambil menjulur ke
+			// bawah berarti menyapu tiap mesin yang dilewati, dan di layar itu mulus.
+			SIM_JOINT_CMD[0] := SIM_ST_X[ST_IDX];
+			SIM_CYCLE_STEP := 8;
+
+		8:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 10; END_IF;
 
 		10:	// ke atas stasiun
 			POSE_REQ[0] := SIM_ST_X[ST_IDX];
@@ -210,7 +426,7 @@ IF SIM_AUTO THEN
 
 		11:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 12; END_IF;
 
-		12:	// turun ke permukaan stasiun
+		12:	// turun tegak ke permukaan stasiun - gripper menyumpit dari ATAS
 			POSE_REQ[0] := SIM_ST_X[ST_IDX];
 			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
 			POSE_REQ[2] := SIM_ST_Z[ST_IDX];
@@ -220,53 +436,100 @@ IF SIM_AUTO THEN
 
 		13:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 14; END_IF;
 
-		14:	// di WIP IN gripper MENUTUP (ambil); di stasiun lain MEMBUKA (menaruh)
-			IF SIM_CYCLE_PHASE = 0 THEN SIM_GRIP_CMD := TRUE; ELSE SIM_GRIP_CMD := FALSE; END_IF;
+		14:	SIM_GRIP_CMD := TRUE;
 			SIM_CYCLE_STEP := 15;
 
-		15:	IF (SIM_CYCLE_PHASE = 0) AND SIM_GRIP_CLOSED THEN
-				SIM_PART_STATE := 1;                       // PCB ikut gripper
-				SIM_CYCLE_STEP := 18;
-			ELSIF (SIM_CYCLE_PHASE <> 0) AND SIM_GRIP_OPEN THEN
-				SIM_PART_STATE := 2 + ST_IDX;              // PCB tinggal di stasiun
-				SIM_WAIT := SIM_ST_PROSES[ST_IDX];
-				IF SIM_CYCLE_PHASE = 3 THEN SIM_CYCLE_STEP := 18; ELSE SIM_CYCLE_STEP := 16; END_IF;
-			END_IF;
-
-		16:	// mesin bekerja. Hitung mundur pakai SIM_DT, bukan TON: satu sumber waktu
-			// di seluruh program, dan yang dipakai motion model juga ini.
-			SIM_WAIT := SIM_WAIT - SIM_DT;
-			IF SIM_WAIT <= 0.0 THEN
-				SIM_WAIT := 0.0;
-				SIM_GRIP_CMD := TRUE;                      // ambil lagi
-				SIM_CYCLE_STEP := 17;
-			END_IF;
-
-		17:	IF SIM_GRIP_CLOSED THEN
+		15:	IF SIM_GRIP_CLOSED THEN
 				SIM_PART_STATE := 1;
-				SIM_CYCLE_STEP := 18;
+				// Stok WIP IN tidak habis; stasiun mesin ditinggal kosong.
+				IF SIM_ST_TIPE[ST_IDX] <> 0 THEN
+					SIM_ST_STATE[ST_IDX] := 0;
+				END_IF;
+				SIM_CYCLE_STEP := 16;
 			END_IF;
 
-		18:	// naik lagi ke ketinggian approach
-			POSE_REQ[0] := SIM_ST_X[ST_IDX];
+		16:	POSE_REQ[0] := SIM_ST_X[ST_IDX];
 			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
 			POSE_REQ[2] := SIM_ST_Z[ST_IDX] + SIM_APPROACH;
 			POSE_REQ[3] := SIM_ST_T[ST_IDX];
 			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 17;
+
+		17:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 18; END_IF;
+
+		18:	SIM_JOINT_CMD[1] := SIM_HOME[1];
+			SIM_JOINT_CMD[2] := SIM_HOME[2];
+			SIM_JOINT_CMD[3] := SIM_HOME[3];
 			SIM_CYCLE_STEP := 19;
 
-		19:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 20; END_IF;
-
-		20:	// fase berikutnya
-			IF SIM_CYCLE_PHASE >= 3 THEN
-				// Di WIP OUT PCB-nya ditinggal, lalu hilang - itu ujung sel ini.
-				SIM_PART_STATE := 0;
-				SIM_CYCLE_COUNT := SIM_CYCLE_COUNT + 1;
-				SIM_CYCLE_PHASE := 0;
-			ELSE
-				SIM_CYCLE_PHASE := SIM_CYCLE_PHASE + 1;
+		19:	IF SIM_MOVE_DONE THEN
+				ST_IDX := SIM_JOB_DST;
+				SIM_TARGET_ST := ST_IDX;
+				SIM_CYCLE_STEP := 20;
 			END_IF;
-			SIM_CYCLE_STEP := 0;
+
+		20:	SIM_JOINT_CMD[0] := SIM_ST_X[ST_IDX];
+			SIM_CYCLE_STEP := 21;
+
+		21:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 22; END_IF;
+
+		22:	POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX] + SIM_APPROACH;
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 23;
+
+		23:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 24; END_IF;
+
+		24:	POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX];
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 25;
+
+		25:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 26; END_IF;
+
+		26:	SIM_GRIP_CMD := FALSE;
+			SIM_CYCLE_STEP := 27;
+
+		27:	IF SIM_GRIP_OPEN THEN
+				SIM_PART_STATE := 0;
+				IF SIM_ST_TIPE[ST_IDX] = 3 THEN
+					// WIP OUT: produk keluar dari sel.
+					SIM_CYCLE_COUNT := SIM_CYCLE_COUNT + 1;
+				ELSE
+					SIM_ST_STATE[ST_IDX] := 1;
+					SIM_ST_TIMER[ST_IDX] := SIM_ST_PROSES[ST_IDX];
+				END_IF;
+				SIM_CYCLE_STEP := 28;
+			END_IF;
+
+		28:	POSE_REQ[0] := SIM_ST_X[ST_IDX];
+			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
+			POSE_REQ[2] := SIM_ST_Z[ST_IDX] + SIM_APPROACH;
+			POSE_REQ[3] := SIM_ST_T[ST_IDX];
+			NEED_IK := TRUE;
+			SIM_CYCLE_STEP := 29;
+
+		29:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 30; END_IF;
+
+		30:	SIM_JOINT_CMD[1] := SIM_HOME[1];
+			SIM_JOINT_CMD[2] := SIM_HOME[2];
+			SIM_JOINT_CMD[3] := SIM_HOME[3];
+			SIM_CYCLE_STEP := 31;
+
+		31:	IF SIM_MOVE_DONE THEN
+				// Di SINI cycle stop dilayani: produk sudah diletakkan, lengan sudah
+				// terlipat. Berhentinya terkendali, jadi SIM_HOMED tidak dipadamkan dan
+				// tombol Autorun bisa langsung dipakai lagi.
+				IF SIM_STOP_REQ THEN
+					SIM_AUTO := FALSE;
+					SIM_STOP_REQ := FALSE;
+				END_IF;
+				SIM_CYCLE_STEP := 0;
+			END_IF;
 	ELSE
 		SIM_CYCLE_STEP := 0;
 	END_CASE;
@@ -299,16 +562,92 @@ ELSIF AX >= 0 THEN
 	END_IF;
 	NEED_IK := TRUE;
 
-ELSIF EDGE_MOVE THEN
+ELSIF EDGE_MOVE AND NOT SIM_ESTOP AND NOT SIM_SEL_AUTO THEN
 	FOR i := 0 TO 3 DO
 		POSE_REQ[i] := SIM_WORLD_CMD[i];
 	END_FOR;
 	NEED_IK := TRUE;
+END_IF;
 
-ELSIF EDGE_HOME THEN
-	FOR i := 0 TO 3 DO
-		SIM_JOINT_CMD[i] := SIM_HOME[i];
-	END_FOR;
+// ----------------------------------------------------------------- tabrakan
+// Badan mesin diperlakukan sebagai kotak: |dx| < lebar/2, |dy| < dalam/2, dan
+// ketinggian di BAWAH permukaan stasiun. Ukurannya dari tag yang sama dengan yang
+// digambar halaman - satu kotak, bukan satu buat gambar dan satu buat penjaga.
+//
+// Diperiksa DUA hal sekaligus dalam satu loop, dan itu sengaja: rumus yang sama
+// ditulis dua kali pasti berbeda pendapat suatu hari.
+//
+//   titik 0-1  pose yang DIMINTA (TCP + pangkal gripper). Ditolak sebelum bergerak -
+//              ini yang bikin jog dan move point tidak bisa menembus mesin.
+//   titik 2-3  pose SEKARANG. Ini deteksi SENTUHAN: kalau lengan sudah terlanjur
+//              masuk (misalnya jog JOINT yang tidak lewat pose world sama sekali),
+//              gerakan dihentikan dan siklus dibatalkan.
+//
+// Pose sekarang dibaca dari SIM_WORLD_POS, hasil FK scan SEBELUMNYA - telat satu
+// scan (4 ms). Menghitungnya lagi di sini butuh instance FK kedua yang cuma dipakai
+// untuk itu.
+//
+// Lebar jari ikut dihitung: yang menabrak mesin duluan bukan TCP-nya, tapi jari yang
+// menjulur ke samping sejauh setengah bukaan.
+CK_MX := SIM_ST_W / 2.0 + SIM_ST_MARGIN + SIM_GRIP_POS / 2.0 + SIM_GRIP_JARI;
+CK_MY := SIM_ST_D / 2.0 + SIM_ST_MARGIN;
+
+TH := POSE_REQ[3] * DEGREE_TO_RAD;
+CK_X[0] := POSE_REQ[0];
+CK_Y[0] := POSE_REQ[1];
+CK_Z[0] := POSE_REQ[2];
+CK_X[1] := POSE_REQ[0];
+CK_Y[1] := POSE_REQ[1] - SIM_GRIP_LEN * COS(TH);
+CK_Z[1] := POSE_REQ[2] - SIM_GRIP_LEN * SIN(TH);
+
+TH := REAL_TO_LREAL(SIM_WORLD_POS[3]) * DEGREE_TO_RAD;
+CK_X[2] := REAL_TO_LREAL(SIM_WORLD_POS[0]);
+CK_Y[2] := REAL_TO_LREAL(SIM_WORLD_POS[1]);
+CK_Z[2] := REAL_TO_LREAL(SIM_WORLD_POS[2]);
+CK_X[3] := CK_X[2];
+CK_Y[3] := CK_Y[2] - SIM_GRIP_LEN * COS(TH);
+CK_Z[3] := CK_Z[2] - SIM_GRIP_LEN * SIN(TH);
+
+CAND_HIT := FALSE;
+NOW_HIT := FALSE;
+NOW_ST := -1;
+FOR k := 0 TO 3 DO
+	IF (k >= 2) OR NEED_IK THEN
+		FOR i := 0 TO SIM_ST_N - 1 DO
+			// Permukaan stasiun BUKAN tabrakan: produk memang diletakkan di situ.
+			// Yang dihitung menembus badan mesin, jadi batasnya sedikit DI BAWAH
+			// permukaan - tanpa itu, tiap penempatan produk memicu alarm tabrakan.
+			IF (ABS(CK_X[k] - SIM_ST_X[i]) < CK_MX) AND (ABS(CK_Y[k] - SIM_ST_Y[i]) < CK_MY)
+			   AND (CK_Z[k] < SIM_ST_Z[i] - 2.0) THEN
+				IF k >= 2 THEN
+					NOW_HIT := TRUE;
+					NOW_ST := i;
+				ELSE
+					CAND_HIT := TRUE;
+				END_IF;
+			END_IF;
+		END_FOR;
+		// Lantai. Tanpa ini, jog ke bawah menembus lantai tanpa satu pun keluhan -
+		// dan yang di layar cuma lengan yang separuhnya hilang di balik grid.
+		IF CK_Z[k] < 0.0 THEN
+			IF k >= 2 THEN
+				NOW_HIT := TRUE;
+				NOW_ST := -1;
+			ELSE
+				CAND_HIT := TRUE;
+			END_IF;
+		END_IF;
+	END_IF;
+END_FOR;
+SIM_COLLIDE := NOW_HIT;
+SIM_COLLIDE_ST := NOW_ST;
+
+IF CAND_HIT THEN
+	// Perintahnya dibuang sebelum sumbu bergerak. ERROR_ID 5 = tabrakan, dan nomor
+	// itu sengaja di luar 1-4 milik IK: yang menolak di sini bukan kinematiknya.
+	NEED_IK := FALSE;
+	SIM_ERROR := TRUE;
+	SIM_ERROR_ID := 5;
 END_IF;
 
 // ------------------------------------------------------ inverse kinematic
@@ -340,10 +679,10 @@ IF NEED_IK THEN
 END_IF;
 
 // ------------------------------------------------------------------ gripper
-// Dua jari, bukaan = jarak antar jari. Modelnya sama dengan sumbu: didorong ke
-// target dengan batas kecepatan. Panjang gripper TIDAK diurus di sini - dia sudah
-// ikut di ROBOT_TOOL_Y_LREAL, jadi TCP kinematiknya memang di ujung jari.
-IF SIM_GRIP_CMD THEN GRIP_TARGET := 0.0; ELSE GRIP_TARGET := SIM_GRIP_STROKE; END_IF;
+// Dua jari yang membuka SEPANJANG SUMBU X (arah rel) dan menjepit sisi kiri-kanan
+// produk. Menutup berhenti di SIM_GRIP_TUTUP - lebar produk - bukan di nol: jari
+// yang bertemu di nol berarti menembus barang yang sedang dipegangnya.
+IF SIM_GRIP_CMD THEN GRIP_TARGET := SIM_GRIP_TUTUP; ELSE GRIP_TARGET := SIM_GRIP_STROKE; END_IF;
 D := GRIP_TARGET - SIM_GRIP_POS;
 STEP_M := SIM_GRIP_VEL * SIM_DT;
 IF ABS(D) <= STEP_M THEN
@@ -353,23 +692,46 @@ ELSIF D > 0.0 THEN
 ELSE
 	SIM_GRIP_POS := SIM_GRIP_POS - STEP_M;
 END_IF;
-SIM_GRIP_CLOSED := SIM_GRIP_POS <= 0.0;
-SIM_GRIP_OPEN := SIM_GRIP_POS >= SIM_GRIP_STROKE;
+SIM_GRIP_CLOSED := SIM_GRIP_POS <= (SIM_GRIP_TUTUP + 0.5);
+SIM_GRIP_OPEN := SIM_GRIP_POS >= (SIM_GRIP_STROKE - 0.5);
 
 // ------------------------------------------------------------ motion model
-// Pengganti MC_*: tiap sumbu didorong ke target dengan batas kecepatan sendiri.
-// Tanpa profil trapesium - yang dinilai viz ini kinematiknya, bukan dinamikanya.
+// Pengganti MC_*: profil trapesium per sumbu - dipercepat sampai SIM_VEL, lalu
+// direm tepat waktu supaya berhenti PERSIS di target.
+//
+// Versi lama melompat langsung ke kecepatan penuh dan berhenti mendadak. Itu bukan
+// cuma soal enak dilihat: gerakan yang berangkat dan berhenti dalam satu scan
+// terlihat patah-patah begitu angkanya lewat jaringan (bridge mengirim tiap 50 ms,
+// jadi tiap patahan jatuh di frame yang berbeda), dan yang ditanyakan orang jadi
+// "kenapa gerakannya tersendat" - pertanyaan tentang jaringan, padahal sebabnya di
+// sini.
+//
+// VB = kecepatan tertinggi yang MASIH bisa direm sebelum sampai target
+// (v = sqrt(2*a*s)). Tanpa itu sumbu melewati target lalu balik - dan di layar itu
+// terlihat seperti lengan yang bergetar di ujung gerakan.
 SIM_BUSY := FALSE;
 FOR i := 0 TO 3 DO
-	STEP_M := SIM_VEL[i] * SIM_DT;
 	D := SIM_JOINT_CMD[i] - SIM_JOINT_POS[i];
-	IF ABS(D) <= STEP_M THEN
-		SIM_JOINT_POS[i] := SIM_JOINT_CMD[i];
-	ELSIF D > 0.0 THEN
-		SIM_JOINT_POS[i] := SIM_JOINT_POS[i] + STEP_M;
-		SIM_BUSY := TRUE;
+	VB := SQRT(2.0 * SIM_ACC[i] * ABS(D));
+	VT := SIM_VEL[i];
+	IF VB < VT THEN VT := VB; END_IF;
+	IF D < 0.0 THEN VT := -VT; END_IF;
+
+	DV := SIM_ACC[i] * SIM_DT;
+	IF ABS(VT - SIM_JOINT_VEL[i]) <= DV THEN
+		SIM_JOINT_VEL[i] := VT;
+	ELSIF VT > SIM_JOINT_VEL[i] THEN
+		SIM_JOINT_VEL[i] := SIM_JOINT_VEL[i] + DV;
 	ELSE
-		SIM_JOINT_POS[i] := SIM_JOINT_POS[i] - STEP_M;
+		SIM_JOINT_VEL[i] := SIM_JOINT_VEL[i] - DV;
+	END_IF;
+
+	STEP_M := SIM_JOINT_VEL[i] * SIM_DT;
+	IF ABS(D) <= ABS(STEP_M) THEN
+		SIM_JOINT_POS[i] := SIM_JOINT_CMD[i];
+		SIM_JOINT_VEL[i] := 0.0;
+	ELSE
+		SIM_JOINT_POS[i] := SIM_JOINT_POS[i] + STEP_M;
 		SIM_BUSY := TRUE;
 	END_IF;
 END_FOR;

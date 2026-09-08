@@ -285,27 +285,70 @@ function chainPoints(pos, cfg) {
 }
 
 /**
- * Titik ujung dua jari gripper, buat digambar. Jari membuka TEGAK LURUS terhadap
- * arah tool, di dalam bidang Y-Z yang sama dengan lengannya - jadi bukaannya
- * kelihatan dari sudut kamera mana pun yang bisa melihat lengannya.
+ * Titik ujung dua jari gripper, buat digambar. Jari membuka SEPANJANG SUMBU X -
+ * arah rel - bukan di bidang lengan.
  *
- * @param {number} bukaan  jarak antar jari (mm), 0 = menutup rapat
+ * Itu bukan pilihan gambar: gripper turun TEGAK dari atas (theta_EE -90) dan
+ * menjepit sisi KIRI-KANAN produk, sisi yang sama yang dipegang mesin aslinya.
+ * Jari yang membuka di bidang Y-Z menjepit sisi depan-belakang, dan dari kamera
+ * mana pun itu tetap terlihat seperti "menjepit" - salah yang tidak mengeluh.
+ *
+ * Sumbu X juga satu-satunya arah yang TIDAK ikut berputar bersama lengan: rantai
+ * 1-3 seluruhnya planar di Y-Z, jadi bukaan jari tetap sejajar rel di pose mana pun.
+ *
+ * @param {number} bukaan  jarak antar jari (mm). Menutup berhenti di lebar produk,
+ *                         bukan di 0 - lihat gripper.tutup di robot.config.json.
  */
 function gripperPoints(pos, cfg, bukaan) {
   const p = chainPoints(pos, cfg);
   const pangkal = p[5], tcp = p[6];
-  const dy = tcp.y - pangkal.y, dz = tcp.z - pangkal.z;
-  const n = Math.hypot(dy, dz) || 1;
-  // Normal di dalam bidang: putar arah tool 90 derajat.
-  const ny = -dz / n, nz = dy / n;
   const h = bukaan / 2;
   return {
     pangkal, tcp,
     jari: [1, -1].map(s => ({
-      atas: { x: pangkal.x, y: pangkal.y + s * h * ny, z: pangkal.z + s * h * nz },
-      ujung: { x: tcp.x, y: tcp.y + s * h * ny, z: tcp.z + s * h * nz }
+      atas: { x: pangkal.x + s * h, y: pangkal.y, z: pangkal.z },
+      ujung: { x: tcp.x + s * h, y: tcp.y, z: tcp.z }
     }))
   };
+}
+
+/**
+ * Penjaga tabrakan - CERMINAN dari blok penjaga di PRG_SIM_ROBOT.st, dipakai
+ * halaman waktu simulator mati.
+ *
+ * Yang menentukan tetap PLC: waktu tersambung, halaman cuma menampilkan SIM_COLLIDE
+ * yang dihitung di sana. Fungsi ini supaya mode offline tidak jadi mode yang bisa
+ * menembus mesin - kalau bisa, orang belajar bahwa menembus mesin itu wajar.
+ *
+ * Badan mesin = kotak: lebar (arah rel) x dalam, dari lantai sampai PERMUKAAN
+ * stasiun. Permukaannya sendiri bukan tabrakan - produk memang diletakkan di situ,
+ * jadi batasnya sedikit di bawahnya.
+ *
+ * @param {{x,y,z,theta}} pose  pose TCP yang mau diperiksa (theta derajat)
+ * @param {object} cfg          {gripLen, gripPos, gripJari}
+ * @param {Array}  stasiun      [{x,y,z}]
+ * @param {object} kotak        {lebar, dalam, margin}
+ * @returns {{hit:boolean, st:number}}  st: indeks stasiun, -1 lantai atau tidak ada
+ */
+function collideCheck(pose, cfg, stasiun, kotak) {
+  const mx = kotak.lebar / 2 + kotak.margin + (cfg.gripPos || 0) / 2 + (cfg.gripJari || 0);
+  const my = kotak.dalam / 2 + kotak.margin;
+  const th = pose[3] * KIN_DEGREE_TO_RAD;
+  const g = cfg.gripLen || 0;
+  const titik = [
+    { x: pose[0], y: pose[1], z: pose[2] },
+    { x: pose[0], y: pose[1] - g * Math.cos(th), z: pose[2] - g * Math.sin(th) }
+  ];
+  for (const t of titik) {
+    if (t.z < 0) return { hit: true, st: -1 };
+    for (let i = 0; i < stasiun.length; i++) {
+      const s = stasiun[i];
+      if (Math.abs(t.x - s.x) < mx && Math.abs(t.y - s.y) < my && t.z < s.z - 2) {
+        return { hit: true, st: i };
+      }
+    }
+  }
+  return { hit: false, st: -1 };
 }
 
 /**
@@ -336,6 +379,6 @@ function keArray(v, panjang) {
 if (typeof module !== 'undefined') {
   module.exports = { forwardKinematic, inverseKinematic, reachable, atan2Fix, toolPolar, toREAL,
                      forwardKinematicV2, inverseKinematicV2, toolPolarV2, atanKuadran,
-                     chainPoints, gripperPoints, keArray,
+                     chainPoints, gripperPoints, collideCheck, keArray,
                      KIN_PI, KIN_DEGREE_TO_RAD, KIN_RAD_TO_DEGREE };
 }

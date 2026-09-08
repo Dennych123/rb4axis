@@ -21,3 +21,27 @@ LAST_MOVE	BOOL		False	False	keadaan SIM_MOVE_EXEC scan sebelumnya
 LAST_HOME	BOOL		False	False	keadaan SIM_HOME_EXEC scan sebelumnya
 EDGE_MOVE	BOOL		False	False	tepi naik SIM_MOVE_EXEC
 EDGE_HOME	BOOL		False	False	tepi naik SIM_HOME_EXEC
+LAST_RUN	BOOL		False	False	keadaan SIM_AUTORUN scan sebelumnya
+EDGE_RUN	BOOL		False	False	tepi naik SIM_AUTORUN
+LAST_CSTOP	BOOL		False	False	keadaan SIM_CYCLE_STOP scan sebelumnya
+EDGE_CSTOP	BOOL		False	False	tepi naik SIM_CYCLE_STOP
+LAST_SEL	BOOL		False	False	posisi selector scan sebelumnya
+SEL_UBAH	BOOL		False	False	selector BERUBAH scan ini - itu yang menghentikan, bukan posisinya
+HOMING	BOOL		False	False	sedang menuju pose home
+ABORT	BOOL		False	False	berhenti total scan ini
+LAST_COLLIDE	BOOL		False	False	keadaan tabrakan scan sebelumnya - abort cuma di tepinya
+j	INT		False	False	pencacah FOR kedua (mencari DW kosong)
+k	INT		False	False	pencacah titik yang diperiksa penjaga tabrakan
+WIP_IN	INT		False	False	indeks stasiun WIP IN
+WIP_OUT	INT		False	False	indeks stasiun WIP OUT
+CK_X	ARRAY[0..3] OF LREAL		False	False	titik yang diperiksa tabrakan - X
+CK_Y	ARRAY[0..3] OF LREAL		False	False	titik yang diperiksa tabrakan - Y
+CK_Z	ARRAY[0..3] OF LREAL		False	False	titik yang diperiksa tabrakan - Z
+CK_MX	LREAL		False	False	setengah lebar kotak mesin + margin + jangkauan jari
+CK_MY	LREAL		False	False	setengah kedalaman kotak mesin + margin
+CAND_HIT	BOOL		False	False	pose yang DIMINTA menembus mesin - perintahnya ditolak
+NOW_HIT	BOOL		False	False	pose SEKARANG menembus mesin - sudah tersentuh
+NOW_ST	INT		False	False	stasiun yang tersentuh, -1 lantai atau tidak ada
+VT	LREAL		False	False	kecepatan yang dituju profil trapesium scan ini
+VB	LREAL		False	False	kecepatan tertinggi yang masih bisa direm sebelum target
+DV	LREAL		False	False	perubahan kecepatan maksimum satu scan = akselerasi x dt

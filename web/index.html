@@ -30,6 +30,8 @@
            font:13px system-ui, sans-serif; }
   button:hover { border-color:#2563eb; }
   button.act { background:#2563eb; border-color:#2563eb; color:#fff; }
+  button.bahaya { background:#dc2626; border-color:#dc2626; color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
   input, select { padding:4px 6px; border:1px solid #cbd5e1; border-radius:5px;
                   font:13px ui-monospace, Consolas, monospace; }
   input.num { width:72px; text-align:right; }
@@ -37,6 +39,7 @@
   td { padding:2px 4px; }
   td.k { color:#6b7280; }
   td.v { text-align:right; }
+  td.bad { color:#dc2626; font-weight:600; }
   .jogrow { display:flex; align-items:center; gap:6px; margin:3px 0; }
   .jogrow span.lbl { width:82px; color:#6b7280; font-size:12px; }
   .lamp { display:inline-block; width:11px; height:11px; border-radius:50%; background:#d1d5db;
@@ -57,28 +60,46 @@
 <div class="panel">
   <h1>Blurobot &mdash; viz 3D</h1>
   <p class="sub">1 sumbu linear X + 3 sendi planar di bidang Y&ndash;Z. Kinematiknya milik
-     project mesin, dijalankan simulator NX.</p>
+     project mesin, dijalankan simulator NX. Gripper menyumpit dari atas dan menjepit
+     sisi kiri-kanan PCB.</p>
 
   <div id="status" class="off">memeriksa bridge...</div>
 
   <fieldset>
-    <legend>Siklus otomatis</legend>
+    <legend>Panel sel</legend>
     <div class="jogrow">
-      <button id="autoBtn" class="act">Start</button>
-      <span id="autoStat">berhenti</span>
+      <span class="lbl">selector</span>
+      <label style="font-size:12px"><input type="checkbox" id="selAuto"> AUTO</label>
+      <button id="estopBtn" class="bahaya">E-STOP</button>
+    </div>
+    <div class="jogrow">
+      <button id="runBtn" class="act">Autorun</button>
+      <button id="cstopBtn">Cycle stop</button>
     </div>
     <table>
-      <tr><td class="k">fase</td><td class="v" id="cFase">-</td>
+      <tr><td class="k">keadaan</td><td class="v" id="cState">-</td>
           <td class="k">langkah</td><td class="v" id="cStep">-</td></tr>
+      <tr><td class="k">pekerjaan</td><td class="v" id="cJob" colspan="3">-</td></tr>
       <tr><td class="k">tujuan</td><td class="v" id="cTuju">-</td>
-          <td class="k">PCB</td><td class="v" id="cPart">-</td></tr>
+          <td class="k">gripper</td><td class="v" id="cPart">-</td></tr>
       <tr><td class="k">selesai</td><td class="v" id="cCount">-</td>
-          <td class="k">proses</td><td class="v" id="cWait">-</td></tr>
+          <td class="k">tabrakan</td><td class="v" id="cTabrak">-</td></tr>
+      <tr><td class="k">catatan</td><td class="v" id="cSebab" colspan="3">-</td></tr>
     </table>
-    <div class="hint">WIP IN &rarr; ICC (1/2 bergantian) &rarr; DW (1/2 bergantian) &rarr; WIP OUT,
-      lalu PCB-nya hilang. Sekuensnya jalan di PLC; halaman cuma menggambarnya.
-      Selama Start, jog dimatikan &mdash; dua sumber perintah untuk satu lengan
-      selalu berebut.</div>
+    <div class="hint">Selector diubah SAAT jalan, atau E-STOP ditekan &rarr; robot berhenti
+      di tempat dan wajib <b>Home</b> dulu sebelum Autorun mau jalan lagi. <b>Cycle stop</b>
+      beda: pekerjaan yang sedang dipegang diselesaikan dulu, produk tidak ditinggal di
+      udara, dan sesudahnya Autorun bisa langsung dipakai lagi.
+      Sekuensnya jalan di PLC; halaman cuma menggambarnya.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Stasiun</legend>
+    <table id="stTabel"></table>
+    <div class="hint">Robot mengisi <b>buffer ICC dulu sampai dua-duanya penuh</b>, baru
+      mengosongkan DW yang selesai ke WIP OUT, baru memindah ICC yang selesai ke DW
+      kosong. Urutan itu yang bikin mesin tes 17 detik tidak menganggur menunggu robot.
+      Tiap mesin menghitung waktunya sendiri, berbarengan.</div>
   </fieldset>
 
   <fieldset>

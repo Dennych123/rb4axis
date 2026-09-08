@@ -66,12 +66,22 @@
     {
       "nama": "SIM_HOME",
       "tipe": "ARRAY[0..3] OF LREAL",
-      "komen": "pose home per sumbu"
+      "komen": "pose home per sumbu - SEKALIGUS pose jalan waktu menyusuri rel"
     },
     {
       "nama": "SIM_VEL",
       "tipe": "ARRAY[0..3] OF LREAL",
       "komen": "kecepatan maksimum per sumbu - mm/s atau derajat/s"
+    },
+    {
+      "nama": "SIM_ACC",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "akselerasi per sumbu - tanpa ini gerakannya patah-patah di layar"
+    },
+    {
+      "nama": "SIM_JOINT_VEL",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "kecepatan sumbu sekarang - keluaran profil trapesium"
     },
     {
       "nama": "SIM_VEL_W",
@@ -131,7 +141,7 @@
     {
       "nama": "SIM_GRIP_CLOSED",
       "tipe": "BOOL",
-      "komen": "jari sudah menutup rapat"
+      "komen": "jari sudah menjepit (berhenti di lebar produk, bukan di nol)"
     },
     {
       "nama": "SIM_GRIP_LEN",
@@ -139,24 +149,59 @@
       "komen": "panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz"
     },
     {
-      "nama": "SIM_AUTO",
-      "tipe": "BOOL",
-      "komen": "jalankan siklus otomatis. Jog dimatikan selama ini menyala"
+      "nama": "SIM_GRIP_TUTUP",
+      "tipe": "LREAL",
+      "komen": "bukaan waktu menjepit produk, mm - jari berhenti di sini, bukan di 0"
     },
     {
-      "nama": "SIM_CYCLE_PHASE",
+      "nama": "SIM_GRIP_JARI",
+      "tipe": "LREAL",
+      "komen": "tebal jari, mm - ikut dihitung penjaga tabrakan"
+    },
+    {
+      "nama": "SIM_SEL_AUTO",
+      "tipe": "BOOL",
+      "komen": "selector: TRUE auto, FALSE manual. Diubah saat jalan = berhenti total"
+    },
+    {
+      "nama": "SIM_ESTOP",
+      "tipe": "BOOL",
+      "komen": "emergency stop - berhenti total, wajib home lagi"
+    },
+    {
+      "nama": "SIM_STOP_REQ",
+      "tipe": "BOOL",
+      "komen": "cycle stop sudah diminta, tinggal menunggu akhir siklus"
+    },
+    {
+      "nama": "SIM_HOMED",
+      "tipe": "BOOL",
+      "komen": "sudah home sejak berhenti total terakhir - syarat Autorun"
+    },
+    {
+      "nama": "SIM_STATE",
       "tipe": "INT",
-      "komen": "0 ambil di WIP IN, 1 ICC, 2 DW, 3 lepas di WIP OUT"
+      "komen": "0 manual, 1 homing, 2 auto siap, 3 jalan, 4 stop di akhir siklus, 5 perlu home, 6 emergency"
+    },
+    {
+      "nama": "SIM_ABORT_ID",
+      "tipe": "INT",
+      "komen": "sebab berhenti total: 0 tidak ada, 1 emergency, 2 selector diubah, 3 tabrakan"
+    },
+    {
+      "nama": "SIM_AUTO",
+      "tipe": "BOOL",
+      "komen": "siklus sedang jalan. Dinyalakan SIM_AUTORUN, bukan ditulis halaman"
     },
     {
       "nama": "SIM_CYCLE_STEP",
       "tipe": "INT",
-      "komen": "langkah di dalam fase - buat melihat di mana sekuensnya berhenti"
+      "komen": "langkah sekuenser - buat melihat di mana sekuensnya berhenti"
     },
     {
       "nama": "SIM_CYCLE_COUNT",
       "tipe": "UDINT",
-      "komen": "jumlah PCB yang sudah selesai"
+      "komen": "jumlah PCB yang sudah keluar lewat WIP OUT"
     },
     {
       "nama": "SIM_TARGET_ST",
@@ -164,14 +209,19 @@
       "komen": "stasiun yang sedang dituju"
     },
     {
-      "nama": "SIM_PART_STATE",
+      "nama": "SIM_JOB_SRC",
       "tipe": "INT",
-      "komen": "0 tidak ada PCB, 1 dipegang gripper, 2+i ada di stasiun i"
+      "komen": "stasiun asal pekerjaan sekarang, -1 kalau menganggur"
     },
     {
-      "nama": "SIM_WAIT",
-      "tipe": "LREAL",
-      "komen": "sisa waktu proses mesin, detik"
+      "nama": "SIM_JOB_DST",
+      "tipe": "INT",
+      "komen": "stasiun tujuan pekerjaan sekarang, -1 kalau menganggur"
+    },
+    {
+      "nama": "SIM_PART_STATE",
+      "tipe": "INT",
+      "komen": "0 gripper kosong, 1 sedang memegang PCB"
     },
     {
       "nama": "SIM_APPROACH",
@@ -201,7 +251,7 @@
     {
       "nama": "SIM_ST_T",
       "tipe": "ARRAY[0..5] OF LREAL",
-      "komen": "sudut end-effector tiap stasiun"
+      "komen": "sudut end-effector tiap stasiun (-90 = menyumpit dari atas)"
     },
     {
       "nama": "SIM_ST_TIPE",
@@ -212,6 +262,41 @@
       "nama": "SIM_ST_PROSES",
       "tipe": "ARRAY[0..5] OF LREAL",
       "komen": "lama mesin bekerja, detik"
+    },
+    {
+      "nama": "SIM_ST_STATE",
+      "tipe": "ARRAY[0..5] OF INT",
+      "komen": "0 kosong, 1 sedang proses, 2 selesai - menunggu diambil"
+    },
+    {
+      "nama": "SIM_ST_TIMER",
+      "tipe": "ARRAY[0..5] OF LREAL",
+      "komen": "sisa waktu proses tiap mesin, detik - jalan berbarengan"
+    },
+    {
+      "nama": "SIM_ST_W",
+      "tipe": "LREAL",
+      "komen": "lebar badan mesin (arah rel), mm - dipakai gambar DAN penjaga tabrakan"
+    },
+    {
+      "nama": "SIM_ST_D",
+      "tipe": "LREAL",
+      "komen": "kedalaman badan mesin, mm"
+    },
+    {
+      "nama": "SIM_ST_MARGIN",
+      "tipe": "LREAL",
+      "komen": "jarak aman di sekeliling badan mesin, mm"
+    },
+    {
+      "nama": "SIM_COLLIDE",
+      "tipe": "BOOL",
+      "komen": "lengan sedang menyentuh badan mesin atau lantai"
+    },
+    {
+      "nama": "SIM_COLLIDE_ST",
+      "tipe": "INT",
+      "komen": "yang disentuh: indeks stasiun, -1 lantai, -1 juga kalau tidak ada"
     },
     {
       "nama": "PD1300_000",
@@ -338,12 +423,17 @@
     {
       "nama": "SIM_HOME",
       "tipe": "ARRAY[0..3] OF LREAL",
-      "komen": "pose home per sumbu"
+      "komen": "pose home per sumbu - SEKALIGUS pose jalan waktu menyusuri rel"
     },
     {
       "nama": "SIM_VEL",
       "tipe": "ARRAY[0..3] OF LREAL",
       "komen": "kecepatan maksimum per sumbu - mm/s atau derajat/s"
+    },
+    {
+      "nama": "SIM_ACC",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "akselerasi per sumbu - tanpa ini gerakannya patah-patah di layar"
     },
     {
       "nama": "SIM_VEL_W",
@@ -371,9 +461,29 @@
       "komen": "kecepatan jari, mm/s"
     },
     {
-      "nama": "SIM_AUTO",
+      "nama": "SIM_GRIP_TUTUP",
+      "tipe": "LREAL",
+      "komen": "bukaan waktu menjepit produk, mm - jari berhenti di sini, bukan di 0"
+    },
+    {
+      "nama": "SIM_SEL_AUTO",
       "tipe": "BOOL",
-      "komen": "jalankan siklus otomatis. Jog dimatikan selama ini menyala"
+      "komen": "selector: TRUE auto, FALSE manual. Diubah saat jalan = berhenti total"
+    },
+    {
+      "nama": "SIM_ESTOP",
+      "tipe": "BOOL",
+      "komen": "emergency stop - berhenti total, wajib home lagi"
+    },
+    {
+      "nama": "SIM_AUTORUN",
+      "tipe": "BOOL",
+      "komen": "tepi naik: mulai siklus (butuh selector AUTO + sudah home + tidak emergency)"
+    },
+    {
+      "nama": "SIM_CYCLE_STOP",
+      "tipe": "BOOL",
+      "komen": "tepi naik: berhenti SESUDAH pekerjaan sekarang selesai"
     },
     {
       "nama": "SIM_APPROACH",

@@ -25,19 +25,30 @@ var ERR_TEKS = { 0: '', 1: 'di luar jangkauan (R > L2+L3)', 2: 'terlalu dekat (R
 
 var st = {
   plc: false, bridge: false,
-  joint: [0, 90, -90, 0],
+  joint: [0, 90, -90, 0],         // yang DIGAMBAR - dihaluskan waktu tersambung PLC
+  jointPlc: [0, 90, -90, 0],      // yang TERAKHIR DIBACA dari PLC - itu yang di panel
+  jointVel: [0, 0, 0, 0],
   world: [0, 0, 0, 0],
   cmd: [0, 90, -90, 0],
   limit: [false, false, false, false, false, false, false, false],
   beat: 0, err: false, errId: 0, elbowUp: false,
-  grip: { pos: 80, stroke: 80, len: 90, cmd: false, vel: 120 },
-  auto: false, fase: 0, langkah: 0, siklus: 0, tujuan: 0, part: 0, tunggu: 0,
+  grip: { pos: 180, stroke: 180, tutup: 120, jari: 14, len: 90, cmd: false, vel: 160 },
+  auto: false, langkah: 0, siklus: 0, tujuan: 0, part: 0,
+  jobSrc: -1, jobDst: -1,
+  // panel: selector, emergency, dan syarat home. Semuanya dibaca dari PLC - halaman
+  // TIDAK menyimpulkan sendiri boleh-tidaknya jalan, karena kesimpulannya bisa beda
+  // dari yang dipakai PLC memutuskan.
+  selAuto: false, estop: false, homed: true, stopReq: false, state: 0, abortId: 0,
+  collide: false, collideSt: -1,
   approach: 140,
   stasiun: [],                    // {nama,tipe,x,y,z,theta,proses}
+  stState: [0, 0, 0, 0, 0, 0], stTimer: [0, 0, 0, 0, 0, 0],
+  mesin: { lebar: 300, dalam: 320, margin: 12 },
   pcb: { panjang: 120, lebar: 80, tebal: 8 },
   dim: { L1: 400, L2: 300, L3: 250, L4: 100, toolY: 140, toolZ: 0,
          offset: [0, 0, 0, 0, 0], limitv: [-500, 500, -90, 180, -150, 0, -120, 120] },
-  vel: [200, 30, 30, 45], velW: [100, 100, 100, 30], step: 10, mode: 0, hold: false
+  vel: [900, 90, 90, 120], acc: [1800, 240, 240, 320],
+  velW: [100, 100, 100, 30], step: 10, mode: 0, hold: false
 };
 
 var el = function (id) { return document.getElementById(id); };
@@ -46,6 +57,7 @@ var f2 = function (x) { return (typeof x === 'number' && isFinite(x)) ? x.toFixe
 function cfgKin() {
   return { L1: st.dim.L1, L2: st.dim.L2, L3: st.dim.L3, L4: st.dim.L4,
            toolY: st.dim.toolY, toolZ: st.dim.toolZ, gripLen: st.grip.len,
+           gripPos: st.grip.pos, gripJari: st.grip.jari,
            offset: st.dim.offset, limit: st.dim.limitv };
 }
 
@@ -91,7 +103,12 @@ function stream() {
       // keArray, BUKAN Array.from: array LREAL/REAL datang sebagai typed array dan
       // lewat JSON berubah jadi objek {"0":..} tanpa length - Array.from() atas objek
       // begitu mengembalikan [] kosong, dan lengannya lenyap dari layar tanpa galat.
-      if (v[TAG.joint]) { st.joint = keArray(v[TAG.joint], 4); st.cmd = st.joint.slice(); }
+      // Yang datang dari PLC ditaruh di jointPlc, BUKAN langsung di joint: yang
+      // digambar dikejar ke situ tiap frame (lihat haluskan()). Nilai PLC-nya sendiri
+      // tidak diubah - panel menampilkan yang ini, jadi angka di layar tetap angka
+      // simulator, bukan angka hasil penghalusan.
+      if (v[TAG.joint]) { st.jointPlc = keArray(v[TAG.joint], 4); st.cmd = st.jointPlc.slice(); }
+      if (v.SIM_JOINT_VEL) st.jointVel = keArray(v.SIM_JOINT_VEL, 4);
       if (v[TAG.world]) st.world = keArray(v[TAG.world], 4);
       if (v[TAG.limit]) st.limit = keArray(v[TAG.limit], 8);
       if (v[TAG.beat] !== undefined) st.beat = v[TAG.beat];
@@ -99,6 +116,8 @@ function stream() {
       if (v.SIM_ELBOW_UP !== undefined) st.elbowUp = !!v.SIM_ELBOW_UP;
       if (v.SIM_GRIP_POS !== undefined) st.grip.pos = v.SIM_GRIP_POS;
       if (v.SIM_GRIP_STROKE) st.grip.stroke = v.SIM_GRIP_STROKE;
+      if (v.SIM_GRIP_TUTUP !== undefined) st.grip.tutup = v.SIM_GRIP_TUTUP;
+      if (v.SIM_GRIP_JARI) st.grip.jari = v.SIM_GRIP_JARI;
       if (v.SIM_GRIP_LEN) st.grip.len = v.SIM_GRIP_LEN;
       if (v.SIM_GRIP_CMD !== undefined) st.grip.cmd = !!v.SIM_GRIP_CMD;
       if (v.ROBOT_L1_LREAL) {
@@ -107,12 +126,25 @@ function stream() {
         st.dim.toolY = v.ROBOT_TOOL_Y_LREAL; st.dim.toolZ = v.ROBOT_TOOL_Z_LREAL;
       }
       if (v.SIM_AUTO !== undefined) st.auto = !!v.SIM_AUTO;
-      if (v.SIM_CYCLE_PHASE !== undefined) st.fase = v.SIM_CYCLE_PHASE;
       if (v.SIM_CYCLE_STEP !== undefined) st.langkah = v.SIM_CYCLE_STEP;
       if (v.SIM_CYCLE_COUNT !== undefined) st.siklus = v.SIM_CYCLE_COUNT;
       if (v.SIM_TARGET_ST !== undefined) st.tujuan = v.SIM_TARGET_ST;
       if (v.SIM_PART_STATE !== undefined) st.part = v.SIM_PART_STATE;
-      if (v.SIM_WAIT !== undefined) st.tunggu = v.SIM_WAIT;
+      if (v.SIM_JOB_SRC !== undefined) st.jobSrc = v.SIM_JOB_SRC;
+      if (v.SIM_JOB_DST !== undefined) st.jobDst = v.SIM_JOB_DST;
+      if (v.SIM_SEL_AUTO !== undefined) st.selAuto = !!v.SIM_SEL_AUTO;
+      if (v.SIM_ESTOP !== undefined) st.estop = !!v.SIM_ESTOP;
+      if (v.SIM_HOMED !== undefined) st.homed = !!v.SIM_HOMED;
+      if (v.SIM_STOP_REQ !== undefined) st.stopReq = !!v.SIM_STOP_REQ;
+      if (v.SIM_STATE !== undefined) st.state = v.SIM_STATE;
+      if (v.SIM_ABORT_ID !== undefined) st.abortId = v.SIM_ABORT_ID;
+      if (v.SIM_COLLIDE !== undefined) st.collide = !!v.SIM_COLLIDE;
+      if (v.SIM_COLLIDE_ST !== undefined) st.collideSt = v.SIM_COLLIDE_ST;
+      if (v.SIM_ST_STATE) st.stState = keArray(v.SIM_ST_STATE, 6);
+      if (v.SIM_ST_TIMER) st.stTimer = keArray(v.SIM_ST_TIMER, 6);
+      if (v.SIM_ST_W) st.mesin.lebar = v.SIM_ST_W;
+      if (v.SIM_ST_D) st.mesin.dalam = v.SIM_ST_D;
+      if (v.SIM_ST_MARGIN !== undefined) st.mesin.margin = v.SIM_ST_MARGIN;
       if (v.SIM_APPROACH) st.approach = v.SIM_APPROACH;
       // Pose stasiun dibaca dari PLC, bukan dari config: yang digambar harus yang
       // benar-benar dikejar sekuenser. Kalau keduanya beda, yang salah ketahuan
@@ -127,6 +159,7 @@ function stream() {
         }));
       }
       if (v.SIM_VEL) st.vel = keArray(v.SIM_VEL, 4);
+      if (v.SIM_ACC) st.acc = keArray(v.SIM_ACC, 4);
       if (v.SIM_VEL_W) st.velW = keArray(v.SIM_VEL_W, 4);
       for (var i = 0; i < 8; i++) {
         var k = 'PD1300_00' + i;
@@ -146,6 +179,16 @@ function kirim(nama, nilai, indeks) {
 
 // ------------------------------------------------------- kinematik offline
 function offlineMinta(pose) {
+  // Penjaga tabrakan yang SAMA dengan di PLC (collideCheck di kin.js). Tanpa ini,
+  // mode offline jadi mode yang boleh menembus mesin - dan yang memakainya belajar
+  // bahwa menembus mesin itu wajar sampai simulatornya dinyalakan.
+  var tab = collideCheck(pose, cfgKin(), st.stasiun, st.mesin);
+  if (tab.hit) {
+    st.err = true; st.errId = 5;
+    el('err').textContent = 'ditolak: ' + (tab.st >= 0 && st.stasiun[tab.st]
+      ? 'menabrak ' + st.stasiun[tab.st].nama : 'menembus lantai');
+    return;
+  }
   var ik = inverseKinematicV2(pose, cfgKin(), st.elbowUp);
   st.err = !ik.done;
   st.errId = ik.errorId;
@@ -153,21 +196,39 @@ function offlineMinta(pose) {
   if (ik.done) st.cmd = ik.joint;
 }
 
+// Profil trapesium, CERMINAN motion model di PRG_SIM_ROBOT.st: dipercepat sampai
+// SIM_VEL lalu direm tepat waktu (v = sqrt(2*a*s)). Kalau di sini dipakai model
+// yang lebih sederhana, mode offline dan mode PLC bergerak dengan bentuk yang beda -
+// dan bedanya terbaca seperti PLC-nya yang salah.
+function langkahSumbu(pos, cmd, vel, vmax, acc, dt) {
+  var d = cmd - pos;
+  var vt = Math.min(vmax, Math.sqrt(2 * acc * Math.abs(d)));
+  if (d < 0) vt = -vt;
+  var dv = acc * dt;
+  if (Math.abs(vt - vel) <= dv) vel = vt;
+  else vel += (vt > vel ? dv : -dv);
+  var s = vel * dt;
+  if (Math.abs(d) <= Math.abs(s)) return { pos: cmd, vel: 0, jalan: false };
+  return { pos: pos + s, vel: vel, jalan: true };
+}
+
 var tSebelum = 0;
 function offlineStep(t) {
   var dt = Math.min((t - tSebelum) / 1000, 0.1);
   tSebelum = t;
-  if (st.plc || !dt) return;
+  if (!dt) return;
+  if (st.plc) { haluskan(dt); return; }
 
   for (var i = 0; i < 4; i++) {
-    var langkah = st.vel[i] * dt;
-    var d = st.cmd[i] - st.joint[i];
-    if (Math.abs(d) <= langkah) st.joint[i] = st.cmd[i];
-    else st.joint[i] += (d > 0 ? langkah : -langkah);
+    var r = langkahSumbu(st.joint[i], st.cmd[i], st.jointVel[i], st.vel[i], st.acc[i], dt);
+    st.joint[i] = r.pos;
+    st.jointVel[i] = r.vel;
   }
+  st.jointPlc = st.joint.slice();
 
-  // Gripper: model yang sama dengan di ST - didorong ke target dengan batas kecepatan.
-  var target = st.grip.cmd ? 0 : st.grip.stroke;
+  // Gripper: model yang sama dengan di ST - dan menutupnya berhenti di lebar produk,
+  // bukan di nol.
+  var target = st.grip.cmd ? st.grip.tutup : st.grip.stroke;
   var dg = target - st.grip.pos;
   var lg = st.grip.vel * dt;
   st.grip.pos = (Math.abs(dg) <= lg) ? target : st.grip.pos + (dg > 0 ? lg : -lg);
@@ -176,6 +237,26 @@ function offlineStep(t) {
   st.world = fk.world;
   var ik = inverseKinematicV2(fk.worldL, cfgKin(), st.elbowUp);
   st.limit = ik.limits;
+  var tab = collideCheck(st.world, cfgKin(), st.stasiun, st.mesin);
+  st.collide = tab.hit;
+  st.collideSt = tab.st;
+}
+
+// Penghalusan gambar waktu tersambung PLC. Bridge mengirim tiap ~50 ms sementara
+// layar menggambar tiap ~16 ms, jadi tanpa ini tiap tiga frame menampilkan angka
+// yang sama lalu melompat - dan yang terlihat patah-patah walau sumbunya bergerak
+// mulus di simulator.
+//
+// Yang dihaluskan CUMA yang digambar. Panel tetap menampilkan st.jointPlc apa adanya,
+// jadi angka di layar selalu angka simulator. Ketinggalannya paling banyak satu
+// sampel: begitu nilai berhenti berubah, gambar mengejarnya sampai persis.
+var TAU = 0.05;
+function haluskan(dt) {
+  var a = 1 - Math.exp(-dt / TAU);
+  for (var i = 0; i < 4; i++) {
+    var d = st.jointPlc[i] - st.joint[i];
+    st.joint[i] = (Math.abs(d) < 1e-6) ? st.jointPlc[i] : st.joint[i] + d * a;
+  }
 }
 
 // ------------------------------------------------------------------- scene
@@ -305,6 +386,11 @@ function bikinScene() {
   MAT.wip = bahan(0x64748b, 0.3, 0.7);
   MAT.plat = bahan(0xcbd5e1, 0.6, 0.4);
   MAT.pcb = bahan(0x16a34a, 0.1, 0.8);
+  // PCB yang sedang DIPROSES dibedakan warnanya dari yang sudah selesai: dua ICC
+  // yang satu masih menghitung dan satu sudah menunggu diambil kelihatan sama persis
+  // kalau warnanya sama, dan justru itu yang mau dilihat dari buffer.
+  MAT.pcbProses = bahan(0x0e7490, 0.1, 0.8);
+  MAT.tabrak = bahan(0xdc2626, 0.3, 0.6);
   bagian.stasiun = [];
   for (var s = 0; s < 6; s++) {
     var badan = kotak(1, 1, 1, MAT.wip);
@@ -322,10 +408,18 @@ function bikinScene() {
     bagian.stasiun[t].label = lab;
   }
 
-  // PCB: satu kotak yang berpindah induk secara logis - digambar di gripper waktu
-  // dipegang, di stasiun waktu ditinggal, disembunyikan sesudah keluar di WIP OUT.
-  bagian.pcb = kotak(1, 1, 1, MAT.pcb);
-  scene.add(bagian.pcb);
+  // PCB: SATU per stasiun plus satu yang dipegang gripper. Dulu cuma satu kotak,
+  // dan itu cukup selama cuma ada satu produk di seluruh sel. Sekarang ICC 1 dan
+  // ICC 2 memang harus bisa berisi bersamaan - itu inti buffer-nya - jadi satu kotak
+  // berarti produk kedua tidak pernah kelihatan.
+  bagian.pcbSt = [];
+  for (var q = 0; q < 6; q++) {
+    var kp = kotak(1, 1, 1, MAT.pcb);
+    scene.add(kp);
+    bagian.pcbSt.push(kp);
+  }
+  bagian.pcbHold = kotak(1, 1, 1, MAT.pcb);
+  scene.add(bagian.pcbHold);
 
   // Penanda TCP: bola kecil di ujung jari. Itu titik yang dijanjikan FK/IK, jadi
   // kalau dia tidak berimpit dengan angka world di panel, ada yang salah.
@@ -449,42 +543,54 @@ function gambar() {
     if (!sd) {
       b.badan.visible = false;
       b.plat.visible = false;
+      bagian.pcbSt[s].visible = false;
       if (b.label) b.label.visible = false;
       continue;
     }
     b.badan.visible = true;
     b.plat.visible = true;
-    b.badan.material = (sd.tipe === 1) ? MAT.icc : (sd.tipe === 2) ? MAT.dw : MAT.wip;
+    // Yang sedang ditabrak dimerahkan. Tanpa itu, "SIM_COLLIDE menyala" cuma satu
+    // lampu di panel dan yang bertanya berikutnya adalah "menabrak yang mana".
+    b.badan.material = (st.collide && st.collideSt === s) ? MAT.tabrak
+      : (sd.tipe === 1) ? MAT.icc : (sd.tipe === 2) ? MAT.dw : MAT.wip;
     // Badan berdiri dari lantai sampai permukaan stasiun: tinggi mesin ITU YANG
     // membedakan ICC dari DW di layar, dan tingginya datang dari pose stasiun -
     // bukan angka terpisah yang bisa melenceng dari tempat gripper turun.
     // LANTAI ada di y = -30 (tiga), permukaan stasiun di y = sd.z. Badannya harus
     // menjangkau keduanya; memakai sd.z sebagai tinggi bikin mesinnya menggantung
     // 30 mm di atas lantai - kecil, dan justru karena kecil tidak pernah ditanyakan.
+    // Ukuran badan mesin dibaca dari tag PLC - kotak yang SAMA dengan yang dipakai
+    // penjaga tabrakan di sana. Angka gambar sendiri berarti gripper bisa berhenti
+    // di udara atau menembus kotak, dan dua-duanya terbaca sebagai bug yang lain.
     var tinggi = Math.max(20, sd.z + 30);
-    b.badan.scale.set(300, tinggi, 320);
+    b.badan.scale.set(st.mesin.lebar, tinggi, st.mesin.dalam);
     b.badan.position.set(sd.x, sd.z - tinggi / 2, sd.y);
-    b.plat.scale.set(320, 16, 340);
+    b.plat.scale.set(st.mesin.lebar + 20, 16, st.mesin.dalam + 20);
     b.plat.position.set(sd.x, sd.z, sd.y);
     if (b.label) {
-      tulisLabel(b.label, sd.nama + (sd.proses > 0 ? '  ' + sd.proses + 's' : ''));
+      // Sisa waktu proses ikut di label - itu yang menjelaskan kenapa robot pergi
+      // ke ICC yang satunya dan bukan ke yang ini.
+      var sisa = st.stTimer[s] > 0.05 ? '  ' + st.stTimer[s].toFixed(0) + 's'
+        : (st.stState[s] === 2 && sd.tipe !== 0 && sd.tipe !== 3 ? '  siap' : '');
+      tulisLabel(b.label, sd.nama + sisa);
       b.label.visible = true;
-      b.label.position.set(sd.x, sd.z + 130, sd.y);
+      b.label.position.set(sd.x, sd.z + 150, sd.y);
     }
+
+    // PCB di stasiun. WIP IN selalu berisi (stok), WIP OUT selalu kosong (produk
+    // sudah keluar dari sel) - itu yang dipegang PLC di SIM_ST_STATE, bukan tebakan
+    // halaman.
+    var kp = bagian.pcbSt[s];
+    kp.visible = st.stState[s] > 0;
+    kp.material = (st.stState[s] === 1) ? MAT.pcbProses : MAT.pcb;
+    kp.scale.set(pcb.panjang, pcb.tebal, pcb.lebar);
+    kp.position.set(sd.x, sd.z + pcb.tebal / 2 + 8, sd.y);
   }
 
-  bagian.pcb.scale.set(pcb.panjang, pcb.tebal, pcb.lebar);
-  if (st.part === 1) {
-    // Dipegang: duduk tepat di TCP, di antara kedua jari.
-    bagian.pcb.visible = true;
-    bagian.pcb.position.copy(ke3(g.tcp));
-  } else if (st.part >= 2 && st.stasiun[st.part - 2]) {
-    var sp = st.stasiun[st.part - 2];
-    bagian.pcb.visible = true;
-    bagian.pcb.position.set(sp.x, sp.z + pcb.tebal / 2 + 8, sp.y);
-  } else {
-    bagian.pcb.visible = false;
-  }
+  bagian.pcbHold.scale.set(pcb.panjang, pcb.tebal, pcb.lebar);
+  bagian.pcbHold.visible = st.part === 1;
+  // Dipegang: duduk tepat di TCP, dijepit kedua jari di sisi kiri-kanannya.
+  if (st.part === 1) bagian.pcbHold.position.copy(ke3(g.tcp));
 
   orbit.tY = d.L1 * 0.8;
   cam.position.set(
@@ -546,7 +652,10 @@ function jogTekan(tag, i, on) {
 
 function panelTampil() {
   for (var i = 0; i < 4; i++) {
-    el('j' + i).textContent = f2(st.joint[i]);
+    // Angka PLC apa adanya, BUKAN yang sudah dihaluskan buat digambar. Panel yang
+    // menampilkan angka hasil interpolasi berarti tidak ada lagi tempat untuk
+    // membandingkan layar dengan simulator.
+    el('j' + i).textContent = f2(st.jointPlc[i]);
     el('w' + i).textContent = f2(st.world[i]);
     var l = el('jogl' + i);
     if (l) l.textContent = (st.mode === 0) ? NAMA_JOINT[i] : NAMA_WORLD[i];
@@ -563,21 +672,44 @@ function panelTampil() {
   // Siklusnya jalan DI PLC. Waktu offline tombolnya dimatikan, bukan dijalankan
   // sendiri di halaman: sekuens kedua di JS berarti dua sumber kebenaran, dan yang
   // di layar bakal terlihat benar justru waktu yang di PLC salah.
-  var ab = el('autoBtn');
-  ab.disabled = !st.plc;
-  ab.textContent = st.auto ? 'Stop' : 'Start';
-  ab.className = st.auto ? '' : 'act';
-  el('autoStat').textContent = !st.plc ? 'butuh PLC - sekuensnya jalan di sana'
-    : (st.auto ? 'jalan' : 'berhenti');
-  el('cFase').textContent = NAMA_FASE[st.fase] || st.fase;
+  var bisaRun = st.plc && st.selAuto && st.homed && !st.estop && !st.auto;
+  el('runBtn').disabled = !bisaRun;
+  el('runBtn').className = bisaRun ? 'act' : '';
+  el('cstopBtn').disabled = !st.plc || !st.auto || st.stopReq;
+  el('home').disabled = st.plc && (st.estop || st.auto);
+  el('selAuto').checked = st.selAuto;
+  el('selAuto').disabled = !st.plc;
+  var eb = el('estopBtn');
+  eb.textContent = st.estop ? 'Lepas E-STOP' : 'E-STOP';
+  eb.className = st.estop ? 'act' : 'bahaya';
+  eb.disabled = !st.plc;
+
+  el('cState').textContent = NAMA_STATE[st.state] || st.state;
   el('cStep').textContent = st.langkah;
+  el('cJob').textContent = (st.jobSrc >= 0 && st.stasiun[st.jobSrc] && st.stasiun[st.jobDst])
+    ? st.stasiun[st.jobSrc].nama + ' → ' + st.stasiun[st.jobDst].nama : 'menganggur';
   var sd = st.stasiun[st.tujuan];
   el('cTuju').textContent = sd ? sd.nama : st.tujuan;
-  el('cPart').textContent = st.part === 0 ? 'tidak ada'
-    : st.part === 1 ? 'di gripper'
-    : (st.stasiun[st.part - 2] ? 'di ' + st.stasiun[st.part - 2].nama : 'stasiun ' + (st.part - 2));
+  el('cPart').textContent = st.part === 1 ? 'di gripper' : 'kosong';
   el('cCount').textContent = st.siklus;
-  el('cWait').textContent = st.tunggu > 0 ? f2(st.tunggu) + ' s' : '-';
+  el('cSebab').textContent = !st.homed
+    ? (NAMA_ABORT[st.abortId] || 'berhenti') + ' - tekan Home dulu'
+    : (st.stopReq ? 'cycle stop: selesaikan pekerjaan ini dulu' : '-');
+
+  // Tabel stasiun: keadaan + sisa waktu tiap mesin. Ini yang menjawab "kenapa
+  // robotnya diam" - biasanya karena kedua ICC masih menghitung.
+  var ht = '';
+  for (var s = 0; s < st.stasiun.length; s++) {
+    var x = st.stasiun[s];
+    ht += '<tr><td class="k">' + x.nama + '</td><td class="v">' + (NAMA_STST[st.stState[s]] || '-')
+       + '</td><td class="v">' + (st.stTimer[s] > 0.05 ? f2(st.stTimer[s]) + ' s' : '-')
+       + '</td></tr>';
+  }
+  el('stTabel').innerHTML = ht;
+  el('cTabrak').textContent = !st.collide ? 'bebas'
+    : (st.collideSt >= 0 && st.stasiun[st.collideSt] ? 'menyentuh ' + st.stasiun[st.collideSt].nama
+       : 'menyentuh lantai');
+  el('cTabrak').className = st.collide ? 'v bad' : 'v';
 
   el('gripPos').textContent = f2(st.grip.pos) + ' / ' + f2(st.grip.stroke) + ' mm';
   var gb = el('gripBtn');
@@ -596,12 +728,31 @@ function panelTampil() {
     + '<td class="k">stroke</td><td class="v">' + f2(st.grip.stroke) + '</td></tr>';
 }
 
-var NAMA_FASE = ['ambil di WIP IN', 'ICC test', 'DW write', 'lepas di WIP OUT'];
+var NAMA_STATE = ['manual', 'sedang home', 'auto siap', 'jalan', 'stop di akhir siklus',
+                  'PERLU HOME', 'EMERGENCY'];
+var NAMA_ABORT = { 0: 'berhenti', 1: 'emergency ditekan', 2: 'selector diubah saat jalan',
+                   3: 'menabrak' };
+var NAMA_STST = { 0: 'kosong', 1: 'proses', 2: 'siap diambil' };
+
+// Tombol mengirim TEPI, bukan keadaan: PLC yang memutuskan boleh atau tidak
+// (selector, home, emergency), dan halaman tidak pernah menulis SIM_AUTO langsung.
+// Kalau halaman yang menyalakan, syaratnya ditegakkan di browser - tempat yang tidak
+// dijalankan simulator, dan tidak ikut waktu tombolnya ditekan dari HMI sungguhan.
+function pulsa(nama) {
+  return kirim(nama, false).then(function () { return kirim(nama, true); })
+    .then(function () { return kirim(nama, false); });
+}
 
 function pasangKontrol() {
-  el('autoBtn').onclick = function () {
-    st.auto = !st.auto;
-    kirim('SIM_AUTO', st.auto);
+  el('runBtn').onclick = function () { pulsa('SIM_AUTORUN'); };
+  el('cstopBtn').onclick = function () { pulsa('SIM_CYCLE_STOP'); };
+  el('selAuto').onchange = function () {
+    st.selAuto = this.checked;
+    kirim('SIM_SEL_AUTO', st.selAuto);
+  };
+  el('estopBtn').onclick = function () {
+    st.estop = !st.estop;
+    kirim('SIM_ESTOP', st.estop);
     panelTampil();
   };
   el('mode').onchange = function () {
@@ -637,8 +788,8 @@ function pasangKontrol() {
       .then(function () { return kirim('SIM_MOVE_EXEC', true); });
   };
   el('home').onclick = function () {
-    if (!st.plc) { st.cmd = [0, 90, -90, 0]; return; }
-    kirim('SIM_HOME_EXEC', false).then(function () { return kirim('SIM_HOME_EXEC', true); });
+    if (!st.plc) { st.cmd = st.homeJoint.slice(); return; }
+    pulsa('SIM_HOME_EXEC');
   };
   el('reset').onclick = function () { kirim('SIM_RESET', true); };
 }
@@ -653,16 +804,26 @@ function muatConfig() {
     st.dim.offset = c.offset.nilai;
     st.dim.limitv = [c.limit.PD1300_000, c.limit.PD1300_001, c.limit.PD1300_002, c.limit.PD1300_003,
                      c.limit.PD1300_004, c.limit.PD1300_005, c.limit.PD1300_006, c.limit.PD1300_007];
-    st.vel = c.jog.sumbu; st.velW = c.jog.world; st.step = c.jog.langkah;
-    st.grip = { pos: c.gripper.bukaan_awal, stroke: c.gripper.stroke, len: c.gripper.panjang,
+    st.vel = c.jog.sumbu; st.acc = c.jog.akselerasi;
+    st.velW = c.jog.world; st.step = c.jog.langkah;
+    st.grip = { pos: c.gripper.bukaan_awal, stroke: c.gripper.stroke, tutup: c.gripper.tutup,
+                jari: c.gripper.tebal_jari, len: c.gripper.panjang,
                 cmd: false, vel: c.gripper.kecepatan };
     if (c.siklus) {
       st.stasiun = c.siklus.stasiun.map(x => ({ nama: x.nama, tipe: x.tipe, x: x.x, y: x.y,
                                                 z: x.z, theta: x.theta, proses: x.proses }));
       st.approach = c.siklus.approach;
+      st.mesin = c.siklus.mesin;
       st.pcb = c.siklus.pcb;
+      // Waktu offline, WIP IN tetap berisi dan sisanya kosong - sama dengan yang
+      // dipaksakan PLC tiap scan. Halaman tidak menjalankan sekuensnya, jadi isi
+      // stasiun tidak akan berubah sendiri; itu memang yang mau ditunjukkan.
+      st.stState = c.siklus.stasiun.map(x => (x.tipe === 0 ? 2 : 0));
+      st.stTimer = c.siklus.stasiun.map(function () { return 0; });
     }
-    st.joint = c.home.sumbu.slice(); st.cmd = c.home.sumbu.slice();
+    st.homeJoint = c.home.sumbu.slice();
+    st.joint = c.home.sumbu.slice(); st.jointPlc = c.home.sumbu.slice();
+    st.cmd = c.home.sumbu.slice();
     el('step').value = st.step;
     // Kamera diatur dari UKURAN robot, bukan angka tetap: ganti L1..L4 di config
     // jadi dua kali lipat, dan angka tetap bikin lengannya keluar layar.

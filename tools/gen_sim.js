@@ -65,8 +65,10 @@ const GLOBAL_SIM = [
   ['SIM_MOVE_EXEC', 'BOOL', 'W', 'tepi naik: jalankan move ke SIM_WORLD_CMD'],
   ['SIM_MOVE_DONE', 'BOOL', 'R', 'semua sumbu sudah sampai target'],
   ['SIM_HOME_EXEC', 'BOOL', 'W', 'tepi naik: kembali ke pose home'],
-  ['SIM_HOME', 'ARRAY[0..3] OF LREAL', 'RW', 'pose home per sumbu'],
+  ['SIM_HOME', 'ARRAY[0..3] OF LREAL', 'RW', 'pose home per sumbu - SEKALIGUS pose jalan waktu menyusuri rel'],
   ['SIM_VEL', 'ARRAY[0..3] OF LREAL', 'RW', 'kecepatan maksimum per sumbu - mm/s atau derajat/s'],
+  ['SIM_ACC', 'ARRAY[0..3] OF LREAL', 'RW', 'akselerasi per sumbu - tanpa ini gerakannya patah-patah di layar'],
+  ['SIM_JOINT_VEL', 'ARRAY[0..3] OF LREAL', 'R', 'kecepatan sumbu sekarang - keluaran profil trapesium'],
   ['SIM_VEL_W', 'ARRAY[0..3] OF LREAL', 'RW', 'kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE'],
   ['SIM_BUSY', 'BOOL', 'R', 'masih ada sumbu yang bergerak'],
 
@@ -81,27 +83,49 @@ const GLOBAL_SIM = [
   ['SIM_GRIP_STROKE', 'LREAL', 'RW', 'bukaan penuh, mm'],
   ['SIM_GRIP_VEL', 'LREAL', 'RW', 'kecepatan jari, mm/s'],
   ['SIM_GRIP_OPEN', 'BOOL', 'R', 'jari sudah terbuka penuh'],
-  ['SIM_GRIP_CLOSED', 'BOOL', 'R', 'jari sudah menutup rapat'],
+  ['SIM_GRIP_CLOSED', 'BOOL', 'R', 'jari sudah menjepit (berhenti di lebar produk, bukan di nol)'],
   ['SIM_GRIP_LEN', 'LREAL', 'R', 'panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz'],
+  ['SIM_GRIP_TUTUP', 'LREAL', 'RW', 'bukaan waktu menjepit produk, mm - jari berhenti di sini, bukan di 0'],
+  ['SIM_GRIP_JARI', 'LREAL', 'R', 'tebal jari, mm - ikut dihitung penjaga tabrakan'],
+
+  // ---- panel: selector, emergency, autorun, cycle stop
+  // Yang ditulis halaman cuma TOMBOL dan SELECTOR. SIM_AUTO sendiri dibaca saja:
+  // halaman yang menyalakannya langsung berarti syarat "sudah home" dan "selector di
+  // AUTO" ditegakkan di browser - tempat yang tidak dijalankan simulator.
+  ['SIM_SEL_AUTO', 'BOOL', 'RW', 'selector: TRUE auto, FALSE manual. Diubah saat jalan = berhenti total'],
+  ['SIM_ESTOP', 'BOOL', 'RW', 'emergency stop - berhenti total, wajib home lagi'],
+  ['SIM_AUTORUN', 'BOOL', 'W', 'tepi naik: mulai siklus (butuh selector AUTO + sudah home + tidak emergency)'],
+  ['SIM_CYCLE_STOP', 'BOOL', 'W', 'tepi naik: berhenti SESUDAH pekerjaan sekarang selesai'],
+  ['SIM_STOP_REQ', 'BOOL', 'R', 'cycle stop sudah diminta, tinggal menunggu akhir siklus'],
+  ['SIM_HOMED', 'BOOL', 'R', 'sudah home sejak berhenti total terakhir - syarat Autorun'],
+  ['SIM_STATE', 'INT', 'R', '0 manual, 1 homing, 2 auto siap, 3 jalan, 4 stop di akhir siklus, 5 perlu home, 6 emergency'],
+  ['SIM_ABORT_ID', 'INT', 'R', 'sebab berhenti total: 0 tidak ada, 1 emergency, 2 selector diubah, 3 tabrakan'],
 
   // ---- sel kerja: enam stasiun + siklus pick and place
   // Pose stasiun ikut dipublikasikan supaya halaman menggambar apa yang PLC pegang,
   // bukan salinan kedua dari config yang bebas melenceng.
-  ['SIM_AUTO', 'BOOL', 'RW', 'jalankan siklus otomatis. Jog dimatikan selama ini menyala'],
-  ['SIM_CYCLE_PHASE', 'INT', 'R', '0 ambil di WIP IN, 1 ICC, 2 DW, 3 lepas di WIP OUT'],
-  ['SIM_CYCLE_STEP', 'INT', 'R', 'langkah di dalam fase - buat melihat di mana sekuensnya berhenti'],
-  ['SIM_CYCLE_COUNT', 'UDINT', 'R', 'jumlah PCB yang sudah selesai'],
+  ['SIM_AUTO', 'BOOL', 'R', 'siklus sedang jalan. Dinyalakan SIM_AUTORUN, bukan ditulis halaman'],
+  ['SIM_CYCLE_STEP', 'INT', 'R', 'langkah sekuenser - buat melihat di mana sekuensnya berhenti'],
+  ['SIM_CYCLE_COUNT', 'UDINT', 'R', 'jumlah PCB yang sudah keluar lewat WIP OUT'],
   ['SIM_TARGET_ST', 'INT', 'R', 'stasiun yang sedang dituju'],
-  ['SIM_PART_STATE', 'INT', 'R', '0 tidak ada PCB, 1 dipegang gripper, 2+i ada di stasiun i'],
-  ['SIM_WAIT', 'LREAL', 'R', 'sisa waktu proses mesin, detik'],
+  ['SIM_JOB_SRC', 'INT', 'R', 'stasiun asal pekerjaan sekarang, -1 kalau menganggur'],
+  ['SIM_JOB_DST', 'INT', 'R', 'stasiun tujuan pekerjaan sekarang, -1 kalau menganggur'],
+  ['SIM_PART_STATE', 'INT', 'R', '0 gripper kosong, 1 sedang memegang PCB'],
   ['SIM_APPROACH', 'LREAL', 'RW', 'tinggi berhenti di atas stasiun sebelum turun, mm'],
   ['SIM_ST_N', 'INT', 'R', 'jumlah stasiun'],
   ['SIM_ST_X', 'ARRAY[0..5] OF LREAL', 'R', 'posisi stasiun di sepanjang rel'],
   ['SIM_ST_Y', 'ARRAY[0..5] OF LREAL', 'R', 'jangkauan mendatar tiap stasiun'],
   ['SIM_ST_Z', 'ARRAY[0..5] OF LREAL', 'R', 'tinggi permukaan tiap stasiun'],
-  ['SIM_ST_T', 'ARRAY[0..5] OF LREAL', 'R', 'sudut end-effector tiap stasiun'],
+  ['SIM_ST_T', 'ARRAY[0..5] OF LREAL', 'R', 'sudut end-effector tiap stasiun (-90 = menyumpit dari atas)'],
   ['SIM_ST_TIPE', 'ARRAY[0..5] OF INT', 'R', '0 WIP IN, 1 ICC test, 2 DW, 3 WIP OUT'],
-  ['SIM_ST_PROSES', 'ARRAY[0..5] OF LREAL', 'R', 'lama mesin bekerja, detik']
+  ['SIM_ST_PROSES', 'ARRAY[0..5] OF LREAL', 'R', 'lama mesin bekerja, detik'],
+  ['SIM_ST_STATE', 'ARRAY[0..5] OF INT', 'R', '0 kosong, 1 sedang proses, 2 selesai - menunggu diambil'],
+  ['SIM_ST_TIMER', 'ARRAY[0..5] OF LREAL', 'R', 'sisa waktu proses tiap mesin, detik - jalan berbarengan'],
+  ['SIM_ST_W', 'LREAL', 'R', 'lebar badan mesin (arah rel), mm - dipakai gambar DAN penjaga tabrakan'],
+  ['SIM_ST_D', 'LREAL', 'R', 'kedalaman badan mesin, mm'],
+  ['SIM_ST_MARGIN', 'LREAL', 'R', 'jarak aman di sekeliling badan mesin, mm'],
+  ['SIM_COLLIDE', 'BOOL', 'R', 'lengan sedang menyentuh badan mesin atau lantai'],
+  ['SIM_COLLIDE_ST', 'INT', 'R', 'yang disentuh: indeks stasiun, -1 lantai, -1 juga kalau tidak ada']
 ];
 
 // ------------------------------------------------------ variabel lokal program
@@ -140,7 +164,31 @@ const LOKAL = [
   ['LAST_MOVE', 'BOOL', 'keadaan SIM_MOVE_EXEC scan sebelumnya'],
   ['LAST_HOME', 'BOOL', 'keadaan SIM_HOME_EXEC scan sebelumnya'],
   ['EDGE_MOVE', 'BOOL', 'tepi naik SIM_MOVE_EXEC'],
-  ['EDGE_HOME', 'BOOL', 'tepi naik SIM_HOME_EXEC']
+  ['EDGE_HOME', 'BOOL', 'tepi naik SIM_HOME_EXEC'],
+  ['LAST_RUN', 'BOOL', 'keadaan SIM_AUTORUN scan sebelumnya'],
+  ['EDGE_RUN', 'BOOL', 'tepi naik SIM_AUTORUN'],
+  ['LAST_CSTOP', 'BOOL', 'keadaan SIM_CYCLE_STOP scan sebelumnya'],
+  ['EDGE_CSTOP', 'BOOL', 'tepi naik SIM_CYCLE_STOP'],
+  ['LAST_SEL', 'BOOL', 'posisi selector scan sebelumnya'],
+  ['SEL_UBAH', 'BOOL', 'selector BERUBAH scan ini - itu yang menghentikan, bukan posisinya'],
+  ['HOMING', 'BOOL', 'sedang menuju pose home'],
+  ['ABORT', 'BOOL', 'berhenti total scan ini'],
+  ['LAST_COLLIDE', 'BOOL', 'keadaan tabrakan scan sebelumnya - abort cuma di tepinya'],
+  ['j', 'INT', 'pencacah FOR kedua (mencari DW kosong)'],
+  ['k', 'INT', 'pencacah titik yang diperiksa penjaga tabrakan'],
+  ['WIP_IN', 'INT', 'indeks stasiun WIP IN'],
+  ['WIP_OUT', 'INT', 'indeks stasiun WIP OUT'],
+  ['CK_X', 'ARRAY[0..3] OF LREAL', 'titik yang diperiksa tabrakan - X'],
+  ['CK_Y', 'ARRAY[0..3] OF LREAL', 'titik yang diperiksa tabrakan - Y'],
+  ['CK_Z', 'ARRAY[0..3] OF LREAL', 'titik yang diperiksa tabrakan - Z'],
+  ['CK_MX', 'LREAL', 'setengah lebar kotak mesin + margin + jangkauan jari'],
+  ['CK_MY', 'LREAL', 'setengah kedalaman kotak mesin + margin'],
+  ['CAND_HIT', 'BOOL', 'pose yang DIMINTA menembus mesin - perintahnya ditolak'],
+  ['NOW_HIT', 'BOOL', 'pose SEKARANG menembus mesin - sudah tersentuh'],
+  ['NOW_ST', 'INT', 'stasiun yang tersentuh, -1 lantai atau tidak ada'],
+  ['VT', 'LREAL', 'kecepatan yang dituju profil trapesium scan ini'],
+  ['VB', 'LREAL', 'kecepatan tertinggi yang masih bisa direm sebelum target'],
+  ['DV', 'LREAL', 'perubahan kecepatan maksimum satu scan = akselerasi x dt']
 ];
 
 // ------------------------------------------- tabel variabel kedua FB V2
@@ -208,6 +256,9 @@ function blokInit(cfg) {
   L.push('');
   L.push(t('SIM_GRIP_LEN := ' + lreal(cfg.gripper.panjang) + ';'));
   L.push(t('SIM_GRIP_STROKE := ' + lreal(cfg.gripper.stroke) + ';'));
+  L.push(t('// jari berhenti di lebar produk, bukan di 0 - kalau 0, jari menembus PCB'));
+  L.push(t('SIM_GRIP_TUTUP := ' + lreal(cfg.gripper.tutup) + ';'));
+  L.push(t('SIM_GRIP_JARI := ' + lreal(cfg.gripper.tebal_jari) + ';'));
   L.push(t('SIM_GRIP_VEL := ' + lreal(cfg.gripper.kecepatan) + ';'));
   L.push(t('SIM_GRIP_POS := ' + lreal(cfg.gripper.bukaan_awal) + ';'));
   L.push('');
@@ -222,6 +273,8 @@ function blokInit(cfg) {
   L.push('');
   cfg.jog.sumbu.forEach((v, i) => L.push(t('SIM_VEL[' + i + '] := ' + lreal(v) + ';')));
   L.push('');
+  cfg.jog.akselerasi.forEach((v, i) => L.push(t('SIM_ACC[' + i + '] := ' + lreal(v) + ';')));
+  L.push('');
   cfg.jog.world.forEach((v, i) => L.push(t('SIM_VEL_W[' + i + '] := ' + lreal(v) + ';')));
   L.push('');
   cfg.home.sumbu.forEach((v, i) => L.push(t('SIM_HOME[' + i + '] := ' + lreal(v) + ';')));
@@ -234,17 +287,32 @@ function blokInit(cfg) {
   // config, dan blok init memang tempat satu-satunya angka itu mendarat di PLC.
   L.push(t('SIM_APPROACH := ' + lreal(cfg.siklus.approach) + ';'));
   L.push(t('SIM_ST_N := ' + cfg.siklus.stasiun.length + ';'));
+  L.push(t('SIM_ST_W := ' + lreal(cfg.siklus.mesin.lebar) + ';'));
+  L.push(t('SIM_ST_D := ' + lreal(cfg.siklus.mesin.dalam) + ';'));
+  L.push(t('SIM_ST_MARGIN := ' + lreal(cfg.siklus.mesin.margin) + ';'));
   cfg.siklus.stasiun.forEach((s, i) => {
     L.push(t('// ' + s.nama));
     L.push(t('SIM_ST_X[' + i + '] := ' + lreal(s.x) + ';   SIM_ST_Y[' + i + '] := ' + lreal(s.y) + ';'));
     L.push(t('SIM_ST_Z[' + i + '] := ' + lreal(s.z) + ';   SIM_ST_T[' + i + '] := ' + lreal(s.theta) + ';'));
     L.push(t('SIM_ST_TIPE[' + i + '] := ' + s.tipe + ';   SIM_ST_PROSES[' + i + '] := ' + lreal(s.proses) + ';'));
+    L.push(t('SIM_ST_STATE[' + i + '] := 0;   SIM_ST_TIMER[' + i + '] := 0.0;'));
   });
   L.push('');
+  // Panel dimulai dari keadaan paling aman yang masuk akal: MANUAL, tidak emergency,
+  // siklus mati. Selector yang menyala AUTO sesudah reset berarti satu tekan Autorun
+  // langsung menjalankan sel - dan yang menekan biasanya sedang memeriksa hal lain.
+  L.push(t('SIM_SEL_AUTO := FALSE;'));
+  L.push(t('SIM_ESTOP := FALSE;'));
   L.push(t('SIM_AUTO := FALSE;'));
-  L.push(t('SIM_CYCLE_PHASE := 0;'));
+  L.push(t('SIM_STOP_REQ := FALSE;'));
+  L.push(t('SIM_ABORT_ID := 0;'));
+  L.push(t('SIM_COLLIDE := FALSE;'));
+  L.push(t('SIM_COLLIDE_ST := -1;'));
   L.push(t('SIM_CYCLE_STEP := 0;'));
   L.push(t('SIM_PART_STATE := 0;'));
+  L.push(t('SIM_JOB_SRC := -1;'));
+  L.push(t('SIM_JOB_DST := -1;'));
+  L.push(t('SIM_GRIP_CMD := FALSE;'));
   return L;
 }
 

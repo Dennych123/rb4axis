@@ -105,6 +105,55 @@ satu pun error di konsol** — lengannya cuma hilang. Dinormalkan di sumber
 Jangan hapus salah satunya: yang di bridge membetulkan datanya, yang di halaman
 menjaga halaman tidak mati kalau datanya datang dari tempat lain.
 
+## Sel kerja — yang gagal tanpa mengeluh
+
+**`SIM_MOVE_DONE` dihitung motion model di AKHIR scan.** Perintah dan penungguan di
+scan yang SAMA berarti yang dibaca jawaban scan sebelumnya — dan sesudah robot
+berhenti jawabannya TRUE. Sudah kena sekali di Home: `SIM_HOMED` menyala tanpa
+lengannya bergerak satu milimeter, jadi syarat "wajib home dulu" hilang tanpa satu
+pun tanda. Karena itu blok Home memadamkan `SIM_MOVE_DONE` sendiri sebelum
+memeriksanya. Sekuenser tidak kena karena perintah dan penungguannya ada di langkah —
+dan scan — yang berbeda; kalau menambah langkah baru, pertahankan pola itu.
+
+**Rel cuma boleh dilewati dalam pose jalan** (= pose home). Lengan yang bergeser
+sambil menjulur ke bawah menyapu tiap mesin yang dilewatinya, dan di layar itu mulus.
+Urutannya: lipat → TUNGGU selesai → geser sumbu 0. Menggabungnya jadi satu langkah
+menghemat satu detik dan menghapus seluruh gunanya.
+
+**Urutan tiga pencarian pekerjaan itu logika sel, bukan gaya penulisan.** Isi ICC
+kosong → kosongkan DW yang selesai → pindah ICC yang selesai ke DW kosong. Nomor 3
+didahulukan dari nomor 2 = dua DW penuh + dua ICC selesai bikin sel MACET, dan
+macetnya cuma terlihat sebagai robot yang diam.
+
+**Tiap mesin punya penghitung waktunya sendiri.** Satu `SIM_WAIT` bersama (bentuk yang
+lama) memaksa satu produk di seluruh sel — buffer ICC jadi tidak ada artinya sementara
+kodenya tetap kelihatan benar.
+
+**Penjaga tabrakan ditulis SEKALI, dipakai dua arah.** Satu loop memeriksa empat
+titik: dua dari pose yang DIMINTA (ditolak sebelum bergerak) dan dua dari pose
+SEKARANG (deteksi sentuhan). Rumus yang sama ditulis dua kali pasti berbeda pendapat
+suatu hari. Tiga hal yang menempel padanya:
+
+- **Batas vertikalnya sedikit DI BAWAH permukaan stasiun.** Tepat di permukaan berarti
+  tiap penempatan produk memicu alarm tabrakan sendiri.
+- **Sentuhan membatalkan cuma di TEPI-nya.** Menahan selama masih menempel bikin
+  perintah ditimpa posisi tiap scan — lengan terkunci di dalam benda yang ditabraknya,
+  tanpa arah keluar.
+- **Kotaknya kotak yang SAMA dengan yang digambar** (`SIM_ST_W`/`SIM_ST_D`). Kotak
+  kedua untuk penjaga = gripper berhenti di udara atau menembus kotak yang kelihatan,
+  dan dua-duanya terbaca sebagai bug yang lain.
+
+**Gripper menutup ke LEBAR PRODUK, bukan ke nol.** `SIM_GRIP_CLOSED` diukur terhadap
+`SIM_GRIP_TUTUP`. Menutup ke nol berarti jari bertemu menembus barang yang sedang
+dipegangnya — dan di layar itu cuma terlihat seperti jepitan yang rapat.
+
+**Jari membuka sepanjang sumbu X.** Itu satu-satunya arah yang tidak ikut berputar
+bersama lengan (rantai 1–3 planar di Y-Z), dan itu sisi yang dijepit mesin aslinya.
+
+**Syarat jalan ditegakkan di PLC, bukan di halaman.** Halaman mengirim TEPI tombol dan
+tidak pernah menulis `SIM_AUTO`. Syarat yang ditegakkan di browser tidak ikut waktu
+tombol yang sama ditekan dari tempat lain.
+
 ## Viz — yang bikin gambar berbohong sambil tetap tampak wajar
 
 **Gambar HARUS dari `chainPoints()` di `kin.js`,** bukan rantai yang dihitung ulang
@@ -129,6 +178,11 @@ Dua hal kecil yang gampang balik salah: shadow camera harus melingkupi seluruh s
 (±2200; mesin di ±1400 — yang ±1600 memotong bayangan mesin ujung), dan label
 stasiun digambar ulang **hanya waktu teksnya berubah** — tiap frame berarti
 `CanvasTexture` baru terus.
+
+**Penghalusan gambar TIDAK boleh menyentuh angka panel.** Bridge mengirim tiap ~50 ms,
+layar menggambar tiap ~16 ms, jadi yang digambar dikejar ke nilai PLC terakhir
+(`haluskan()`); panel tetap menampilkan `st.jointPlc` apa adanya. Panel yang ikut
+dihaluskan menghapus satu-satunya tempat membandingkan layar dengan simulator.
 
 **Siklus otomatis jalan di PLC, jangan dipindah ke halaman.** Sekuens kedua di JS =
 dua sumber kebenaran, dan yang di layar bakal terlihat benar justru waktu yang di

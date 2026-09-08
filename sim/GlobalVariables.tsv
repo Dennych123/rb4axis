@@ -15,8 +15,10 @@ SIM_JOG_N	ARRAY[0..3] OF BOOL			False	False	Publish Only	tombol jog arah minus p
 SIM_MOVE_EXEC	BOOL			False	False	Publish Only	tepi naik: jalankan move ke SIM_WORLD_CMD
 SIM_MOVE_DONE	BOOL			False	False	Publish Only	semua sumbu sudah sampai target
 SIM_HOME_EXEC	BOOL			False	False	Publish Only	tepi naik: kembali ke pose home
-SIM_HOME	ARRAY[0..3] OF LREAL			False	False	Publish Only	pose home per sumbu
+SIM_HOME	ARRAY[0..3] OF LREAL			False	False	Publish Only	pose home per sumbu - SEKALIGUS pose jalan waktu menyusuri rel
 SIM_VEL	ARRAY[0..3] OF LREAL			False	False	Publish Only	kecepatan maksimum per sumbu - mm/s atau derajat/s
+SIM_ACC	ARRAY[0..3] OF LREAL			False	False	Publish Only	akselerasi per sumbu - tanpa ini gerakannya patah-patah di layar
+SIM_JOINT_VEL	ARRAY[0..3] OF LREAL			False	False	Publish Only	kecepatan sumbu sekarang - keluaran profil trapesium
 SIM_VEL_W	ARRAY[0..3] OF LREAL			False	False	Publish Only	kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE
 SIM_BUSY	BOOL			False	False	Publish Only	masih ada sumbu yang bergerak
 SIM_LIMIT	ARRAY[0..7] OF BOOL			False	False	Publish Only	soft limit yang KENA - pasangan min/max per sumbu
@@ -28,23 +30,40 @@ SIM_GRIP_POS	LREAL			False	False	Publish Only	bukaan sekarang - jarak antar jari
 SIM_GRIP_STROKE	LREAL			False	False	Publish Only	bukaan penuh, mm
 SIM_GRIP_VEL	LREAL			False	False	Publish Only	kecepatan jari, mm/s
 SIM_GRIP_OPEN	BOOL			False	False	Publish Only	jari sudah terbuka penuh
-SIM_GRIP_CLOSED	BOOL			False	False	Publish Only	jari sudah menutup rapat
+SIM_GRIP_CLOSED	BOOL			False	False	Publish Only	jari sudah menjepit (berhenti di lebar produk, bukan di nol)
 SIM_GRIP_LEN	LREAL			False	False	Publish Only	panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz
-SIM_AUTO	BOOL			False	False	Publish Only	jalankan siklus otomatis. Jog dimatikan selama ini menyala
-SIM_CYCLE_PHASE	INT			False	False	Publish Only	0 ambil di WIP IN, 1 ICC, 2 DW, 3 lepas di WIP OUT
-SIM_CYCLE_STEP	INT			False	False	Publish Only	langkah di dalam fase - buat melihat di mana sekuensnya berhenti
-SIM_CYCLE_COUNT	UDINT			False	False	Publish Only	jumlah PCB yang sudah selesai
+SIM_GRIP_TUTUP	LREAL			False	False	Publish Only	bukaan waktu menjepit produk, mm - jari berhenti di sini, bukan di 0
+SIM_GRIP_JARI	LREAL			False	False	Publish Only	tebal jari, mm - ikut dihitung penjaga tabrakan
+SIM_SEL_AUTO	BOOL			False	False	Publish Only	selector: TRUE auto, FALSE manual. Diubah saat jalan = berhenti total
+SIM_ESTOP	BOOL			False	False	Publish Only	emergency stop - berhenti total, wajib home lagi
+SIM_AUTORUN	BOOL			False	False	Publish Only	tepi naik: mulai siklus (butuh selector AUTO + sudah home + tidak emergency)
+SIM_CYCLE_STOP	BOOL			False	False	Publish Only	tepi naik: berhenti SESUDAH pekerjaan sekarang selesai
+SIM_STOP_REQ	BOOL			False	False	Publish Only	cycle stop sudah diminta, tinggal menunggu akhir siklus
+SIM_HOMED	BOOL			False	False	Publish Only	sudah home sejak berhenti total terakhir - syarat Autorun
+SIM_STATE	INT			False	False	Publish Only	0 manual, 1 homing, 2 auto siap, 3 jalan, 4 stop di akhir siklus, 5 perlu home, 6 emergency
+SIM_ABORT_ID	INT			False	False	Publish Only	sebab berhenti total: 0 tidak ada, 1 emergency, 2 selector diubah, 3 tabrakan
+SIM_AUTO	BOOL			False	False	Publish Only	siklus sedang jalan. Dinyalakan SIM_AUTORUN, bukan ditulis halaman
+SIM_CYCLE_STEP	INT			False	False	Publish Only	langkah sekuenser - buat melihat di mana sekuensnya berhenti
+SIM_CYCLE_COUNT	UDINT			False	False	Publish Only	jumlah PCB yang sudah keluar lewat WIP OUT
 SIM_TARGET_ST	INT			False	False	Publish Only	stasiun yang sedang dituju
-SIM_PART_STATE	INT			False	False	Publish Only	0 tidak ada PCB, 1 dipegang gripper, 2+i ada di stasiun i
-SIM_WAIT	LREAL			False	False	Publish Only	sisa waktu proses mesin, detik
+SIM_JOB_SRC	INT			False	False	Publish Only	stasiun asal pekerjaan sekarang, -1 kalau menganggur
+SIM_JOB_DST	INT			False	False	Publish Only	stasiun tujuan pekerjaan sekarang, -1 kalau menganggur
+SIM_PART_STATE	INT			False	False	Publish Only	0 gripper kosong, 1 sedang memegang PCB
 SIM_APPROACH	LREAL			False	False	Publish Only	tinggi berhenti di atas stasiun sebelum turun, mm
 SIM_ST_N	INT			False	False	Publish Only	jumlah stasiun
 SIM_ST_X	ARRAY[0..5] OF LREAL			False	False	Publish Only	posisi stasiun di sepanjang rel
 SIM_ST_Y	ARRAY[0..5] OF LREAL			False	False	Publish Only	jangkauan mendatar tiap stasiun
 SIM_ST_Z	ARRAY[0..5] OF LREAL			False	False	Publish Only	tinggi permukaan tiap stasiun
-SIM_ST_T	ARRAY[0..5] OF LREAL			False	False	Publish Only	sudut end-effector tiap stasiun
+SIM_ST_T	ARRAY[0..5] OF LREAL			False	False	Publish Only	sudut end-effector tiap stasiun (-90 = menyumpit dari atas)
 SIM_ST_TIPE	ARRAY[0..5] OF INT			False	False	Publish Only	0 WIP IN, 1 ICC test, 2 DW, 3 WIP OUT
 SIM_ST_PROSES	ARRAY[0..5] OF LREAL			False	False	Publish Only	lama mesin bekerja, detik
+SIM_ST_STATE	ARRAY[0..5] OF INT			False	False	Publish Only	0 kosong, 1 sedang proses, 2 selesai - menunggu diambil
+SIM_ST_TIMER	ARRAY[0..5] OF LREAL			False	False	Publish Only	sisa waktu proses tiap mesin, detik - jalan berbarengan
+SIM_ST_W	LREAL			False	False	Publish Only	lebar badan mesin (arah rel), mm - dipakai gambar DAN penjaga tabrakan
+SIM_ST_D	LREAL			False	False	Publish Only	kedalaman badan mesin, mm
+SIM_ST_MARGIN	LREAL			False	False	Publish Only	jarak aman di sekeliling badan mesin, mm
+SIM_COLLIDE	BOOL			False	False	Publish Only	lengan sedang menyentuh badan mesin atau lantai
+SIM_COLLIDE_ST	INT			False	False	Publish Only	yang disentuh: indeks stasiun, -1 lantai, -1 juga kalau tidak ada
 DEGREE_TO_RAD	LREAL	0.017453292		False	True	Do not publish	
 PD1300_000	REAL			True	False	Publish Only	
 PD1300_001	REAL			True	False	Publish Only	

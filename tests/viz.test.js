@@ -160,12 +160,82 @@ chk('12 pose stasiun+approach terjangkau dan di dalam soft limit', takTerjangkau
 chk('stasiun ada di dalam rel', siklus.stasiun.every(s =>
       s.x > raw.limit.PD1300_000 && s.x < raw.limit.PD1300_001),
     'rel ' + raw.limit.PD1300_000 + '..' + raw.limit.PD1300_001);
-chk('ICC dan DW beda tinggi', (() => {
+// Beda tinggi ICC vs DW: PULUHAN mm, bukan ratusan. Mesin di sel nyata berdiri di
+// satu lantai dengan tinggi meja yang hampir sama; beda 300 mm memaksa lengan
+// mengambil pose yang tidak pernah terjadi di sana, dan viz-nya jadi meyakinkan
+// untuk sel yang salah.
+chk('beda tinggi ICC vs DW 25..40 mm', (() => {
   const icc = siklus.stasiun.filter(s => s.tipe === 1).map(s => s.z);
   const dw = siklus.stasiun.filter(s => s.tipe === 2).map(s => s.z);
-  return icc.length === 2 && dw.length === 2 && Math.abs(icc[0] - dw[0]) > 50;
+  if (icc.length !== 2 || dw.length !== 2) return false;
+  const beda = Math.abs(icc[0] - dw[0]);
+  return beda >= 25 && beda <= 40 && icc[0] === icc[1] && dw[0] === dw[1];
 })(), 'ICC z=' + siklus.stasiun.filter(s => s.tipe === 1)[0].z
     + ' DW z=' + siklus.stasiun.filter(s => s.tipe === 2)[0].z);
+
+// ------------------------------------------------- gripper menyumpit dari atas
+chk('tiap stasiun diambil dari ATAS (theta_EE -90)',
+    siklus.stasiun.every(s => s.theta === -90),
+    'theta 0 = tool menjulur mendatar; gripper mendekat dari samping dan menembus badan mesin');
+
+// Jari membuka sepanjang SUMBU X - arah rel - jadi yang dijepit sisi kiri-kanan
+// produk. Kalau bukaannya di bidang Y-Z, yang dijepit sisi depan-belakang: dari
+// kamera mana pun tetap terlihat "menjepit", cuma bukan sisi yang benar.
+const gx = K.gripperPoints([0, 45, -74.3, -60.7], cfg, 120);
+chk('jari membuka sepanjang sumbu X (arah rel)',
+    Math.abs(gx.jari[0].ujung.x - gx.jari[1].ujung.x - 120) < 1e-9
+    && Math.abs(gx.jari[0].ujung.y - gx.jari[1].ujung.y) < 1e-9
+    && Math.abs(gx.jari[0].ujung.z - gx.jari[1].ujung.z) < 1e-9,
+    'dx=' + (gx.jari[0].ujung.x - gx.jari[1].ujung.x).toFixed(2));
+chk('bukaan menjepit = lebar PCB', raw.gripper.tutup === siklus.pcb.panjang,
+    'jari yang menutup ke 0 menembus produk yang sedang dipegangnya');
+chk('bukaan penuh lebih lebar dari produk', raw.gripper.stroke > siklus.pcb.panjang);
+
+// -------------------------------------------- rel cuma dilewati dalam pose jalan
+// Pose home dipakai sekuenser sebagai pose JALAN. Kalau dia tidak lebih tinggi dari
+// mesin tertinggi, robot menyapu tiap mesin yang dilewatinya - dan di layar itu
+// mulus, karena tidak ada yang menghitung tabrakan waktu menggambar.
+const tertinggi = Math.max(...siklus.stasiun.map(s => s.z));
+const poseJalan = K.forwardKinematicV2(raw.home.sumbu, cfg).worldL;
+chk('pose jalan (home) lebih tinggi dari mesin tertinggi',
+    poseJalan[2] > tertinggi + 100,
+    'TCP z=' + poseJalan[2].toFixed(0) + ' vs mesin ' + tertinggi);
+
+// ------------------------------------------------------------------ tabrakan
+// collideCheck di kin.js itu cerminan penjaga di PRG_SIM_ROBOT.st, dipakai halaman
+// waktu simulator mati. Yang diuji di sini bukan rumusnya, tapi bahwa kotaknya
+// SEPADAN dengan sel: pose kerja tidak boleh dianggap menabrak, dan pose di dalam
+// badan mesin tidak boleh lolos.
+const kotak = siklus.mesin;
+const cfgTab = Object.assign({}, cfg, { gripPos: raw.gripper.stroke, gripJari: raw.gripper.tebal_jari });
+const salahTolak = [];
+for (const s of siklus.stasiun) {
+  for (const [label, z] of [['pose', s.z], ['approach', s.z + siklus.approach]]) {
+    if (K.collideCheck([s.x, s.y, z, s.theta], cfgTab, siklus.stasiun, kotak).hit) {
+      salahTolak.push(s.nama + ' ' + label);
+    }
+  }
+}
+chk('pose kerja TIDAK dianggap tabrakan', salahTolak.length === 0,
+    salahTolak.join(', ') + ' - penjaga yang menolak pose kerjanya sendiri bikin sel mati total');
+
+const dalamMesin = siklus.stasiun[1];
+chk('titik di dalam badan mesin ketahuan', (() => {
+  const t = K.collideCheck([dalamMesin.x, dalamMesin.y, dalamMesin.z - 80, -90], cfgTab,
+                           siklus.stasiun, kotak);
+  return t.hit && t.st === 1;
+})());
+chk('menembus lantai ketahuan',
+    K.collideCheck([0, 300, -5, -90], cfgTab, siklus.stasiun, kotak).st === -1);
+
+// Lengan yang menyusuri rel dalam pose jalan harus bebas di SELURUH panjang rel -
+// itu yang bikin langkah "lipat dulu, baru geser" ada gunanya.
+let sapuan = 0;
+for (let x = raw.limit.PD1300_000; x <= raw.limit.PD1300_001; x += 25) {
+  if (K.collideCheck([x, poseJalan[1], poseJalan[2], poseJalan[3]], cfgTab,
+                     siklus.stasiun, kotak).hit) sapuan++;
+}
+chk('pose jalan bebas di sepanjang rel', sapuan === 0, sapuan + ' titik menabrak');
 
 // Halaman menggambar stasiun dari tag PLC, bukan dari config: kalau keduanya beda,
 // yang salah harus kelihatan sebagai gripper turun di sebelah mesin - bukan tersembunyi

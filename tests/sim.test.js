@@ -172,5 +172,122 @@ chk('gripper punya motion model sendiri', /SIM_GRIP_POS\s*:=\s*SIM_GRIP_POS\s*[+
 chk('init sim tidak menulis ke PI/DEGREE_TO_RAD/RAD_TO_DEGREE',
     !/\b(PI|DEGREE_TO_RAD|RAD_TO_DEGREE)\s*:=/.test(kode));
 
+// ------------------------------------------------ selector, emergency, home
+// Yang menghentikan robot bukan POSISI selector tapi PERUBAHANNYA: kalau dipakai
+// posisinya, robot tidak akan pernah bisa dijalankan dari selector yang memang sudah
+// di AUTO sejak awal - dan gejalanya "tombol Autorun tidak berfungsi".
+chk('selector dinilai dari perubahannya, bukan posisinya',
+    /SEL_UBAH\s*:=\s*SIM_SEL_AUTO\s*<>\s*LAST_SEL/.test(kode));
+chk('emergency dan selector-saat-jalan sama-sama membatalkan',
+    /IF\s+SIM_ESTOP\s+THEN[\s\S]{0,200}?ELSIF\s+SEL_UBAH\s+AND\s+SIM_AUTO\s+THEN/.test(kode));
+chk('berhenti total memadamkan SIM_HOMED', /IF ABORT THEN[\s\S]{0,400}?SIM_HOMED := FALSE;/.test(kode),
+    'tanpa itu robot melanjutkan dari pose yang tidak pernah direncanakan sekuenser');
+chk('berhenti total menyamakan perintah dengan posisi',
+    /IF ABORT THEN[\s\S]{0,400}?SIM_JOINT_CMD\[i\] := SIM_JOINT_POS\[i\];/.test(kode),
+    'perintah lama yang dibiarkan bikin lengan lanjut jalan sesudah emergency dilepas');
+chk('Autorun digerbang selector + sudah home + tidak emergency',
+    /EDGE_RUN AND SIM_SEL_AUTO AND SIM_HOMED AND NOT SIM_ESTOP/.test(kode),
+    'syarat yang ditegakkan di halaman tidak ikut waktu tombolnya ditekan dari tempat lain');
+chk('tabrakan membatalkan cuma di TEPI-nya',
+    /SIM_COLLIDE AND NOT LAST_COLLIDE/.test(kode),
+    'menahan selama masih menempel bikin lengan terkunci di dalam benda yang ditabraknya');
+
+// Cycle stop BUKAN emergency: pekerjaan diselesaikan dulu, dan SIM_HOMED tidak
+// dipadamkan - itu yang bikin Autorun bisa langsung dipakai lagi sesudahnya.
+chk('cycle stop dilayani di AKHIR pekerjaan, bukan seketika', (() => {
+  const iStop = kode.indexOf('EDGE_CSTOP');
+  const iLayani = kode.lastIndexOf('IF SIM_STOP_REQ THEN');
+  return iStop > 0 && iLayani > iStop && /31:[\s\S]{0,400}?IF SIM_STOP_REQ THEN/.test(kode);
+})());
+chk('cycle stop tidak memadamkan SIM_HOMED',
+    !/SIM_STOP_REQ THEN[\s\S]{0,200}?SIM_HOMED := FALSE/.test(kode));
+
+// SIM_MOVE_DONE dihitung motion model di AKHIR scan, jadi waktu Home baru saja
+// diperintahkan isinya masih jawaban scan sebelumnya - TRUE, karena robot memang
+// sedang berhenti. Tanpa dipadamkan, home dinyatakan SELESAI pada scan yang sama:
+// SIM_HOMED menyala tanpa lengannya bergerak, dan syarat yang mau ditegakkan hilang
+// tanpa satu pun tanda. Sekuenser tidak kena karena perintah dan penungguannya ada
+// di langkah - dan scan - yang berbeda.
+chk('home tidak bisa dinyatakan selesai pada scan yang sama',
+    /HOMING := TRUE;[\s\S]{0,700}?SIM_MOVE_DONE := FALSE;[\s\S]{0,80}?END_IF;[\s\S]{0,40}?IF HOMING AND SIM_MOVE_DONE THEN/.test(kode));
+chk('produk yang masih terjepit dilepas waktu home selesai',
+    /IF HOMING AND SIM_MOVE_DONE THEN[\s\S]{0,300}?IF SIM_PART_STATE = 1 THEN[\s\S]{0,120}?SIM_PART_STATE := 0;/.test(kode),
+    'dibiarkan, robot berangkat mengambil produk berikutnya sambil masih memegang yang lama');
+
+// --------------------------------------------------- rel cuma dilewati terlipat
+// Lengan yang bergeser sambil menjulur ke bawah menyapu tiap mesin yang dilewatinya.
+// Yang menjaganya urutan langkah: lipat DULU (sumbu 1-3 ke pose home), tunggu selesai,
+// baru sumbu 0 digerakkan.
+chk('rel digerakkan SESUDAH lengan dilipat ke pose jalan', (() => {
+  const lipat = kode.indexOf('SIM_JOINT_CMD[1] := SIM_HOME[1];');
+  const rel = kode.indexOf('SIM_JOINT_CMD[0] := SIM_ST_X[ST_IDX];');
+  const tunggu = kode.indexOf('SIM_MOVE_DONE', lipat);
+  return lipat > 0 && rel > lipat && tunggu > lipat && tunggu < rel;
+})(), 'kalau rel duluan - atau tanpa menunggu lipatannya selesai - lengan menyapu mesin, dan di layar itu mulus');
+chk('sumbu 0 tidak ikut disetel waktu melipat',
+    !/SIM_JOINT_CMD\[1\] := SIM_HOME\[1\];[\s\S]{0,80}?SIM_JOINT_CMD\[0\] :=/.test(kode),
+    'melipat sambil menggeser rel = lengan menjulur waktu bergerak, persis yang mau dihindari');
+
+// ------------------------------------------------------- buffer ICC dulu
+// URUTAN tiga pencarian ini yang menentukan perilaku selnya, dan urutannya bukan
+// selera:
+//   ICC kosong dulu   -> mesin tes 17 detik tidak menganggur menunggu robot
+//   DW selesai kedua  -> selalu ada DW kosong buat produk ICC berikutnya
+//   ICC selesai -> DW ketiga
+// Dibalik (ICC->DW didahulukan dari DW->WIP OUT), dua DW penuh + dua ICC selesai
+// bikin sel MACET, dan macetnya cuma terlihat sebagai robot yang diam.
+chk('penjadwal: isi ICC -> kosongkan DW -> pindah ICC ke DW', (() => {
+  const isiIcc = kode.indexOf('(SIM_ST_TIPE[i] = 1) AND (SIM_ST_STATE[i] = 0)');
+  const dwKeluar = kode.indexOf('(SIM_ST_TIPE[i] = 2) AND (SIM_ST_STATE[i] = 2)');
+  const iccKeDw = kode.indexOf('(SIM_ST_TIPE[i] = 1) AND (SIM_ST_STATE[i] = 2)');
+  return isiIcc > 0 && dwKeluar > isiIcc && iccKeDw > dwKeluar;
+})());
+chk('tiap mesin punya penghitung waktunya sendiri',
+    /FOR i := 0 TO SIM_ST_N - 1 DO[\s\S]{0,600}?SIM_ST_TIMER\[i\] := SIM_ST_TIMER\[i\] - SIM_DT;/.test(kode),
+    'satu penghitung bersama = satu produk di seluruh sel, dan buffer jadi tidak ada artinya');
+chk('WIP IN selalu berisi, WIP OUT selalu kosong',
+    /SIM_ST_TIPE\[i\] = 0 THEN[\s\S]{0,120}?SIM_ST_STATE\[i\] := 2;/.test(kode)
+    && /SIM_ST_TIPE\[i\] = 3 THEN[\s\S]{0,120}?SIM_ST_STATE\[i\] := 0;/.test(kode));
+chk('cycle time dari config: ICC 17 s, DW 15 s',
+    cfg.siklus.stasiun.filter(s => s.tipe === 1).every(s => s.proses === 17)
+    && cfg.siklus.stasiun.filter(s => s.tipe === 2).every(s => s.proses === 15));
+
+// ----------------------------------------------------------------- tabrakan
+chk('pose yang diminta diperiksa SEBELUM IK dijalankan', (() => {
+  return kode.indexOf('CAND_HIT := TRUE') < kode.indexOf('IF NEED_IK THEN');
+})(), 'memeriksa sesudah IK berarti sumbu sudah diberi perintah menembus mesin');
+chk('perintah yang menabrak dibuang, bukan cuma ditandai',
+    /IF CAND_HIT THEN[\s\S]{0,200}?NEED_IK := FALSE;/.test(kode));
+chk('kotak tabrakan dari tag yang sama dengan yang digambar',
+    /CK_MX := SIM_ST_W \/ 2\.0 \+ SIM_ST_MARGIN/.test(kode) && /CK_MY := SIM_ST_D/.test(kode),
+    'kotak kedua buat penjaga = gripper berhenti di udara atau menembus kotak yang digambar');
+chk('jari ikut dihitung, bukan cuma TCP', /SIM_GRIP_POS \/ 2\.0 \+ SIM_GRIP_JARI/.test(kode),
+    'yang menabrak duluan jari yang menjulur ke samping, bukan titik TCP-nya');
+chk('permukaan stasiun bukan tabrakan', /CK_Z\[k\] < SIM_ST_Z\[i\] - 2\.0/.test(kode),
+    'tanpa selisih itu, tiap penempatan produk memicu alarm tabrakan');
+chk('lantai ikut dijaga', /IF CK_Z\[k\] < 0\.0 THEN/.test(kode));
+
+// --------------------------------------------------------- gerakan halus
+// Berangkat dan berhenti pada kecepatan penuh dalam satu scan terlihat patah-patah
+// begitu angkanya lewat jaringan - dan yang ditanyakan jadi soal jaringan, padahal
+// sebabnya profil gerakan.
+chk('motion model pakai profil trapesium (akselerasi + jarak rem)',
+    /VB := SQRT\(2\.0 \* SIM_ACC\[i\] \* ABS\(D\)\)/.test(kode)
+    && /DV := SIM_ACC\[i\] \* SIM_DT/.test(kode));
+chk('kecepatan sumbu disimpan antar scan', /SIM_JOINT_VEL\[i\] :=/.test(kode));
+chk('halaman menghaluskan GAMBAR, bukan angkanya', (() => {
+  const r = fs.readFileSync(path.join(__dirname, '..', 'web', 'robot.js'), 'utf8');
+  return /function haluskan\(dt\)/.test(r) && /el\('j' \+ i\)\.textContent = f2\(st\.jointPlc\[i\]\)/.test(r);
+})(), 'panel yang ikut dihaluskan menghapus satu-satunya tempat membandingkan layar dengan simulator');
+
+// ------------------------------------------------------------------ gripper
+chk('gripper menutup ke lebar produk, bukan ke nol',
+    /IF SIM_GRIP_CMD THEN GRIP_TARGET := SIM_GRIP_TUTUP;/.test(kode),
+    'jari yang bertemu di 0 menembus barang yang sedang dipegangnya');
+chk('halaman menulis TOMBOL, bukan SIM_AUTO langsung', (() => {
+  const r = fs.readFileSync(path.join(__dirname, '..', 'web', 'robot.js'), 'utf8');
+  return /pulsa\('SIM_AUTORUN'\)/.test(r) && !/kirim\('SIM_AUTO',/.test(r);
+})(), 'halaman yang menyalakan SIM_AUTO menegakkan syaratnya di browser - tempat yang tidak dijalankan simulator');
+
 console.log(fail ? 'GAGAL ' + fail : 'LULUS');
 process.exit(fail ? 1 : 0);
