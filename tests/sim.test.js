@@ -210,9 +210,31 @@ chk('cycle stop tidak memadamkan SIM_HOMED',
 // di langkah - dan scan - yang berbeda.
 chk('home tidak bisa dinyatakan selesai pada scan yang sama',
     /HOMING := TRUE;[\s\S]{0,700}?SIM_MOVE_DONE := FALSE;[\s\S]{0,80}?END_IF;[\s\S]{0,40}?IF HOMING AND SIM_MOVE_DONE THEN/.test(kode));
-chk('produk yang masih terjepit dilepas waktu home selesai',
-    /IF HOMING AND SIM_MOVE_DONE THEN[\s\S]{0,300}?IF SIM_PART_STATE = 1 THEN[\s\S]{0,120}?SIM_PART_STATE := 0;/.test(kode),
-    'dibiarkan, robot berangkat mengambil produk berikutnya sambil masih memegang yang lama');
+// Produk yang sedang dijepit TETAP dipegang lewat emergency, cycle stop, selector,
+// dan Home. Gripper yang membuka sendiri waktu pulih berarti barang jatuh ke lantai
+// tiap kali orang menekan emergency - di mesin aslinya itu barang sungguhan.
+chk('home TIDAK melepas produk yang sedang dijepit',
+    !/IF HOMING AND SIM_MOVE_DONE THEN[\s\S]{0,300}?SIM_PART_STATE := 0;/.test(kode));
+chk('berhenti total tidak menghapus ingatan pekerjaan',
+    !/IF ABORT THEN[\s\S]{0,500}?SIM_JOB_DST := -1;/.test(kode),
+    'ingatan yang dihapus = produk di gripper tidak akan pernah sampai ke tujuannya');
+chk('Autorun MELANJUTKAN pengantaran kalau masih memegang produk',
+    /IF \(SIM_PART_STATE = 1\) AND \(SIM_JOB_DST >= 0\) THEN[\s\S]{0,700}?SIM_CYCLE_STEP := 18;[\s\S]{0,60}?ELSE[\s\S]{0,40}?SIM_CYCLE_STEP := 0;/.test(kode),
+    'mulai dari nol = robot berangkat mengambil produk kedua sambil tangannya masih penuh');
+
+// Gripper dibuka MANUAL sambil memegang: produknya jatuh, dan pekerjaannya ikut
+// hilang. Ingatan yang ditinggal bikin Autorun berikutnya mengantar produk yang tidak
+// ada - stasiun tercatat berisi, dan salahnya baru ketahuan waktu produk hantu itu
+// diambil belasan menit kemudian.
+chk('produk jatuh kalau gripper dibuka manual sambil memegang',
+    /IF \(SIM_PART_STATE = 1\) AND SIM_GRIP_OPEN AND NOT SIM_AUTO THEN[\s\S]{0,200}?SIM_PART_STATE := 0;/.test(kode));
+chk('produk jatuh ikut menghapus ingatan pekerjaan',
+    /SIM_GRIP_OPEN AND NOT SIM_AUTO THEN[\s\S]{0,300}?SIM_JOB_SRC := -1;[\s\S]{0,60}?SIM_JOB_DST := -1;/.test(kode));
+chk('produk yang jatuh DIHITUNG',
+    /SIM_DROP_COUNT := SIM_DROP_COUNT \+ 1;/.test(kode) && glob.includes('SIM_DROP_COUNT'),
+    'produk yang hilang tanpa angka bikin jumlah masuk dan keluar tidak bisa diadu');
+chk('yang jatuh cuma di MANUAL, bukan waktu sekuenser meletakkan',
+    /SIM_GRIP_OPEN AND NOT SIM_AUTO/.test(kode));
 
 // --------------------------------------------------- rel cuma dilewati terlipat
 // Lengan yang bergeser sambil menjulur ke bawah menyapu tiap mesin yang dilewatinya.

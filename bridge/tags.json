@@ -224,6 +224,11 @@
       "komen": "0 gripper kosong, 1 sedang memegang PCB"
     },
     {
+      "nama": "SIM_DROP_COUNT",
+      "tipe": "UDINT",
+      "komen": "jumlah produk yang JATUH - gripper dibuka manual sambil memegang"
+    },
+    {
       "nama": "SIM_APPROACH",
       "tipe": "LREAL",
       "komen": "tinggi berhenti di atas stasiun sebelum turun, mm"

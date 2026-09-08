@@ -111,6 +111,7 @@ const GLOBAL_SIM = [
   ['SIM_JOB_SRC', 'INT', 'R', 'stasiun asal pekerjaan sekarang, -1 kalau menganggur'],
   ['SIM_JOB_DST', 'INT', 'R', 'stasiun tujuan pekerjaan sekarang, -1 kalau menganggur'],
   ['SIM_PART_STATE', 'INT', 'R', '0 gripper kosong, 1 sedang memegang PCB'],
+  ['SIM_DROP_COUNT', 'UDINT', 'R', 'jumlah produk yang JATUH - gripper dibuka manual sambil memegang'],
   ['SIM_APPROACH', 'LREAL', 'RW', 'tinggi berhenti di atas stasiun sebelum turun, mm'],
   ['SIM_ST_N', 'INT', 'R', 'jumlah stasiun'],
   ['SIM_ST_X', 'ARRAY[0..5] OF LREAL', 'R', 'posisi stasiun di sepanjang rel'],
@@ -312,6 +313,7 @@ function blokInit(cfg) {
   L.push(t('SIM_PART_STATE := 0;'));
   L.push(t('SIM_JOB_SRC := -1;'));
   L.push(t('SIM_JOB_DST := -1;'));
+  L.push(t('SIM_DROP_COUNT := 0;'));
   L.push(t('SIM_GRIP_CMD := FALSE;'));
   return L;
 }

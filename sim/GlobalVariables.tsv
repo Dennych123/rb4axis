@@ -49,6 +49,7 @@ SIM_TARGET_ST	INT			False	False	Publish Only	stasiun yang sedang dituju
 SIM_JOB_SRC	INT			False	False	Publish Only	stasiun asal pekerjaan sekarang, -1 kalau menganggur
 SIM_JOB_DST	INT			False	False	Publish Only	stasiun tujuan pekerjaan sekarang, -1 kalau menganggur
 SIM_PART_STATE	INT			False	False	Publish Only	0 gripper kosong, 1 sedang memegang PCB
+SIM_DROP_COUNT	UDINT			False	False	Publish Only	jumlah produk yang JATUH - gripper dibuka manual sambil memegang
 SIM_APPROACH	LREAL			False	False	Publish Only	tinggi berhenti di atas stasiun sebelum turun, mm
 SIM_ST_N	INT			False	False	Publish Only	jumlah stasiun
 SIM_ST_X	ARRAY[0..5] OF LREAL			False	False	Publish Only	posisi stasiun di sepanjang rel

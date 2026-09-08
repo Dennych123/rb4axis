@@ -69,6 +69,22 @@ pekerjaan yang sedang dipegang diselesaikan dulu (produk tidak ditinggal di udar
 lengan kembali ke pose jalan, dan karena berhentinya terkendali Autorun bisa langsung
 dipakai lagi.
 
+**Produk yang sedang dijepit TETAP dipegang** lewat E-STOP, cycle stop, pergantian
+selector, dan Home. Robot pulang membawa produknya, ingatan pekerjaannya
+(`SIM_JOB_SRC`/`SIM_JOB_DST`) tidak dihapus, dan Autorun berikutnya **melanjutkan
+pengantaran yang tertunda** - bukan memilih pekerjaan baru. Gripper yang membuka
+sendiri waktu pulih berarti barang jatuh ke lantai tiap kali orang menekan emergency,
+dan mulai dari nol berarti robot berangkat mengambil produk kedua sambil tangannya
+masih penuh.
+
+**Satu-satunya cara produk keluar dari gripper selain diletakkan sekuenser: dibuka
+manual.** Di MANUAL, membuka gripper sambil memegang = produk **jatuh**, dan
+pekerjaannya ikut terhapus. Ingatan yang ditinggal bikin Autorun berikutnya mengantar
+produk yang tidak ada - stasiun tercatat berisi, dan salahnya baru ketahuan belasan
+menit kemudian waktu robot mengambil produk hantu itu. Yang jatuh **dihitung**
+(`SIM_DROP_COUNT`): produk yang hilang tanpa angka bikin jumlah masuk dan jumlah keluar
+tidak akan pernah bisa diadu.
+
 Syaratnya ditegakkan **di PLC**, bukan di halaman: halaman cuma mengirim tepi tombol
 (`SIM_AUTORUN`, `SIM_CYCLE_STOP`, `SIM_HOME_EXEC`) dan tidak pernah menulis `SIM_AUTO`
 sendiri. Syarat yang ditegakkan di browser tidak ikut waktu tombol yang sama ditekan

@@ -153,6 +153,7 @@ IF NOT SIM_INIT_DONE THEN
 	SIM_PART_STATE := 0;
 	SIM_JOB_SRC := -1;
 	SIM_JOB_DST := -1;
+	SIM_DROP_COUNT := 0;
 	SIM_GRIP_CMD := FALSE;
 	// >>> DIBANGKITKAN
 
@@ -248,21 +249,33 @@ END_IF;
 IF HOMING AND SIM_MOVE_DONE THEN
 	HOMING := FALSE;
 	SIM_HOMED := TRUE;
-	// Produk yang masih terjepit waktu robot dihentikan dianggap diambil operator
-	// selama pemulihan - itu yang memang terjadi di mesin. Dibiarkan, robot berangkat
-	// mengambil produk berikutnya sambil masih memegang yang lama, dan yang kelihatan
-	// cuma satu PCB yang menempel di gripper selamanya.
-	IF SIM_PART_STATE = 1 THEN
-		SIM_PART_STATE := 0;
-		SIM_GRIP_CMD := FALSE;
-	END_IF;
 END_IF;
+// Home TIDAK melepas produk yang sedang dijepit, dan TIDAK menghapus pekerjaannya
+// (SIM_JOB_SRC/SIM_JOB_DST). Gripper yang membuka sendiri waktu pulih berarti produk
+// jatuh ke lantai tiap kali orang menekan emergency - dan di mesin aslinya yang jatuh
+// itu barang sungguhan. Jadi robot pulang MEMBAWA produknya, dan Autorun berikutnya
+// melanjutkan pengantaran yang tertunda, bukan memulai dari nol.
+// Yang melepas cuma perintah gripper dari operator - lihat blok "produk jatuh".
 
 // -------------------------------------------------------- start / cycle stop
 IF EDGE_RUN AND SIM_SEL_AUTO AND SIM_HOMED AND NOT SIM_ESTOP AND NOT HOMING THEN
 	SIM_AUTO := TRUE;
 	SIM_STOP_REQ := FALSE;
 	SIM_ABORT_ID := 0;
+	IF (SIM_PART_STATE = 1) AND (SIM_JOB_DST >= 0) THEN
+		// Masih memegang produk dari pekerjaan yang tadi dihentikan: LANJUTKAN
+		// pengantarannya, jangan pilih pekerjaan baru. Mulai dari nol berarti robot
+		// berangkat mengambil produk kedua sambil tangannya masih penuh, dan produk
+		// pertama tidak akan pernah sampai ke tujuannya.
+		//
+		// Langkah 18 = lipat -> geser rel ke tujuan -> turun -> lepas -> naik -> lipat:
+		// persis separuh-antar dari pekerjaan yang sama. Stasiun asalnya sudah
+		// dikosongkan waktu produknya diambil, jadi tidak ada yang perlu dikembalikan.
+		SIM_TARGET_ST := SIM_JOB_DST;
+		SIM_CYCLE_STEP := 18;
+	ELSE
+		SIM_CYCLE_STEP := 0;
+	END_IF;
 END_IF;
 IF EDGE_CSTOP AND SIM_AUTO THEN
 	SIM_STOP_REQ := TRUE;
@@ -694,6 +707,26 @@ ELSE
 END_IF;
 SIM_GRIP_CLOSED := SIM_GRIP_POS <= (SIM_GRIP_TUTUP + 0.5);
 SIM_GRIP_OPEN := SIM_GRIP_POS >= (SIM_GRIP_STROKE - 0.5);
+
+// ------------------------------------------------------------- produk jatuh
+// Gripper dibuka MANUAL sambil memegang produk: produknya jatuh, dan pekerjaannya
+// ikut hilang bersamanya. Ini bukan pengecualian yang dibuat-buat - itu satu-satunya
+// cara produk keluar dari gripper selain diletakkan di stasiun oleh sekuenser.
+//
+// Ingatannya (SIM_JOB_SRC/DST) DIHAPUS di sini, bukan cuma SIM_PART_STATE: pekerjaan
+// yang ditinggal bikin Autorun berikutnya mengira masih ada produk yang harus diantar,
+// robot pergi ke tujuan dengan tangan kosong dan membuka gripper di sana - stasiun
+// tercatat berisi produk yang tidak ada. Salahnya baru ketahuan belasan menit
+// kemudian, waktu robot mengambil produk hantu itu.
+//
+// Dihitung, bukan didiamkan: produk yang hilang dari sel harus ada angkanya, kalau
+// tidak jumlah masuk dan jumlah keluar tidak akan pernah bisa diadu.
+IF (SIM_PART_STATE = 1) AND SIM_GRIP_OPEN AND NOT SIM_AUTO THEN
+	SIM_PART_STATE := 0;
+	SIM_JOB_SRC := -1;
+	SIM_JOB_DST := -1;
+	SIM_DROP_COUNT := SIM_DROP_COUNT + 1;
+END_IF;
 
 // ------------------------------------------------------------ motion model
 // Pengganti MC_*: profil trapesium per sumbu - dipercepat sampai SIM_VEL, lalu

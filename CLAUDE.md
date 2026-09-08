@@ -129,6 +129,23 @@ macetnya cuma terlihat sebagai robot yang diam.
 lama) memaksa satu produk di seluruh sel — buffer ICC jadi tidak ada artinya sementara
 kodenya tetap kelihatan benar.
 
+**Produk yang dijepit bertahan lewat SEMUA berhenti** — emergency, cycle stop,
+selector, Home. Yang melepasnya cuma perintah gripper dari operator. Dan ingatannya
+(`SIM_JOB_SRC`/`SIM_JOB_DST`) ikut bertahan: Autorun sesudah pemulihan MELANJUTKAN
+pengantaran (langkah 18), bukan memilih pekerjaan baru — kalau tidak, robot berangkat
+mengambil produk kedua sambil tangannya masih penuh.
+
+**Produk jatuh WAJIB menghapus ingatan pekerjaannya.** Menghapus `SIM_PART_STATE` saja
+bikin Autorun berikutnya mengantar produk yang tidak ada: robot pergi ke tujuan dengan
+tangan kosong, membuka gripper, dan stasiun itu tercatat berisi. Baru ketahuan belasan
+menit kemudian, waktu produk hantu itu diambil.
+
+**Kejadian sesaat dipublikasikan sebagai PENCACAH, bukan pulsa.** Bridge mengambil
+sampel tiap 50 ms; pulsa satu scan (4 ms) lewat tanpa pernah terlihat. `SIM_DROP_COUNT`
+naik, halaman membandingkannya dengan yang terakhir dilihat — dan pesan PERTAMA cuma
+menyelaraskan angkanya, kalau tidak membuka halaman sesudah ada produk jatuh
+menampilkan animasi jatuh yang tidak sedang terjadi.
+
 **Penjaga tabrakan ditulis SEKALI, dipakai dua arah.** Satu loop memeriksa empat
 titik: dua dari pose yang DIMINTA (ditolak sebelum bergerak) dan dua dari pose
 SEKARANG (deteksi sentuhan). Rumus yang sama ditulis dua kali pasti berbeda pendapat

@@ -39,6 +39,7 @@ var st = {
   // TIDAK menyimpulkan sendiri boleh-tidaknya jalan, karena kesimpulannya bisa beda
   // dari yang dipakai PLC memutuskan.
   selAuto: false, estop: false, homed: true, stopReq: false, state: 0, abortId: 0,
+  drop: null, jatuh: null,        // pencacah produk jatuh + animasi jatuhnya
   collide: false, collideSt: -1,
   approach: 140,
   stasiun: [],                    // {nama,tipe,x,y,z,theta,proses}
@@ -130,6 +131,14 @@ function stream() {
       if (v.SIM_CYCLE_COUNT !== undefined) st.siklus = v.SIM_CYCLE_COUNT;
       if (v.SIM_TARGET_ST !== undefined) st.tujuan = v.SIM_TARGET_ST;
       if (v.SIM_PART_STATE !== undefined) st.part = v.SIM_PART_STATE;
+      // Jatuhnya produk datang sebagai PENCACAH, bukan pulsa: bridge mengambil sampel
+      // tiap 50 ms, dan pulsa satu scan (4 ms) lewat begitu saja tanpa pernah terlihat.
+      // Pesan pertama cuma menyelaraskan angkanya - tanpa itu, membuka halaman sesudah
+      // ada produk jatuh menampilkan animasi jatuh yang tidak sedang terjadi.
+      if (v.SIM_DROP_COUNT !== undefined) {
+        if (st.drop !== null && v.SIM_DROP_COUNT > st.drop) mulaiJatuh();
+        st.drop = v.SIM_DROP_COUNT;
+      }
       if (v.SIM_JOB_SRC !== undefined) st.jobSrc = v.SIM_JOB_SRC;
       if (v.SIM_JOB_DST !== undefined) st.jobDst = v.SIM_JOB_DST;
       if (v.SIM_SEL_AUTO !== undefined) st.selAuto = !!v.SIM_SEL_AUTO;
@@ -391,6 +400,7 @@ function bikinScene() {
   // kalau warnanya sama, dan justru itu yang mau dilihat dari buffer.
   MAT.pcbProses = bahan(0x0e7490, 0.1, 0.8);
   MAT.tabrak = bahan(0xdc2626, 0.3, 0.6);
+  MAT.pcbJatuh = bahan(0xb91c1c, 0.1, 0.8);
   bagian.stasiun = [];
   for (var s = 0; s < 6; s++) {
     var badan = kotak(1, 1, 1, MAT.wip);
@@ -420,6 +430,12 @@ function bikinScene() {
   }
   bagian.pcbHold = kotak(1, 1, 1, MAT.pcb);
   scene.add(bagian.pcbHold);
+  // Produk yang jatuh punya kotaknya sendiri: yang dipegang HILANG di scan yang sama
+  // (PLC sudah menyatakan gripper kosong), jadi memakai kotak yang sama berarti
+  // jatuhnya tidak pernah tergambar.
+  bagian.pcbJatuh = kotak(1, 1, 1, MAT.pcbJatuh);
+  bagian.pcbJatuh.visible = false;
+  scene.add(bagian.pcbJatuh);
 
   // Penanda TCP: bola kecil di ujung jari. Itu titik yang dijanjikan FK/IK, jadi
   // kalau dia tidak berimpit dengan angka world di panel, ada yang salah.
@@ -512,6 +528,30 @@ function ruasKe(mesh, a, b) {
   mesh.visible = panjang > 0.5;
 }
 
+// Produk jatuh: dilepas dari TCP terakhir lalu dipercepat gravitasi sampai lantai,
+// diam sebentar, lalu hilang. Jatuhnya BUKAN keadaan PLC - di sana produknya sudah
+// tidak ada begitu gripper terbuka. Ini gambar dari sebuah kejadian, dan lamanya
+// tidak boleh dipakai menyimpulkan apa pun tentang sel.
+var G = 9810;                                   // mm/s2
+function mulaiJatuh() {
+  if (!renderer) return;                        // three.js tidak termuat - tidak ada yang digambar
+  var g = gripperPoints(st.joint, cfgKin(), st.grip.pos);
+  st.jatuh = { p: ke3(g.tcp), t: (typeof performance !== 'undefined' ? performance.now() : Date.now()) };
+}
+
+function gambarJatuh(pcb) {
+  var m = bagian.pcbJatuh;
+  if (!st.jatuh) { m.visible = false; return; }
+  var dt = ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - st.jatuh.t) / 1000;
+  if (dt > 1.6) { st.jatuh = null; m.visible = false; return; }
+  var lantai = -30 + pcb.tebal / 2;
+  var y = Math.max(lantai, st.jatuh.p.y - 0.5 * G * dt * dt);
+  m.visible = true;
+  m.scale.set(pcb.panjang, pcb.tebal, pcb.lebar);
+  m.position.set(st.jatuh.p.x, y, st.jatuh.p.z);
+  m.rotation.z = Math.min(0.5, dt * 1.2);       // miring waktu mendarat - jelas bukan diletakkan
+}
+
 function gambar() {
   if (!renderer) return;
   var d = st.dim;
@@ -591,6 +631,9 @@ function gambar() {
   bagian.pcbHold.visible = st.part === 1;
   // Dipegang: duduk tepat di TCP, dijepit kedua jari di sisi kiri-kanannya.
   if (st.part === 1) bagian.pcbHold.position.copy(ke3(g.tcp));
+  // Yang dipegang waktu gripper dibuka di MANUAL jatuh ke lantai. Yang digambar cuma
+  // jatuhnya; yang menyatakan produknya hilang tetap PLC (SIM_PART_STATE + SIM_DROP_COUNT).
+  gambarJatuh(pcb);
 
   orbit.tY = d.L1 * 0.8;
   cam.position.set(
@@ -696,9 +739,15 @@ function panelTampil() {
   el('cTuju').textContent = sd ? sd.nama : st.tujuan;
   el('cPart').textContent = st.part === 1 ? 'di gripper' : 'kosong';
   el('cCount').textContent = st.siklus;
+  var bawa = st.part === 1 && st.jobDst >= 0 && st.stasiun[st.jobDst];
   el('cSebab').textContent = !st.homed
     ? (NAMA_ABORT[st.abortId] || 'berhenti') + ' - tekan Home dulu'
-    : (st.stopReq ? 'cycle stop: selesaikan pekerjaan ini dulu' : '-');
+      + (bawa ? ' (produk tetap dipegang, lanjut ke ' + st.stasiun[st.jobDst].nama
+                + ' sesudah Autorun)' : '')
+    : st.stopReq ? 'cycle stop: selesaikan pekerjaan ini dulu'
+    : bawa && !st.auto ? 'produk di gripper - Autorun melanjutkan antar ke '
+        + st.stasiun[st.jobDst].nama + '. Buka gripper = produk JATUH'
+    : (st.drop ? st.drop + ' produk jatuh' : '-');
 
   // Tabel stasiun: keadaan + sisa waktu tiap mesin. Ini yang menjawab "kenapa
   // robotnya diam" - biasanya karena kedua ICC masih menghitung.
