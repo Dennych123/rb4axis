@@ -40,6 +40,7 @@ var st = {
   // dari yang dipakai PLC memutuskan.
   selAuto: false, estop: false, homed: true, stopReq: false, state: 0, abortId: 0,
   drop: null, jatuh: null,        // pencacah produk jatuh + animasi jatuhnya
+  tSampel: 0,                     // kapan nilai sumbu terakhir datang - dasar ramalan
   collide: false, collideSt: -1,
   approach: 140,
   stasiun: [],                    // {nama,tipe,x,y,z,theta,proses}
@@ -54,6 +55,12 @@ var st = {
 
 var el = function (id) { return document.getElementById(id); };
 var seretOvr = false;               // slider speed sedang diseret - jangan ditimpa nilai PLC
+var perluPanel = false;             // ada nilai baru yang belum tergambar di panel
+var panelTerakhir = 0;
+var selTerakhir = null;             // posisi selector waktu kartu manual terakhir diatur
+var jam = function () {
+  return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+};
 var f2 = function (x) { return (typeof x === 'number' && isFinite(x)) ? x.toFixed(2) : '-'; };
 
 function cfgKin() {
@@ -109,7 +116,11 @@ function stream() {
       // digambar dikejar ke situ tiap frame (lihat haluskan()). Nilai PLC-nya sendiri
       // tidak diubah - panel menampilkan yang ini, jadi angka di layar tetap angka
       // simulator, bukan angka hasil penghalusan.
-      if (v[TAG.joint]) { st.jointPlc = keArray(v[TAG.joint], 4); st.cmd = st.jointPlc.slice(); }
+      if (v[TAG.joint]) {
+        st.jointPlc = keArray(v[TAG.joint], 4);
+        st.cmd = st.jointPlc.slice();
+        st.tSampel = jam();
+      }
       if (v.SIM_JOINT_VEL) st.jointVel = keArray(v.SIM_JOINT_VEL, 4);
       if (v[TAG.world]) st.world = keArray(v[TAG.world], 4);
       if (v[TAG.limit]) st.limit = keArray(v[TAG.limit], 8);
@@ -167,6 +178,7 @@ function stream() {
           nama: (st.stasiun[i] && st.stasiun[i].nama) || ('ST' + i),
           tipe: tp[i] || 0, x: x, y: sy[i], z: sz[i], theta: stt[i] || 0, proses: pr[i] || 0
         }));
+        if (refStasiun.length !== st.stasiun.length) bikinPanelStatis();
       }
       if (v.SIM_VEL) st.vel = keArray(v.SIM_VEL, 4);
       if (v.SIM_ACC) st.acc = keArray(v.SIM_ACC, 4);
@@ -183,7 +195,11 @@ function stream() {
         if (v[k] !== undefined) st.dim.limitv[i] = v[k];
       }
     }
-    panelTampil();
+    // Panel TIDAK digambar di sini. Pesan datang ~20x per detik dan tiap panggilan
+    // menyentuh puluhan elemen; menggambarnya tiap pesan memaksa layout ulang di tengah
+    // frame, dan yang terasa justru animasi 3D-nya yang tersendat - bukan panelnya.
+    // Ditandai saja, lalu digambar paling sering 8x per detik dari putar().
+    perluPanel = true;
   };
   es.onerror = function () { st.bridge = false; st.plc = false; statusTampil(null); };
 }
@@ -260,20 +276,37 @@ function offlineStep(t) {
   st.collideSt = tab.st;
 }
 
-// Penghalusan gambar waktu tersambung PLC. Bridge mengirim tiap ~50 ms sementara
-// layar menggambar tiap ~16 ms, jadi tanpa ini tiap tiga frame menampilkan angka
-// yang sama lalu melompat - dan yang terlihat patah-patah walau sumbunya bergerak
-// mulus di simulator.
+// Penghalusan gambar waktu tersambung PLC. Bridge mengirim tiap ~50 ms sementara layar
+// menggambar tiap ~16 ms: tanpa apa-apa, tiga frame menampilkan angka yang sama lalu
+// melompat.
 //
-// Yang dihaluskan CUMA yang digambar. Panel tetap menampilkan st.jointPlc apa adanya,
-// jadi angka di layar selalu angka simulator. Ketinggalannya paling banyak satu
-// sampel: begitu nilai berhenti berubah, gambar mengejarnya sampai persis.
-var TAU = 0.05;
+// Yang dipakai KECEPATAN sumbu dari PLC (SIM_JOINT_VEL), bukan sekadar mengejar posisi
+// terakhir. Bedanya menentukan:
+//
+//   mengejar posisi  - gambar selalu TERTINGGAL, dan makin cepat sumbunya makin jauh
+//                      tertinggal. Waktu sumbu berhenti mendadak, gambar masih meluncur.
+//   memakai kecepatan - di antara dua sampel, posisi diramal dari kecepatan yang memang
+//                      sedang dipakai PLC. Yang digambar lanjut bergerak dengan kecepatan
+//                      yang BENAR, bukan menunggu kabar berikutnya.
+//
+// Ramalannya dibatasi 120 ms. Kalau kabar berhenti datang (bridge putus, simulator
+// dijeda), lengan yang diramal terus akan terbang menjauh - dan yang di layar terlihat
+// seperti robot yang kabur, bukan seperti sambungan yang putus.
+//
+// Koreksinya tetap ada tapi cepat (tau 25 ms): ramalan tidak pernah persis, dan tanpa
+// koreksi selisihnya menumpuk sampai gambar dan angka panel bercerita beda.
+//
+// Panel tetap menampilkan st.jointPlc apa adanya - itu yang bikin layar masih bisa
+// diadu ke simulator.
+var TAU = 0.025;
+var RAMAL_MAKS = 0.12;
 function haluskan(dt) {
+  var umur = Math.min((jam() - st.tSampel) / 1000, RAMAL_MAKS);
   var a = 1 - Math.exp(-dt / TAU);
   for (var i = 0; i < 4; i++) {
-    var d = st.jointPlc[i] - st.joint[i];
-    st.joint[i] = (Math.abs(d) < 1e-6) ? st.jointPlc[i] : st.joint[i] + d * a;
+    var target = st.jointPlc[i] + (st.jointVel[i] || 0) * umur;
+    var d = target - st.joint[i];
+    st.joint[i] = (Math.abs(d) < 1e-6) ? target : st.joint[i] + d * a;
   }
 }
 
@@ -310,7 +343,10 @@ function bikinScene() {
   }
   var cv = el('cv');
   renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  // Dibatasi 1.5, bukan 2. Di layar 4K, pixel ratio 2 berarti empat kali lipat piksel
+  // yang harus dibayangi dan digambar tiap frame - dan yang hilang justru kehalusan
+  // gerakan, yang lebih kelihatan daripada tepi yang sedikit lebih tajam.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -658,6 +694,66 @@ var NAMA_JOINT = ['X (rel)', 'theta 1', 'theta 2', 'theta 3'];
 var NAMA_WORLD = ['X', 'Y', 'Z', 'theta_EE'];
 var NAMA_LIMIT = ['X min', 'X maks', 't1 min', 't1 maks', 't2 min', 't2 maks', 't3 min', 't3 maks'];
 
+// Bagian panel yang bentuknya tidak pernah berubah dibangun SEKALI, dan panelTampil()
+// cuma mengganti teks dan kelasnya. Yang dulu: innerHTML disusun ulang tiap kabar dari
+// PLC (~20x per detik) - browser membuang lalu membuat lagi puluhan elemen di tengah
+// frame, dan yang terasa tersendat justru animasi 3D-nya, bukan panelnya.
+var refStasiun = [];
+var refLamp = [];
+var refDim = [];
+function bikinPanelStatis() {
+  var w = el('limits');
+  w.innerHTML = '';
+  refLamp = [];
+  for (var k = 0; k < 8; k++) {
+    var lamp = document.createElement('span');
+    lamp.className = 'lamp';
+    w.appendChild(lamp);
+    w.appendChild(document.createTextNode(NAMA_LIMIT[k]));
+    w.appendChild(k % 2 ? document.createElement('br') : document.createTextNode('  '));
+    refLamp.push(lamp);
+  }
+
+  // Tabel dimensi: nilainya berubah cuma waktu config diganti, tapi dulu ikut disusun
+  // ulang tiap gambaran panel.
+  var dm = el('dims');
+  dm.innerHTML = '';
+  refDim = [];
+  [['L1', 'L2'], ['L3', 'L4'], ['tool Y', 'tool Z'], ['gripper', 'stroke']].forEach(function (pas) {
+    var tr = document.createElement('tr');
+    pas.forEach(function (nama) {
+      var k = document.createElement('td');
+      k.className = 'k';
+      k.textContent = nama;
+      var v = document.createElement('td');
+      v.className = 'v';
+      tr.appendChild(k);
+      tr.appendChild(v);
+      refDim.push(v);
+    });
+    dm.appendChild(tr);
+  });
+
+  var t = el('stTabel');
+  t.innerHTML = '';
+  refStasiun = st.stasiun.map(function (x) {
+    var baris = document.createElement('div');
+    baris.className = 'stbaris';
+    var nama = document.createElement('div');
+    nama.className = 'stnama';
+    nama.textContent = x.nama;
+    var badge = document.createElement('span');
+    badge.className = 'badge';
+    var timer = document.createElement('span');
+    timer.className = 'sttimer';
+    baris.appendChild(nama);
+    baris.appendChild(badge);
+    baris.appendChild(timer);
+    t.appendChild(baris);
+    return { nama: nama, badge: badge, timer: timer };
+  });
+}
+
 function bikinJog() {
   var w = el('jog');
   w.innerHTML = '';
@@ -712,12 +808,9 @@ function panelTampil() {
     var l = el('jogl' + i);
     if (l) l.textContent = (st.mode === 0) ? NAMA_JOINT[i] : NAMA_WORLD[i];
   }
-  var h = '';
-  for (var k = 0; k < 8; k++) {
-    h += '<span class="lamp' + (st.limit[k] ? ' on' : '') + '"></span>' + NAMA_LIMIT[k]
-       + (k % 2 ? '<br>' : ' &nbsp; ');
+  for (var k = 0; k < refLamp.length; k++) {
+    refLamp[k].className = st.limit[k] ? 'lamp on' : 'lamp';
   }
-  el('limits').innerHTML = h;
   el('beat').textContent = 'heartbeat ' + st.beat
     + (st.err ? '   -   ' + (ERR_TEKS[st.errId] || ('error ' + st.errId)) : '');
 
@@ -735,18 +828,33 @@ function panelTampil() {
   el('home').className = (!st.homed && !st.estop) ? 'act' : '';
   el('selAuto').checked = st.selAuto;
   el('selAuto').disabled = !st.plc;
+  el('selKotak').className = 'sel' + (st.selAuto ? ' auto' : '');
+  // Kartu manual dibuka/ditutup mengikuti selector, tapi HANYA waktu selectornya
+  // berpindah - bukan tiap gambaran panel. Kalau tiap kali, kartu yang sengaja dibuka
+  // orang buat melihat posisi akan menutup sendiri dua per sepuluh detik kemudian.
+  if (selTerakhir !== st.selAuto) {
+    selTerakhir = st.selAuto;
+    el('kartuManual').open = !st.selAuto;
+  }
   var eb = el('estopBtn');
   eb.textContent = st.estop ? 'Lepas E-STOP' : 'E-STOP';
   eb.className = st.estop ? 'act' : 'bahaya';
   eb.disabled = !st.plc;
 
-  el('cState').textContent = NAMA_STATE[st.state] || st.state;
+  var cs = el('cState');
+  cs.textContent = NAMA_STATE[st.state] || st.state;
+  // Warna keadaan: hijau jalan, kuning menunggu tindakan, merah berhenti. Satu kata di
+  // ukuran itu terbaca dari jauh - orang yang sedang melihat robotnya tidak sedang
+  // membaca tabel.
+  cs.className = (st.state === 3) ? 'jalan'
+    : (st.state === 5 || st.state === 6) ? 'stop'
+    : (st.state === 1 || st.state === 4) ? 'tunggu' : '';
   el('cStep').textContent = st.langkah;
   el('cJob').textContent = (st.jobSrc >= 0 && st.stasiun[st.jobSrc] && st.stasiun[st.jobDst])
     ? st.stasiun[st.jobSrc].nama + ' → ' + st.stasiun[st.jobDst].nama : 'menganggur';
   var sd = st.stasiun[st.tujuan];
   el('cTuju').textContent = sd ? sd.nama : st.tujuan;
-  el('cPart').textContent = st.part === 1 ? 'di gripper' : 'kosong';
+  el('cPart').textContent = st.part === 1 ? 'ISI' : 'kosong';
   el('cCount').textContent = st.siklus;
   var bawa = st.part === 1 && st.jobDst >= 0 && st.stasiun[st.jobDst];
   el('cSebab').textContent = !st.homed
@@ -758,16 +866,19 @@ function panelTampil() {
         + st.stasiun[st.jobDst].nama + '. Buka gripper = produk JATUH'
     : (st.drop ? st.drop + ' produk jatuh' : '-');
 
-  // Tabel stasiun: keadaan + sisa waktu tiap mesin. Ini yang menjawab "kenapa
-  // robotnya diam" - biasanya karena kedua ICC masih menghitung.
-  var ht = '';
-  for (var s = 0; s < st.stasiun.length; s++) {
-    var x = st.stasiun[s];
-    ht += '<tr><td class="k">' + x.nama + '</td><td class="v">' + (NAMA_STST[st.stState[s]] || '-')
-       + '</td><td class="v">' + (st.stTimer[s] > 0.05 ? f2(st.stTimer[s]) + ' s' : '-')
-       + '</td></tr>';
+  // Baris stasiun: keadaan + sisa waktu tiap mesin. Ini yang menjawab "kenapa robotnya
+  // diam" - biasanya karena kedua ICC masih menghitung.
+  //
+  // Barisnya dibangun SEKALI (bikinPanelStatis) dan di sini cuma teksnya yang diganti.
+  // Menyusun ulang innerHTML tiap kabar berarti browser membuang lalu membuat lagi
+  // puluhan elemen 8x per detik, dan yang tersendat justru animasi 3D-nya.
+  for (var s = 0; s < refStasiun.length; s++) {
+    var r = refStasiun[s], keadaan = st.stState[s] || 0;
+    r.badge.textContent = NAMA_STST[keadaan] || '-';
+    r.badge.className = 'badge' + (keadaan === 1 ? ' proses' : keadaan === 2 ? ' siap' : '');
+    r.timer.textContent = st.stTimer[s] > 0.05 ? st.stTimer[s].toFixed(0) + 's' : '';
+    r.nama.className = 'stnama' + (st.auto && st.tujuan === s ? ' tuju' : '');
   }
-  el('stTabel').innerHTML = ht;
   el('cTabrak').textContent = !st.collide ? 'bebas'
     : (st.collideSt >= 0 && st.stasiun[st.collideSt] ? 'menyentuh ' + st.stasiun[st.collideSt].nama
        : 'menyentuh lantai');
@@ -780,22 +891,15 @@ function panelTampil() {
   gb.className = st.grip.cmd ? '' : 'act';
 
   var d = st.dim;
-  el('dims').innerHTML =
-    '<tr><td class="k">L1</td><td class="v">' + f2(d.L1) + '</td>'
-    + '<td class="k">L2</td><td class="v">' + f2(d.L2) + '</td></tr>'
-    + '<tr><td class="k">L3</td><td class="v">' + f2(d.L3) + '</td>'
-    + '<td class="k">L4</td><td class="v">' + f2(d.L4) + '</td></tr>'
-    + '<tr><td class="k">tool Y</td><td class="v">' + f2(d.toolY) + '</td>'
-    + '<td class="k">tool Z</td><td class="v">' + f2(d.toolZ) + '</td></tr>'
-    + '<tr><td class="k">gripper</td><td class="v">' + f2(st.grip.len) + '</td>'
-    + '<td class="k">stroke</td><td class="v">' + f2(st.grip.stroke) + '</td></tr>';
+  var nilai = [d.L1, d.L2, d.L3, d.L4, d.toolY, d.toolZ, st.grip.len, st.grip.stroke];
+  for (var q = 0; q < refDim.length; q++) refDim[q].textContent = f2(nilai[q]);
 }
 
 var NAMA_STATE = ['manual', 'sedang home', 'auto siap', 'jalan', 'stop di akhir siklus',
                   'PERLU HOME', 'EMERGENCY'];
 var NAMA_ABORT = { 0: 'berhenti', 1: 'emergency ditekan', 2: 'selector diubah saat jalan',
                    3: 'menabrak' };
-var NAMA_STST = { 0: 'kosong', 1: 'proses', 2: 'siap diambil' };
+var NAMA_STST = { 0: 'kosong', 1: 'proses', 2: 'siap' };
 
 // Tombol mengirim TEPI, bukan keadaan: PLC yang memutuskan boleh atau tidak
 // (selector, home, emergency), dan halaman tidak pernah menulis SIM_AUTO langsung.
@@ -916,12 +1020,20 @@ function muatConfig() {
 function putar(t) {
   offlineStep(t);
   gambar();
+  // Panel paling sering 8x per detik. Mata tidak bisa membaca angka yang berganti 20x
+  // per detik, dan tiap gambaran panel menyentuh puluhan elemen di tengah frame.
+  if (perluPanel && t - panelTerakhir > 120) {
+    perluPanel = false;
+    panelTerakhir = t;
+    panelTampil();
+  }
   requestAnimationFrame(putar);
 }
 
 bikinJog();
 pasangKontrol();
 muatConfig().then(function () {
+  bikinPanelStatis();
   panelTampil();
   if (bikinScene()) { ukur(); requestAnimationFrame(putar); }
   window.addEventListener('resize', ukur);

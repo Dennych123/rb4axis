@@ -5,52 +5,138 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blurobot - viz 3D</title>
 <style>
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.45 system-ui, Segoe UI, sans-serif; color:#111827; background:#f6f7f9;
-         display:flex; height:100vh; overflow:hidden; }
-  @media (prefers-color-scheme: dark) {
-    body { color:#e5e7eb; background:#111418; }
-    .panel { background:#171b21; border-color:#2a313a; }
-    fieldset { border-color:#2a313a; }
-    input, select { background:#0f1216; color:#e5e7eb; border-color:#333b45; }
-    .num { background:#0f1216; }
-    button { background:#1f2937; color:#e5e7eb; border-color:#374151; }
-    button.act { background:#2563eb; border-color:#2563eb; color:#fff; }
+  /* Warna ditaruh di variabel supaya terang dan gelap punya PASANGAN yang lengkap.
+     Yang dulu salah: abu-abu dipilih enak dilihat di layar terang, lalu di mode gelap
+     jadi #6b7280 di atas #171b21 - kontrasnya 3:1, dan yang paling sering perlu dibaca
+     (label, keterangan, angka kecil) justru yang paling pudar. */
+  :root {
+    color-scheme: light dark;
+    --bg:#f4f6f8; --kartu:#fff; --garis:#dbe1e8;
+    --teks:#0f172a; --teks2:#475569; --label:#5b6b7f;
+    --biru:#2563eb; --biruBg:#e8efff;
+    --hijau:#15803d; --hijauBg:#dcfce7;
+    --kuning:#a16207; --kuningBg:#fef3c7;
+    --merah:#b91c1c; --merahBg:#fee2e2;
+    --tombol:#fff; --tombolTeks:#0f172a;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f1216; --kartu:#171b21; --garis:#2b333d;
+      --teks:#e8edf3; --teks2:#b6c2d1; --label:#93a3b6;
+      --biru:#60a5fa; --biruBg:#17273f;
+      --hijau:#4ade80; --hijauBg:#12291b;
+      --kuning:#fbbf24; --kuningBg:#2c2312;
+      --merah:#f87171; --merahBg:#2e1516;
+      --tombol:#212933; --tombolTeks:#e8edf3;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui, "Segoe UI", sans-serif; color:var(--teks);
+         background:var(--bg); display:flex; height:100vh; overflow:hidden; }
   #view { flex:1 1 auto; position:relative; min-width:0; }
   #cv { width:100%; height:100%; display:block; }
-  .panel { flex:0 0 340px; overflow:auto; padding:12px 14px; background:#fff;
-           border-left:1px solid #e2e6ec; }
-  h1 { font-size:16px; margin:0 0 2px; }
-  .sub { color:#6b7280; font-size:12px; margin:0 0 12px; }
-  fieldset { border:1px solid #e2e6ec; border-radius:8px; padding:8px 10px 10px; margin:0 0 12px; }
-  legend { font-weight:600; font-size:12px; padding:0 5px; }
-  button { padding:5px 9px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer;
-           font:13px system-ui, sans-serif; }
-  button:hover { border-color:#2563eb; }
-  button.act { background:#2563eb; border-color:#2563eb; color:#fff; }
+
+  .panel { flex:0 0 340px; overflow:auto; padding:12px; background:var(--bg);
+           border-left:1px solid var(--garis); }
+  .kartu { background:var(--kartu); border:1px solid var(--garis); border-radius:10px;
+           padding:10px 12px; margin-bottom:10px; }
+  .judul { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+           color:var(--label); margin:0 0 8px; }
+  h1 { font-size:15px; margin:0 0 10px; font-weight:650; }
+
+  /* Status: satu baris yang bisa dibaca dari jauh, bukan satu sel di dalam tabel. */
+  #status { border-radius:8px; padding:7px 10px; font-size:12.5px; font-weight:600;
+            margin-bottom:10px; }
+  .ok  { background:var(--hijauBg); color:var(--hijau); }
+  .off { background:var(--kuningBg); color:var(--kuning); }
+  .bad { background:var(--merahBg); color:var(--merah); }
+
+  #cState { font-size:20px; font-weight:700; letter-spacing:-.01em; }
+  #cState.jalan { color:var(--hijau); }
+  #cState.tunggu { color:var(--kuning); }
+  #cState.stop { color:var(--merah); }
+  #cSebab { font-size:12.5px; color:var(--teks2); margin-top:3px; min-height:19px; }
+  .angka { display:flex; gap:8px; margin-top:10px; }
+  .angka div { flex:1; background:var(--bg); border:1px solid var(--garis); border-radius:8px;
+               padding:5px 8px; }
+  .angka b { display:block; font-size:17px; font-weight:700; line-height:1.25;
+             font-variant-numeric:tabular-nums; }
+  .angka span { font-size:10.5px; color:var(--label); text-transform:uppercase;
+                letter-spacing:.05em; }
+
+  button { padding:7px 11px; border-radius:7px; border:1px solid var(--garis);
+           background:var(--tombol); color:var(--tombolTeks); cursor:pointer;
+           font:600 13px system-ui, sans-serif; }
+  button:hover:not(:disabled) { border-color:var(--biru); }
+  button.act { background:var(--biru); border-color:var(--biru); color:#fff; }
   button.bahaya { background:#dc2626; border-color:#dc2626; color:#fff; }
-  button:disabled { opacity:.45; cursor:default; }
-  input, select { padding:4px 6px; border:1px solid #cbd5e1; border-radius:5px;
+  button:disabled { opacity:.4; cursor:default; }
+  .baris { display:flex; gap:6px; align-items:center; margin:7px 0; }
+  .baris button { flex:1; }
+  #estopBtn { width:100%; padding:9px; letter-spacing:.06em; }
+
+  /* Selector digambar sebagai dua sisi yang salah satunya menyala. Checkbox polos tidak
+     menjawab "sekarang di posisi mana", dan itu pertanyaan pertama tiap orang. */
+  .sel { display:flex; border:1px solid var(--garis); border-radius:7px; overflow:hidden;
+         font:600 12.5px system-ui, sans-serif; cursor:pointer; }
+  .sel span { flex:1; text-align:center; padding:6px 0; color:var(--label); }
+  .sel input { display:none; }
+  .sel.auto .kanan { background:var(--biru); color:#fff; }
+  .sel:not(.auto) .kiri { background:var(--biru); color:#fff; }
+
+  input, select { padding:5px 7px; border:1px solid var(--garis); border-radius:6px;
+                  background:var(--kartu); color:var(--teks);
                   font:13px ui-monospace, Consolas, monospace; }
-  input.num { width:72px; text-align:right; }
-  table { border-collapse:collapse; width:100%; font:12.5px ui-monospace, Consolas, monospace; }
-  td { padding:2px 4px; }
-  td.k { color:#6b7280; }
-  td.v { text-align:right; }
-  td.bad { color:#dc2626; font-weight:600; }
-  .jogrow { display:flex; align-items:center; gap:6px; margin:3px 0; }
-  .jogrow span.lbl { width:82px; color:#6b7280; font-size:12px; }
-  .lamp { display:inline-block; width:11px; height:11px; border-radius:50%; background:#d1d5db;
-          margin-right:3px; vertical-align:-1px; }
+  input.num { width:70px; text-align:right; }
+  input[type=range] { flex:1; accent-color:var(--biru); padding:0; border:0; background:none; }
+  label { font-size:12.5px; color:var(--teks2); }
+
+  table { border-collapse:collapse; width:100%; font:13px ui-monospace, Consolas, monospace; }
+  td { padding:3px 4px; }
+  td.k { color:var(--label); font-family:system-ui, sans-serif; font-size:12px; }
+  td.v { text-align:right; font-variant-numeric:tabular-nums; }
+  td.bad { color:var(--merah); font-weight:700; background:none; }
+
+  /* Stasiun: badge berwarna, bukan kata di kolom - keadaan enam mesin harus terbaca
+     sekali lihat, bukan dibaca satu per satu. */
+  .stbaris { display:flex; align-items:center; gap:8px; padding:5px 0;
+             border-top:1px solid var(--garis); }
+  .stbaris:first-child { border-top:0; }
+  .stnama { flex:1; font-size:12.5px; font-weight:600; }
+  .stnama.tuju::after { content:" ←"; color:var(--biru); font-weight:700; }
+  .badge { font:600 10.5px system-ui, sans-serif; padding:2px 7px; border-radius:99px;
+           background:var(--bg); color:var(--label); border:1px solid var(--garis); }
+  .badge.proses { background:var(--biruBg); color:var(--biru); border-color:transparent; }
+  .badge.siap { background:var(--hijauBg); color:var(--hijau); border-color:transparent; }
+  .sttimer { width:44px; text-align:right; font:12.5px ui-monospace, monospace;
+             color:var(--teks2); font-variant-numeric:tabular-nums; }
+
+  .lamp { display:inline-block; width:10px; height:10px; border-radius:50%;
+          background:var(--garis); margin-right:4px; vertical-align:-1px; }
   .lamp.on { background:#dc2626; }
-  #status { padding:6px 8px; border-radius:6px; font-size:12.5px; margin-bottom:10px; }
-  .ok   { background:#dcfce7; color:#166534; }
-  .off  { background:#fef3c7; color:#92400e; }
-  .bad  { background:#fee2e2; color:#991b1b; }
-  #err { font-size:12.5px; color:#b91c1c; min-height:18px; }
-  .hint { font-size:11.5px; color:#6b7280; margin-top:4px; }
+  #limits { font-size:11.5px; color:var(--teks2); line-height:1.9; }
+  #err { font-size:12.5px; color:var(--merah); min-height:18px; font-weight:600; }
+  #beat { font-size:11.5px; color:var(--label); margin-top:6px; }
+
+  /* Keterangan panjang disembunyikan di balik ringkasan. Alasan tiap keputusan tetap
+     ada - dihapus, orang berikutnya mengubahnya lagi jadi salah - tapi tidak lagi
+     memenuhi panel yang dipakai menjalankan mesin. */
+  details { margin-top:8px; }
+  summary { cursor:pointer; list-style:none; user-select:none; }
+  summary::-webkit-details-marker { display:none; }
+  details > summary.k2 { font-size:11.5px; color:var(--label); }
+  details > summary.k2::before { content:"? "; font-weight:700; }
+  details > summary.k2:hover { color:var(--biru); }
+  summary.tajuk { font-size:11px; font-weight:700; letter-spacing:.07em;
+                  text-transform:uppercase; color:var(--label); }
+  summary.tajuk::before { content:"▸ "; }
+  details[open] > summary.tajuk::before { content:"▾ "; }
+  .ket { font-size:12px; color:var(--teks2); margin-top:6px; }
+  .ket b { color:var(--teks); }
+  .ket code { background:var(--bg); padding:1px 4px; border-radius:4px; font-size:11.5px; }
+  .jogrow { display:flex; align-items:center; gap:6px; margin:4px 0; }
+  .jogrow span.lbl { width:74px; color:var(--label); font-size:12px; }
+  .jogrow button { min-width:38px; }
 </style>
 </head>
 <body>
@@ -58,120 +144,75 @@
 <div id="view"><canvas id="cv"></canvas></div>
 
 <div class="panel">
-  <h1>Blurobot &mdash; viz 3D</h1>
-  <p class="sub">1 sumbu linear X + 3 sendi planar di bidang Y&ndash;Z. Kinematiknya milik
-     project mesin, dijalankan simulator NX. Gripper menyumpit dari atas dan menjepit
-     sisi kiri-kanan PCB.</p>
-
+  <h1>Blurobot &mdash; sel ICC / DW</h1>
   <div id="status" class="off">memeriksa bridge...</div>
 
-  <fieldset>
-    <legend>Panel sel</legend>
-    <div class="jogrow">
-      <span class="lbl">selector</span>
-      <label style="font-size:12px"><input type="checkbox" id="selAuto"> AUTO</label>
-      <button id="estopBtn" class="bahaya">E-STOP</button>
+  <div class="kartu">
+    <div id="cState">-</div>
+    <div id="cSebab">-</div>
+    <div class="angka">
+      <div><b id="cCount">0</b><span>selesai</span></div>
+      <div><b id="cPart">-</b><span>gripper</span></div>
+      <div><b id="cStep">-</b><span>langkah</span></div>
     </div>
-    <div class="jogrow">
+    <table style="margin-top:8px">
+      <tr><td class="k">pekerjaan</td><td class="v" id="cJob">-</td></tr>
+      <tr><td class="k">tujuan</td><td class="v" id="cTuju">-</td></tr>
+      <tr><td class="k">tabrakan</td><td class="v" id="cTabrak">-</td></tr>
+    </table>
+  </div>
+
+  <div class="kartu">
+    <p class="judul">Kendali</p>
+    <label class="sel" id="selKotak">
+      <input type="checkbox" id="selAuto">
+      <span class="kiri">MANUAL</span><span class="kanan">AUTO</span>
+    </label>
+    <div class="baris">
       <button id="runBtn" class="act">Autorun</button>
       <button id="cstopBtn">Cycle stop</button>
-      <button id="home">Home pos</button>
+      <button id="home">Home</button>
     </div>
-    <div class="jogrow">
-      <span class="lbl">speed</span>
-      <input type="range" id="ovr" min="1" max="100" step="1" value="100" style="flex:1">
-      <span id="ovrNilai" style="width:44px;text-align:right">100%</span>
+    <button id="estopBtn" class="bahaya">E-STOP</button>
+    <div class="baris">
+      <span style="width:52px;color:var(--label);font-size:12px">speed</span>
+      <input type="range" id="ovr" min="1" max="100" step="1" value="100">
+      <span id="ovrNilai" style="width:42px;text-align:right;font:600 13px ui-monospace,monospace">100%</span>
     </div>
-    <table>
-      <tr><td class="k">keadaan</td><td class="v" id="cState">-</td>
-          <td class="k">langkah</td><td class="v" id="cStep">-</td></tr>
-      <tr><td class="k">pekerjaan</td><td class="v" id="cJob" colspan="3">-</td></tr>
-      <tr><td class="k">tujuan</td><td class="v" id="cTuju">-</td>
-          <td class="k">gripper</td><td class="v" id="cPart">-</td></tr>
-      <tr><td class="k">selesai</td><td class="v" id="cCount">-</td>
-          <td class="k">tabrakan</td><td class="v" id="cTabrak">-</td></tr>
-      <tr><td class="k">catatan</td><td class="v" id="cSebab" colspan="3">-</td></tr>
-    </table>
-    <div class="hint">Selector diubah SAAT jalan, atau E-STOP ditekan &rarr; robot berhenti
-      di tempat dan wajib <b>Home</b> dulu sebelum Autorun mau jalan lagi. <b>Cycle stop</b>
-      beda: pekerjaan yang sedang dipegang diselesaikan dulu, produk tidak ditinggal di
-      udara, dan sesudahnya Autorun bisa langsung dipakai lagi.
-      Sekuensnya jalan di PLC; halaman cuma menggambarnya.<br>
-      <b>Speed</b> menskalakan kecepatan sumbu &mdash; siklus otomatis maupun jog.
-      Akselerasi TIDAK ikut diskalakan (jarak pengereman tetap), dan gripper juga tidak:
-      di mesin aslinya jarinya pneumatik. Dijepit 1..100 % di PLC, bukan di halaman.</div>
-  </fieldset>
+    <details>
+      <summary class="k2">kenapa tombolnya begitu</summary>
+      <div class="ket">
+        Selector diubah <b>saat jalan</b>, E-STOP, atau tabrakan &rarr; robot berhenti di
+        tempat dan wajib <b>Home</b> sebelum Autorun mau jalan lagi: sesudah berhenti
+        mendadak sekuenser tidak tahu di pose mana sumbunya berhenti.
+        <b>Cycle stop</b> beda &mdash; pekerjaan yang dipegang diselesaikan dulu, produknya
+        tidak ditinggal di udara, dan Autorun bisa langsung dipakai lagi.
+        Produk yang sedang dijepit <b>tetap dipegang</b> lewat semua itu, dan Autorun
+        melanjutkan pengantarannya.
+        <b>Home</b> cuma melipat lengan &mdash; rel tidak ikut pulang, jadi home boleh di
+        mana saja di sepanjang rel.
+        <b>Speed</b> menskalakan kecepatan sumbu (siklus dan jog), bukan akselerasi dan
+        bukan gripper; dijepit 1..100 % di PLC.
+      </div>
+    </details>
+  </div>
 
-  <fieldset>
-    <legend>Stasiun</legend>
-    <table id="stTabel"></table>
-    <div class="hint">Robot mengisi <b>buffer ICC dulu sampai dua-duanya penuh</b>, baru
-      mengosongkan DW yang selesai ke WIP OUT, baru memindah ICC yang selesai ke DW
-      kosong. Urutan itu yang bikin mesin tes 17 detik tidak menganggur menunggu robot.
-      Tiap mesin menghitung waktunya sendiri, berbarengan.</div>
-  </fieldset>
+  <div class="kartu">
+    <p class="judul">Stasiun</p>
+    <div id="stTabel"></div>
+    <details>
+      <summary class="k2">aturan buffer</summary>
+      <div class="ket">
+        ICC kosong diisi <b>dulu</b> sampai dua-duanya penuh &rarr; DW yang selesai
+        dikosongkan ke WIP OUT &rarr; ICC yang selesai dipindah ke DW kosong.
+        Urutan itu yang bikin mesin tes 17 detik tidak menganggur, dan yang mencegah empat
+        mesin penuh saling mengunci. Tiap mesin menghitung waktunya sendiri, berbarengan.
+      </div>
+    </details>
+  </div>
 
-  <fieldset>
-    <legend>Jog</legend>
-    <div class="jogrow">
-      <span class="lbl">mode</span>
-      <select id="mode">
-        <option value="0">joint</option>
-        <option value="1">world</option>
-        <option value="2">tool</option>
-      </select>
-      <label style="font-size:12px"><input type="checkbox" id="hold"> tahan-jalan</label>
-    </div>
-    <div class="jogrow">
-      <span class="lbl">langkah</span>
-      <input class="num" id="step" type="number" value="10" step="1">
-      <button id="stepSet">set</button>
-    </div>
-    <div id="jog"></div>
-    <div class="hint">Mesin aslinya jog per LANGKAH (10). "tahan-jalan" itu tambahan viz.</div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Gripper</legend>
-    <div class="jogrow">
-      <span class="lbl">bukaan</span>
-      <span id="gripPos">-</span>
-      <button id="gripBtn">Tutup</button>
-    </div>
-    <div class="hint">Menutup berhenti di lebar PCB, bukan di 0 &mdash; jari yang bertemu di
-      nol menembus barang yang dipegangnya. Panjang gripper ikut TCP:
-      <code>ROBOT_TOOL_Y = tool.Y + gripper.panjang</code>, dijumlahkan sekali di
-      <code>gen_sim.js</code>. Bola kuning di layar itu TCP-nya.<br>
-      <b>Membuka gripper sambil memegang produk (di MANUAL) = produk JATUH</b> dan
-      pekerjaannya ikut hilang. Itu satu-satunya cara produk keluar dari gripper selain
-      diletakkan sekuenser &mdash; emergency, cycle stop, selector, dan Home semuanya
-      TETAP memegangnya.</div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Solusi IK</legend>
-    <div class="jogrow">
-      <label style="font-size:12px"><input type="checkbox" id="elbow"> elbow up (cermin)</label>
-    </div>
-    <div class="hint">Mati = cabang yang sama dengan mesin. Pilihan ini cuma ada di FB V2 —
-      V1 selalu elbow down, jadi pose yang butuh cermin tidak pernah punya solusi.</div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Move point (world)</legend>
-    <div class="jogrow"><span class="lbl">X mm</span><input class="num" id="tx" type="number" step="1"></div>
-    <div class="jogrow"><span class="lbl">Y mm</span><input class="num" id="ty" type="number" step="1"></div>
-    <div class="jogrow"><span class="lbl">Z mm</span><input class="num" id="tz" type="number" step="1"></div>
-    <div class="jogrow"><span class="lbl">theta_EE &deg;</span><input class="num" id="tt" type="number" step="1"></div>
-    <div class="jogrow">
-      <button id="move" class="act">Move</button>
-      <button id="here">isi dari posisi sekarang</button>
-    </div>
-    <div id="err"></div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Posisi</legend>
+  <div class="kartu">
+    <p class="judul">Posisi</p>
     <table>
       <tr><td class="k">sumbu 0 (X)</td><td class="v" id="j0">-</td>
           <td class="k">world X</td><td class="v" id="w0">-</td></tr>
@@ -182,23 +223,65 @@
       <tr><td class="k">theta 3</td><td class="v" id="j3">-</td>
           <td class="k">theta_EE</td><td class="v" id="w3">-</td></tr>
     </table>
-  </fieldset>
+    <div id="limits" style="margin-top:8px"></div>
+    <div id="beat">heartbeat -</div>
+  </div>
 
-  <fieldset>
-    <legend>Soft limit &amp; status</legend>
-    <div id="limits" style="font-size:12px"></div>
-    <div class="jogrow" style="margin-top:8px">
-      <button id="reset">Reset init</button>
+  <details class="kartu" id="kartuManual">
+    <summary class="tajuk">Manual: jog, gripper, move point</summary>
+
+    <div class="jogrow" style="margin-top:10px">
+      <span class="lbl">mode</span>
+      <select id="mode">
+        <option value="0">joint</option>
+        <option value="1">world</option>
+        <option value="2">tool</option>
+      </select>
+      <label><input type="checkbox" id="hold"> tahan-jalan</label>
     </div>
-    <div class="hint" id="beat">heartbeat -</div>
-  </fieldset>
+    <div class="jogrow">
+      <span class="lbl">langkah</span>
+      <input class="num" id="step" type="number" value="10" step="1">
+      <button id="stepSet">set</button>
+    </div>
+    <div id="jog"></div>
 
-  <fieldset>
-    <legend>Dimensi (dibaca dari PLC)</legend>
-    <table id="dims"></table>
-    <div class="hint">Angkanya placeholder sampai robot aslinya diukur &mdash;
-      ganti di <code>sim/robot.config.json</code>.</div>
-  </fieldset>
+    <div class="jogrow" style="margin-top:10px">
+      <span class="lbl">gripper</span>
+      <span id="gripPos" style="flex:1;font:13px ui-monospace,monospace">-</span>
+      <button id="gripBtn">Tutup</button>
+    </div>
+
+    <div class="jogrow" style="margin-top:10px"><span class="lbl">X mm</span><input class="num" id="tx" type="number" step="1"></div>
+    <div class="jogrow"><span class="lbl">Y mm</span><input class="num" id="ty" type="number" step="1"></div>
+    <div class="jogrow"><span class="lbl">Z mm</span><input class="num" id="tz" type="number" step="1"></div>
+    <div class="jogrow"><span class="lbl">theta_EE</span><input class="num" id="tt" type="number" step="1"></div>
+    <div class="baris">
+      <button id="move" class="act">Move</button>
+      <button id="here">isi dari posisi</button>
+    </div>
+    <div id="err"></div>
+    <div class="jogrow"><label><input type="checkbox" id="elbow"> elbow up (cermin)</label></div>
+    <div class="baris"><button id="reset">Reset init</button></div>
+
+    <details>
+      <summary class="k2">catatan jog</summary>
+      <div class="ket">
+        Mesin aslinya jog per <b>langkah</b> (10); "tahan-jalan" itu tambahan viz.
+        Jog cuma hidup waktu selector MANUAL &mdash; dua sumber perintah untuk satu lengan
+        berebut tiap scan. Membuka gripper sambil memegang produk = produk <b>JATUH</b>,
+        dan pekerjaannya ikut terhapus. Pose yang menembus badan mesin ditolak PLC sebelum
+        sumbu bergerak. Elbow up cuma ada di FB V2; mati = cabang yang sama dengan mesin.
+      </div>
+    </details>
+  </details>
+
+  <details class="kartu">
+    <summary class="tajuk">Dimensi (dari PLC)</summary>
+    <table id="dims" style="margin-top:8px"></table>
+    <div class="ket">Placeholder sampai robot aslinya diukur &mdash; ganti di
+      <code>sim/robot.config.json</code>, bukan di halaman ini.</div>
+  </details>
 </div>
 
 <!-- three.js: salinan lokal dulu (taruh three.min.js di folder web/ kalau mesinnya

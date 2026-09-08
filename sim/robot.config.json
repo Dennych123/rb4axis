@@ -128,12 +128,20 @@
 
   "home": {
     "_catatan": [
-      "Pose sumbu yang dituju SIM_HOME_EXEC. Ini JUGA pose jalan (travel): lengan cuma",
-      "boleh menyusuri rel dalam pose ini, tidak pernah dalam pose apa pun yang sedang",
-      "menjulur ke bawah. Lengan yang bergeser sambil menjulur menyapu tiap mesin yang",
-      "dilewatinya, dan di layar itu terlihat mulus sampai ada yang memperhatikan.",
-      "Pose ini WAJIB lebih tinggi dari mesin tertinggi - dijaga tests/viz.test.js."
+      "Pose LENGAN yang dituju SIM_HOME_EXEC - sumbu 1, 2, 3 saja.",
+      "SUMBU 0 (rel) TIDAK ikut: home boleh di mana saja di sepanjang rel. Robot yang",
+      "harus pulang ke satu titik rel dulu berarti tiap pemulihan menyeret lengan melewati",
+      "mesin-mesin yang tidak ada urusannya - lebih jauh, lebih lama, dan lebih banyak",
+      "yang bisa tersenggol daripada kalau dia melipat di tempat.",
+      "Angka sumbu[0] tetap dipakai SEKALI, waktu init menaruh posisi awal.",
+      "Pose ini JUGA pose jalan (travel): lengan cuma boleh menyusuri rel dalam pose ini,",
+      "tidak pernah sambil menjulur ke bawah - yang menjulur menyapu tiap mesin yang",
+      "dilewatinya, dan di layar itu mulus sampai ada yang memperhatikan.",
+      "Bentuknya seperti robot aslinya: lengan atas tegak, lengan bawah mendatar, dan",
+      "gripper MENGGANTUNG TEGAK ke bawah (theta_EE -90) - sama dengan sikapnya waktu",
+      "menyumpit, jadi turun ke stasiun tinggal menurunkan, bukan memutar dulu.",
+      "WAJIB lebih tinggi dari mesin tertinggi - dijaga tests/viz.test.js."
     ],
-    "sumbu": [0.0, 90.0, -90.0, 0.0]
+    "sumbu": [0.0, 90.0, -90.0, -90.0]
   }
 }

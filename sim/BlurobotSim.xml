@@ -1235,7 +1235,7 @@ IF NOT SIM_INIT_DONE THEN
 	SIM_HOME[0] := 0.0;
 	SIM_HOME[1] := 90.0;
 	SIM_HOME[2] := -90.0;
-	SIM_HOME[3] := 0.0;
+	SIM_HOME[3] := -90.0;
 
 	SIM_DT := 0.004;
 	SIM_JOG_STEP := 10.0;
@@ -1384,7 +1384,12 @@ END_IF;
 // Home dipakai DUA hal sekaligus: pose istirahat, dan pose JALAN. Lengan cuma boleh
 // menyusuri rel dalam pose ini - lihat sekuenser di bawah.
 IF EDGE_HOME AND NOT SIM_ESTOP AND NOT SIM_AUTO THEN
-	FOR i := 0 TO 3 DO
+	// Sumbu 1-3 SAJA. Rel tidak disentuh: home boleh di mana saja di sepanjang rel.
+	// Memaksa rel pulang ke satu titik bikin tiap pemulihan menyeret lengan melewati
+	// mesin yang tidak ada urusannya - lebih jauh, lebih lama, dan lebih banyak yang
+	// bisa tersenggol daripada melipat di tempat. Yang dibutuhkan sekuenser cuma
+	// BENTUK lengannya, karena langkah pertama tiap pekerjaan memang menggeser rel.
+	FOR i := 1 TO 3 DO
 		SIM_JOINT_CMD[i] := SIM_HOME[i];
 	END_FOR;
 	HOMING := TRUE;

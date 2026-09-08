@@ -116,10 +116,18 @@ dan 500 % yang lolos bikin sumbu melompati targetnya tiap scan.
 
 **Gerakannya dihaluskan di dua tempat, dan keduanya perlu.** Di PLC: profil trapesium
 per sumbu (akselerasi + jarak rem), jadi sumbu tidak lagi berangkat dan berhenti pada
-kecepatan penuh dalam satu scan. Di halaman: yang DIGAMBAR dikejar ke nilai PLC terakhir
-tiap frame, karena bridge mengirim tiap ~50 ms sementara layar menggambar tiap ~16 ms.
+kecepatan penuh dalam satu scan. Di halaman: di antara dua kabar (~50 ms, sementara layar
+menggambar tiap ~16 ms) posisi **diramal dari kecepatan sumbu yang dipublikasikan PLC**,
+bukan sekadar dikejar ke posisi terakhir - yang mengejar selalu tertinggal, dan makin
+cepat sumbunya makin jauh tertinggal. Ramalannya dibatasi 120 ms: kalau kabarnya berhenti
+datang, lengan yang diramal terus akan terbang menjauh, dan itu terlihat seperti robot
+yang kabur alih-alih sambungan yang putus.
+
 Yang dihaluskan cuma gambarnya - **panel tetap menampilkan angka PLC apa adanya**, jadi
-masih ada tempat untuk membandingkan layar dengan simulator.
+masih ada tempat untuk membandingkan layar dengan simulator. Panelnya sendiri digambar
+paling sering 8x per detik dan mengganti teks di elemen yang sudah ada, bukan menyusun
+ulang `innerHTML` tiap kabar: yang tersendat karena itu justru animasi 3D-nya, bukan
+panelnya.
 
 Project mesinnya **hanya dibaca**. Tidak ada satu pun berkas di
 `C:\Users\denny\Downloads\Blurobot ECU\` yang ditulis alat di folder ini.

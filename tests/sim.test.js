@@ -236,6 +236,17 @@ chk('produk yang jatuh DIHITUNG',
 chk('yang jatuh cuma di MANUAL, bukan waktu sekuenser meletakkan',
     /SIM_GRIP_OPEN AND NOT SIM_AUTO/.test(kode));
 
+// Home cuma melipat LENGAN. Rel tidak ikut pulang: memaksanya ke satu titik berarti
+// tiap pemulihan menyeret lengan melewati mesin yang tidak ada urusannya, dan langkah
+// pertama tiap pekerjaan toh menggeser rel sendiri.
+chk('home tidak menyentuh sumbu 0 (rel bebas di mana saja)',
+    /IF EDGE_HOME[\s\S]{0,700}?FOR i := 1 TO 3 DO[\s\S]{0,120}?SIM_JOINT_CMD\[i\] := SIM_HOME\[i\];/.test(kode)
+    && !/IF EDGE_HOME[\s\S]{0,700}?FOR i := 0 TO 3 DO[\s\S]{0,120}?SIM_JOINT_CMD\[i\] := SIM_HOME\[i\];/.test(kode));
+chk('pose home menggantung tegak seperti robot aslinya',
+    cfg.home.sumbu[1] + cfg.home.sumbu[2] + cfg.home.sumbu[3] === -90,
+    'theta_EE home = ' + (cfg.home.sumbu[1] + cfg.home.sumbu[2] + cfg.home.sumbu[3])
+    + '; kalau bukan -90 gripper mendatar dan tiap turun ke stasiun harus memutar dulu');
+
 // --------------------------------------------------- rel cuma dilewati terlipat
 // Lengan yang bergeser sambil menjulur ke bawah menyapu tiap mesin yang dilewatinya.
 // Yang menjaganya urutan langkah: lipat DULU (sumbu 1-3 ke pose home), tunggu selesai,

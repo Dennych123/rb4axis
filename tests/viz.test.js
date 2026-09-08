@@ -114,6 +114,29 @@ chk('robot.js tidak menghitung rantai sendiri',
 // bikin Z PLC jadi ketinggian. Ketukar: lengan rebah, rel berdiri.
 chk('pemetaan sumbu PLC->three ada di satu fungsi', /function ke3\(p\)[\s\S]*?p\.x, p\.z, p\.y/.test(robot));
 
+// ------------------------------------------------------- gerakan yang digambar
+// Yang membuat gerakan terlihat mulus di antara dua kabar dari PLC (~50 ms) bukan
+// mengejar posisi terakhir - itu selalu tertinggal, dan makin cepat sumbunya makin
+// jauh tertinggal - tapi meramalkannya dari KECEPATAN yang memang sedang dipakai PLC.
+chk('gambar diramal dari kecepatan PLC, bukan sekadar mengejar posisi',
+    /st\.jointPlc\[i\] \+ \(st\.jointVel\[i\] \|\| 0\) \* umur/.test(robot));
+// Ramalan tanpa batas = lengan terbang menjauh waktu kabarnya berhenti datang, dan di
+// layar itu terlihat seperti robot yang kabur, bukan seperti sambungan yang putus.
+chk('ramalan dibatasi', /RAMAL_MAKS = 0\.\d+/.test(robot)
+    && /Math\.min\(\(jam\(\) - st\.tSampel\) \/ 1000, RAMAL_MAKS\)/.test(robot));
+// Panel disusun ulang tiap kabar = puluhan elemen dibuang dan dibuat lagi 20x per
+// detik, di tengah frame. Yang tersendat justru animasi 3D-nya, bukan panelnya.
+chk('panel tidak menyusun ulang innerHTML tiap kabar dari PLC', (() => {
+  // Komentar dibuang dulu: catatan di dalam fungsi itu MENYEBUT innerHTML justru untuk
+  // menjelaskan kenapa tidak dipakai, dan mencocokkan teks mentah bikin tes ini
+  // menjawab pertanyaan yang lain.
+  const badan = robot.slice(robot.indexOf('function panelTampil'), robot.indexOf('var NAMA_STATE'))
+    .replace(/\/\/.*/g, '');
+  return !/innerHTML/.test(badan);
+})(), 'panelTampil() harus mengganti teks di elemen yang sudah ada');
+chk('panel digambar ter-throttle dari putar(), bukan dari tiap pesan SSE',
+    /perluPanel && t - panelTerakhir >/.test(robot) && /perluPanel = true;/.test(robot));
+
 // ------------------------------------------------ nilai PLC -> array yang bisa dipakai
 // SUDAH KEJADIAN: lengan hilang dari layar begitu PLC tersambung, base dan rel tetap
 // ada. Sebabnya bentuk nilainya, bukan kinematiknya - array LREAL/REAL datang sebagai
@@ -197,6 +220,10 @@ chk('bukaan penuh lebih lebar dari produk', raw.gripper.stroke > siklus.pcb.panj
 // mulus, karena tidak ada yang menghitung tabrakan waktu menggambar.
 const tertinggi = Math.max(...siklus.stasiun.map(s => s.z));
 const poseJalan = K.forwardKinematicV2(raw.home.sumbu, cfg).worldL;
+// Gripper sudah menggantung tegak di pose jalan, jadi turun ke stasiun tinggal
+// menurunkan - bukan memutar dulu di atas mesin, yang mengayunkan jari melewati
+// badan mesin dalam perjalanannya.
+chk('pose jalan sudah menghadap bawah (theta_EE -90)', poseJalan[3] === -90, 'thEE=' + poseJalan[3]);
 chk('pose jalan (home) lebih tinggi dari mesin tertinggi',
     poseJalan[2] > tertinggi + 100,
     'TCP z=' + poseJalan[2].toFixed(0) + ' vs mesin ' + tertinggi);

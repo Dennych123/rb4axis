@@ -115,6 +115,10 @@ pun tanda. Karena itu blok Home memadamkan `SIM_MOVE_DONE` sendiri sebelum
 memeriksanya. Sekuenser tidak kena karena perintah dan penungguannya ada di langkah —
 dan scan — yang berbeda; kalau menambah langkah baru, pertahankan pola itu.
 
+**Home cuma melipat LENGAN — sumbu 0 tidak ikut.** Home yang menyeret rel ke satu titik
+bikin tiap pemulihan melewatkan lengan di depan mesin yang tidak ada urusannya, padahal
+langkah pertama tiap pekerjaan memang menggeser rel sendiri.
+
 **Rel cuma boleh dilewati dalam pose jalan** (= pose home). Lengan yang bergeser
 sambil menjulur ke bawah menyapu tiap mesin yang dilewatinya, dan di layar itu mulus.
 Urutannya: lipat → TUNGGU selesai → geser sumbu 0. Menggabungnya jadi satu langkah
@@ -195,6 +199,17 @@ Dua hal kecil yang gampang balik salah: shadow camera harus melingkupi seluruh s
 (±2200; mesin di ±1400 — yang ±1600 memotong bayangan mesin ujung), dan label
 stasiun digambar ulang **hanya waktu teksnya berubah** — tiap frame berarti
 `CanvasTexture` baru terus.
+
+**Penghalusan gambar meramal dari KECEPATAN PLC, bukan mengejar posisi.** Mengejar
+posisi selalu tertinggal, dan makin cepat sumbunya makin jauh tertinggal — itu yang
+terbaca sebagai "laggy". Ramalannya wajib dibatasi (120 ms): tanpa batas, kabar yang
+berhenti datang bikin lengan terbang menjauh, dan itu terlihat seperti robot yang kabur
+alih-alih sambungan yang putus.
+
+**Panel jangan digambar dari tiap pesan SSE.** ~20 pesan per detik × puluhan elemen
+`innerHTML` yang disusun ulang = layout ulang di tengah frame, dan yang tersendat justru
+animasi 3D-nya. Bentuk panel dibangun SEKALI (`bikinPanelStatis`), `panelTampil()` cuma
+mengganti teks, dan pemanggilannya di-throttle dari `putar()`.
 
 **Penghalusan gambar TIDAK boleh menyentuh angka panel.** Bridge mengirim tiap ~50 ms,
 layar menggambar tiap ~16 ms, jadi yang digambar dikejar ke nilai PLC terakhir
