@@ -676,7 +676,11 @@ function panelTampil() {
   el('runBtn').disabled = !bisaRun;
   el('runBtn').className = bisaRun ? 'act' : '';
   el('cstopBtn').disabled = !st.plc || !st.auto || st.stopReq;
+  // Home disorot begitu dia jadi satu-satunya tombol yang berguna. Sesudah berhenti
+  // total, Autorun mati dan panel bilang "PERLU HOME" - tombolnya harus ikut menunjuk
+  // dirinya sendiri, bukan menunggu orang mencarinya.
   el('home').disabled = st.plc && (st.estop || st.auto);
+  el('home').className = (!st.homed && !st.estop) ? 'act' : '';
   el('selAuto').checked = st.selAuto;
   el('selAuto').disabled = !st.plc;
   var eb = el('estopBtn');
