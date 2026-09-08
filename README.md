@@ -35,19 +35,23 @@ Project mesinnya **hanya dibaca**. Tidak ada satu pun berkas di
 
 ## Perintah
 
+Semua path di dokumen ini relatif terhadap AKAR REPO INI (`rb4axis`). Kalau folder ini
+kebetulan tinggal di dalam repo alat `sysmac-generator`, tambahkan awalan `blurobot/`
+— di situ `node tests/run.js` menjalankan suite repo alat, bukan suite ini.
+
 ```bash
-node blurobot/tools/extract.js     # .smc2 -> extract/ (ST verbatim + tabel variabel)
-node blurobot/tools/gen_sim.js     # robot.config.json -> blok init ST, tabel variabel, tags.json
-node blurobot/tools/gen_xml.js     # sim/*.st + *.tsv -> sim/BlurobotSim.xml (import Sysmac)
-node blurobot/tests/run.js         # 5 suite, tanpa Studio dan tanpa PLC
-node blurobot/bridge/bridge.js     # OPC UA <-> halaman, http://127.0.0.1:7656
+node tools/extract.js     # .smc2 -> extract/ (ST verbatim + tabel variabel)
+node tools/gen_sim.js     # robot.config.json -> blok init ST, tabel variabel, tags.json
+node tools/gen_xml.js     # sim/*.st + *.tsv -> sim/BlurobotSim.xml (import Sysmac)
+node tests/run.js         # 5 suite, tanpa Studio dan tanpa PLC
+node bridge/bridge.js     # OPC UA <-> halaman, http://127.0.0.1:7656
 ```
 
 Bridge butuh paket OPC UA - dipasang sekali, dan itu satu-satunya dependensi di
 seluruh repo ini:
 
 ```bash
-cd blurobot/bridge && npm install
+cd bridge && npm install
 node bridge.js --list SIM_                       # periksa simulator dari terminal
 node bridge.js --write SIM_JOG_MODE=0            # tekan tombol dari luar
 node bridge.js --watch SIM_JOINT_POS             # pantau perubahan

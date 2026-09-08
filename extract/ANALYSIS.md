@@ -77,10 +77,10 @@ tidak ada satu pun titik gagal yang datang dari konfigurasi motion.
 ## Empat cacat di algoritma asli
 
 Berkas di folder ini **tetap verbatim** — keempat cacat di bawah masih ada di sini,
-dan punya tes yang MENUNTUT perilaku aslinya (`blurobot/tests/kin.test.js`). Itu yang
+dan punya tes yang MENUNTUT perilaku aslinya (`tests/kin.test.js`). Itu yang
 membuat folder ini bisa diadu ke project mesin kapan pun.
 
-Yang DIPAKAI simulasi adalah versi perbaikannya, `blurobot/sim/FORWARD_KINEMATIC_V2.st`
+Yang DIPAKAI simulasi adalah versi perbaikannya, `sim/FORWARD_KINEMATIC_V2.st`
 dan `INVERSE_KINEMATIC_V2.st` — berdampingan, bukan menggantikan. Tesnya berpasangan:
 satu menuntut perilaku salah (V1), satu menuntut yang benar (V2), plus satu yang
 membuktikan keduanya memang berbeda di pose yang sama. Kalau nanti mesin aslinya mau

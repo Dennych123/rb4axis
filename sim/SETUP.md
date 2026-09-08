@@ -6,10 +6,10 @@ dan menebak-nebak di sini mahal karena tiap kesalahan baru kelihatan setelah Bui
 Sebelum mulai, pastikan berkasnya segar:
 
 ```bash
-node blurobot/tools/extract.js     # extract/*.st + variables.tsv dari project mesin
-node blurobot/tools/gen_sim.js     # blok init ST + tabel variabel + tags.json dari config
-node blurobot/tools/gen_xml.js     # semuanya jadi SATU berkas import: sim/BlurobotSim.xml
-node blurobot/tests/run.js         # 5 suite - jangan ke Studio kalau ini merah
+node tools/extract.js     # extract/*.st + variables.tsv dari project mesin
+node tools/gen_sim.js     # blok init ST + tabel variabel + tags.json dari config
+node tools/gen_xml.js     # semuanya jadi SATU berkas import: sim/BlurobotSim.xml
+node tests/run.js         # 5 suite - jangan ke Studio kalau ini merah
 ```
 
 Ada DUA jalur memasukkan ini ke Studio. Pilih satu:
@@ -39,11 +39,16 @@ server untuk simulator memang ada di situ.
 ## 2A. Import XML (satu berkas)
 
 ```bash
-node blurobot/tools/gen_xml.js
-pwsh scripts/validate_xml.ps1 blurobot/sim/BlurobotSim.xml
+node tools/gen_xml.js
+pwsh ../scripts/validate_xml.ps1 sim/BlurobotSim.xml      # validator milik repo ALAT
 ```
 
-Validator harus bilang `Semua lolos XSD` sebelum berkasnya dibawa ke Studio. Studio
+Validator itu bagian dari repo alat `sysmac-generator`, bukan repo ini - path-nya
+tergantung di mana repo alat itu kamu taruh. Kalau tidak punya, langkah ini boleh
+dilewati: `node tests/run.js` sudah memeriksa bentuk XML-nya sendiri, dan gerbang XSD
+di dalamnya SKIP dengan alasan kalau validatornya tidak ketemu.
+
+Kalau ada, validator harus bilang `Semua lolos XSD` sebelum berkasnya dibawa ke Studio. Studio
 sendiri cuma bilang `(Import failed)` tanpa nomor baris; validator menyebut elemen dan
 barisnya.
 
@@ -153,8 +158,8 @@ Endpointnya `opc.tcp://127.0.0.1:4840`.
 Paketnya dipasang sekali (ini SATU-SATUNYA bagian repo ini yang punya dependensi):
 
 ```bash
-cd blurobot/bridge && npm install && cd ../..
-node blurobot/bridge/bridge.js --list SIM_
+cd bridge && npm install && cd ../..
+node bridge/bridge.js --list SIM_
 ```
 
 Yang dicari bukan "daftarnya keluar", tapi tiga hal:
@@ -170,9 +175,9 @@ Yang dicari bukan "daftarnya keluar", tapi tiga hal:
 Lalu tekan tombol dari luar:
 
 ```bash
-node blurobot/bridge/bridge.js --write SIM_JOG_MODE=0
-node blurobot/bridge/bridge.js --write "SIM_JOG_P[1]=true"
-node blurobot/bridge/bridge.js --watch SIM_JOINT_POS SIM_WORLD_POS
+node bridge/bridge.js --write SIM_JOG_MODE=0
+node bridge/bridge.js --write "SIM_JOG_P[1]=true"
+node bridge/bridge.js --watch SIM_JOINT_POS SIM_WORLD_POS
 ```
 
 Perintah itu memakai **sesi dan peta tag yang sama** dengan halaman viz - bukan klien
@@ -190,7 +195,7 @@ Sesudah itu baru jalankan bridge + halaman viz — lihat [`../README.md`](../REA
 |---|---|
 | tag ada, semua diam, `SIM_HEARTBEAT` tetap 0 | program belum ditugaskan ke task |
 | Build gagal menyebut `BLUE_ROBOT_AXIS1` | yang ditempel FB V1 dari `extract/`, bukan V2 dari `sim/` |
-| `(Import failed)` tanpa nomor baris | jalankan `pwsh scripts/validate_xml.ps1` dulu — dia menyebut elemen dan barisnya |
+| `(Import failed)` tanpa nomor baris | validasi dulu ke XSD (validator repo alat) — dia menyebut elemen dan barisnya, Studio tidak |
 | `(DefinitionError)` sesudah import XML | susunan pin FB tidak cocok; catat nama POU-nya, itu bahan buat memperbaiki `gen_xml.js` |
 | `Cannot use an element of array or a member of structure for the reference of function block instance variables` | ada `FK2.ARRAY[i]` — array milik instance FB tidak boleh diindeks. Salin arraynya UTUH dulu ke variabel lokal. Anggota skalar (`IK2.DONE`) tidak kena |
 | nama program di daftar error bukan yang kamu import | Studio menamai ulang POU yang awalannya `P_` (awalan itu milik variabel sistem: `P_On`, `P_First_Run`) — **tanpa satu pun pesan**. Karena itu programnya `PRG_SIM_ROBOT`, bukan `P_SIM_ROBOT` |
