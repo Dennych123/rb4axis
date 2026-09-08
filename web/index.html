@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Blurobot - viz 3D</title>
+<title>Blurobot - 3D view</title>
 <style>
   /* Warna ditaruh di variabel supaya terang dan gelap punya PASANGAN yang lengkap.
      Yang dulu salah: abu-abu dipilih enak dilihat di layar terang, lalu di mode gelap
@@ -144,26 +144,26 @@
 <div id="view"><canvas id="cv"></canvas></div>
 
 <div class="panel">
-  <h1>Blurobot &mdash; sel ICC / DW</h1>
-  <div id="status" class="off">memeriksa bridge...</div>
+  <h1>Blurobot &mdash; ICC / DW cell</h1>
+  <div id="status" class="off">checking the bridge...</div>
 
   <div class="kartu">
     <div id="cState">-</div>
     <div id="cSebab">-</div>
     <div class="angka">
-      <div><b id="cCount">0</b><span>selesai</span></div>
+      <div><b id="cCount">0</b><span>done</span></div>
       <div><b id="cPart">-</b><span>gripper</span></div>
-      <div><b id="cStep">-</b><span>langkah</span></div>
+      <div><b id="cStep">-</b><span>step</span></div>
     </div>
     <table style="margin-top:8px">
-      <tr><td class="k">pekerjaan</td><td class="v" id="cJob">-</td></tr>
-      <tr><td class="k">tujuan</td><td class="v" id="cTuju">-</td></tr>
-      <tr><td class="k">tabrakan</td><td class="v" id="cTabrak">-</td></tr>
+      <tr><td class="k">job</td><td class="v" id="cJob">-</td></tr>
+      <tr><td class="k">target</td><td class="v" id="cTuju">-</td></tr>
+      <tr><td class="k">collision</td><td class="v" id="cTabrak">-</td></tr>
     </table>
   </div>
 
   <div class="kartu">
-    <p class="judul">Kendali</p>
+    <p class="judul">Controls</p>
     <label class="sel" id="selKotak">
       <input type="checkbox" id="selAuto">
       <span class="kiri">MANUAL</span><span class="kanan">AUTO</span>
@@ -180,41 +180,41 @@
       <span id="ovrNilai" style="width:42px;text-align:right;font:600 13px ui-monospace,monospace">100%</span>
     </div>
     <details>
-      <summary class="k2">kenapa tombolnya begitu</summary>
+      <summary class="k2">why the buttons behave like this</summary>
       <div class="ket">
-        Selector diubah <b>saat jalan</b>, E-STOP, atau tabrakan &rarr; robot berhenti di
-        tempat dan wajib <b>Home</b> sebelum Autorun mau jalan lagi: sesudah berhenti
-        mendadak sekuenser tidak tahu di pose mana sumbunya berhenti.
-        <b>Cycle stop</b> beda &mdash; pekerjaan yang dipegang diselesaikan dulu, produknya
-        tidak ditinggal di udara, dan Autorun bisa langsung dipakai lagi.
-        Produk yang sedang dijepit <b>tetap dipegang</b> lewat semua itu, dan Autorun
-        melanjutkan pengantarannya.
-        <b>Home</b> cuma melipat lengan &mdash; rel tidak ikut pulang, jadi home boleh di
-        mana saja di sepanjang rel.
-        <b>Speed</b> menskalakan kecepatan sumbu (siklus dan jog), bukan akselerasi dan
-        bukan gripper; dijepit 1..100 % di PLC.
+        Changing the selector <b>while running</b>, E-STOP, or a collision stops the robot
+        where it is and demands <b>Home</b> before Autorun will run again: after a sudden
+        stop the sequencer does not know what pose the axes ended in.
+        <b>Cycle stop</b> is different &mdash; the job in hand is finished first, so no board
+        is left in mid-air, and Autorun can be used again straight away.
+        A board being gripped is <b>kept held</b> through all of that, and Autorun resumes
+        its delivery.
+        <b>Home</b> folds the arm only &mdash; the rail stays put, so home is valid anywhere
+        along it.
+        <b>Speed</b> scales axis velocity (cycle and jog), not acceleration and not the
+        gripper; clamped to 1..100 % in the PLC.
       </div>
     </details>
   </div>
 
   <div class="kartu">
-    <p class="judul">Stasiun</p>
+    <p class="judul">Stations</p>
     <div id="stTabel"></div>
     <details>
-      <summary class="k2">aturan buffer</summary>
+      <summary class="k2">buffer rule</summary>
       <div class="ket">
-        ICC kosong diisi <b>dulu</b> sampai dua-duanya penuh &rarr; DW yang selesai
-        dikosongkan ke WIP OUT &rarr; ICC yang selesai dipindah ke DW kosong.
-        Urutan itu yang bikin mesin tes 17 detik tidak menganggur, dan yang mencegah empat
-        mesin penuh saling mengunci. Tiap mesin menghitung waktunya sendiri, berbarengan.
+        Empty ICCs are filled <b>first</b>, both of them &rarr; a finished DW is cleared to
+        WIP OUT &rarr; a finished ICC moves into a free DW. That order is what keeps the
+        17-second testers busy, and what stops four full machines from deadlocking each
+        other. Every machine times itself, concurrently.
       </div>
     </details>
   </div>
 
   <div class="kartu">
-    <p class="judul">Posisi</p>
+    <p class="judul">Position</p>
     <table>
-      <tr><td class="k">sumbu 0 (X)</td><td class="v" id="j0">-</td>
+      <tr><td class="k">axis 0 (X)</td><td class="v" id="j0">-</td>
           <td class="k">world X</td><td class="v" id="w0">-</td></tr>
       <tr><td class="k">theta 1</td><td class="v" id="j1">-</td>
           <td class="k">world Y</td><td class="v" id="w1">-</td></tr>
@@ -237,10 +237,10 @@
         <option value="1">world</option>
         <option value="2">tool</option>
       </select>
-      <label><input type="checkbox" id="hold"> tahan-jalan</label>
+      <label><input type="checkbox" id="hold"> hold to move</label>
     </div>
     <div class="jogrow">
-      <span class="lbl">langkah</span>
+      <span class="lbl">step</span>
       <input class="num" id="step" type="number" value="10" step="1">
       <button id="stepSet">set</button>
     </div>
@@ -249,7 +249,7 @@
     <div class="jogrow" style="margin-top:10px">
       <span class="lbl">gripper</span>
       <span id="gripPos" style="flex:1;font:13px ui-monospace,monospace">-</span>
-      <button id="gripBtn">Tutup</button>
+      <button id="gripBtn">Close</button>
     </div>
 
     <div class="jogrow" style="margin-top:10px"><span class="lbl">X mm</span><input class="num" id="tx" type="number" step="1"></div>
@@ -258,35 +258,36 @@
     <div class="jogrow"><span class="lbl">theta_EE</span><input class="num" id="tt" type="number" step="1"></div>
     <div class="baris">
       <button id="move" class="act">Move</button>
-      <button id="here">isi dari posisi</button>
+      <button id="here">fill from position</button>
     </div>
     <div id="err"></div>
-    <div class="jogrow"><label><input type="checkbox" id="elbow"> elbow up (cermin)</label></div>
+    <div class="jogrow"><label><input type="checkbox" id="elbow"> elbow up (mirrored)</label></div>
     <div class="baris"><button id="reset">Reset init</button></div>
 
     <details>
-      <summary class="k2">catatan jog</summary>
+      <summary class="k2">jog notes</summary>
       <div class="ket">
-        Mesin aslinya jog per <b>langkah</b> (10); "tahan-jalan" itu tambahan viz.
-        Jog cuma hidup waktu selector MANUAL &mdash; dua sumber perintah untuk satu lengan
-        berebut tiap scan. Membuka gripper sambil memegang produk = produk <b>JATUH</b>,
-        dan pekerjaannya ikut terhapus. Pose yang menembus badan mesin ditolak PLC sebelum
-        sumbu bergerak. Elbow up cuma ada di FB V2; mati = cabang yang sama dengan mesin.
+        The real machine jogs one <b>step</b> at a time (10); "hold to move" is an addition
+        for this view. Jog is live only with the selector at MANUAL &mdash; two command
+        sources for one arm fight every scan. Opening the gripper while holding a board
+        <b>DROPS</b> it, and clears the job with it. A pose that would enter a machine body
+        is rejected by the PLC before any axis moves. Elbow up exists only in the V2 FB;
+        off = the same branch the machine uses.
       </div>
     </details>
   </details>
 
   <details class="kartu">
-    <summary class="tajuk">Dimensi (dari PLC)</summary>
+    <summary class="tajuk">Dimensions (from the PLC)</summary>
     <table id="dims" style="margin-top:8px"></table>
-    <div class="ket">Placeholder sampai robot aslinya diukur &mdash; ganti di
-      <code>sim/robot.config.json</code>, bukan di halaman ini.</div>
+    <div class="ket">Placeholders until the real robot is measured &mdash; change them in
+      <code>sim/robot.config.json</code>, not on this page.</div>
   </details>
 </div>
 
-<!-- three.js: salinan lokal dulu (taruh three.min.js di folder web/ kalau mesinnya
-     offline), baru CDN dengan versi DIPATOK. Tanpa versi patokan, halaman ini bisa
-     rusak sendiri suatu hari karena pustaka di ujung sana berubah. -->
+<!-- three.js: local copy first (drop three.min.js into web/ if this machine is offline),
+     then the CDN with a PINNED version. Without a pinned version this page can break by
+     itself one day, because the library at the other end changed. -->
 <script src="three.min.js" onerror="this.remove()"></script>
 <script>
 if (typeof THREE === 'undefined') {

@@ -20,8 +20,8 @@
 var TAG = { joint: 'SIM_JOINT_POS', world: 'SIM_WORLD_POS', limit: 'SIM_LIMIT',
             beat: 'SIM_HEARTBEAT', err: 'SIM_ERROR', errId: 'SIM_ERROR_ID' };
 
-var ERR_TEKS = { 0: '', 1: 'di luar jangkauan (R > L2+L3)', 2: 'terlalu dekat (R < |L2-L3|)',
-                 3: 'singular (R = 0)', 4: 'soft limit ditembus' };
+var ERR_TEKS = { 0: '', 1: 'out of reach (R > L2+L3)', 2: 'too close (R < |L2-L3|)',
+                 3: 'singular (R = 0)', 4: 'soft limit exceeded', 5: 'would hit a machine' };
 
 var st = {
   plc: false, bridge: false,
@@ -89,14 +89,14 @@ function ping() {
 
 function statusTampil(pesan) {
   var s = el('status');
-  if (st.plc) { s.className = 'ok'; s.textContent = 'PLC tersambung - angka di layar dari simulator NX'; }
+  if (st.plc) { s.className = 'ok'; s.textContent = 'PLC connected - values on screen come from the NX simulator'; }
   else if (st.bridge) {
     s.className = 'off';
-    s.textContent = 'PLC putus - halaman pakai kinematik JS (bukan bukti program PLC benar). '
+    s.textContent = 'PLC offline - page is running its own JS kinematics (not proof the PLC program is right). '
       + (pesan ? String(pesan).split('\n')[0] : '');
   } else {
     s.className = 'bad';
-    s.textContent = 'bridge mati - jalankan: node blurobot/bridge/bridge.js';
+    s.textContent = 'bridge down - run: node bridge/bridge.js';
   }
 }
 
@@ -218,14 +218,14 @@ function offlineMinta(pose) {
   var tab = collideCheck(pose, cfgKin(), st.stasiun, st.mesin);
   if (tab.hit) {
     st.err = true; st.errId = 5;
-    el('err').textContent = 'ditolak: ' + (tab.st >= 0 && st.stasiun[tab.st]
-      ? 'menabrak ' + st.stasiun[tab.st].nama : 'menembus lantai');
+    el('err').textContent = 'rejected: ' + (tab.st >= 0 && st.stasiun[tab.st]
+      ? 'would hit ' + st.stasiun[tab.st].nama : 'would go through the floor');
     return;
   }
   var ik = inverseKinematicV2(pose, cfgKin(), st.elbowUp);
   st.err = !ik.done;
   st.errId = ik.errorId;
-  el('err').textContent = ik.done ? '' : ('ditolak: ' + (ERR_TEKS[ik.errorId] || ik.errorId));
+  el('err').textContent = ik.done ? '' : ('rejected: ' + (ERR_TEKS[ik.errorId] || ik.errorId));
   if (ik.done) st.cmd = ik.joint;
 }
 
@@ -337,8 +337,8 @@ function silinder(r, panjang, mat) {
 
 function bikinScene() {
   if (typeof THREE === 'undefined') {
-    el('view').innerHTML = '<p style="padding:20px">three.js tidak termuat. Kalau mesin ini offline, '
-      + 'taruh salinan <code>three.min.js</code> di folder <code>blurobot/web/</code>.</p>';
+    el('view').innerHTML = '<p style="padding:20px">three.js did not load. If this machine is offline, '
+      + 'drop a copy of <code>three.min.js</code> into the <code>web/</code> folder.</p>';
     return false;
   }
   var cv = el('cv');
@@ -656,7 +656,7 @@ function gambar() {
       // Sisa waktu proses ikut di label - itu yang menjelaskan kenapa robot pergi
       // ke ICC yang satunya dan bukan ke yang ini.
       var sisa = st.stTimer[s] > 0.05 ? '  ' + st.stTimer[s].toFixed(0) + 's'
-        : (st.stState[s] === 2 && sd.tipe !== 0 && sd.tipe !== 3 ? '  siap' : '');
+        : (st.stState[s] === 2 && sd.tipe !== 0 && sd.tipe !== 3 ? '  ready' : '');
       tulisLabel(b.label, sd.nama + sisa);
       b.label.visible = true;
       b.label.position.set(sd.x, sd.z + 150, sd.y);
@@ -690,9 +690,9 @@ function gambar() {
 }
 
 // -------------------------------------------------------------------- panel
-var NAMA_JOINT = ['X (rel)', 'theta 1', 'theta 2', 'theta 3'];
+var NAMA_JOINT = ['X (rail)', 'theta 1', 'theta 2', 'theta 3'];
 var NAMA_WORLD = ['X', 'Y', 'Z', 'theta_EE'];
-var NAMA_LIMIT = ['X min', 'X maks', 't1 min', 't1 maks', 't2 min', 't2 maks', 't3 min', 't3 maks'];
+var NAMA_LIMIT = ['X min', 'X max', 't1 min', 't1 max', 't2 min', 't2 max', 't3 min', 't3 max'];
 
 // Bagian panel yang bentuknya tidak pernah berubah dibangun SEKALI, dan panelTampil()
 // cuma mengganti teks dan kelasnya. Yang dulu: innerHTML disusun ulang tiap kabar dari
@@ -854,17 +854,17 @@ function panelTampil() {
     ? st.stasiun[st.jobSrc].nama + ' → ' + st.stasiun[st.jobDst].nama : 'menganggur';
   var sd = st.stasiun[st.tujuan];
   el('cTuju').textContent = sd ? sd.nama : st.tujuan;
-  el('cPart').textContent = st.part === 1 ? 'ISI' : 'kosong';
+  el('cPart').textContent = st.part === 1 ? 'HOLDING' : 'empty';
   el('cCount').textContent = st.siklus;
   var bawa = st.part === 1 && st.jobDst >= 0 && st.stasiun[st.jobDst];
   el('cSebab').textContent = !st.homed
-    ? (NAMA_ABORT[st.abortId] || 'berhenti') + ' - tekan Home dulu'
-      + (bawa ? ' (produk tetap dipegang, lanjut ke ' + st.stasiun[st.jobDst].nama
-                + ' sesudah Autorun)' : '')
-    : st.stopReq ? 'cycle stop: selesaikan pekerjaan ini dulu'
-    : bawa && !st.auto ? 'produk di gripper - Autorun melanjutkan antar ke '
-        + st.stasiun[st.jobDst].nama + '. Buka gripper = produk JATUH'
-    : (st.drop ? st.drop + ' produk jatuh' : '-');
+    ? (NAMA_ABORT[st.abortId] || 'stopped') + ' - press Home first'
+      + (bawa ? ' (board still held; delivery to ' + st.stasiun[st.jobDst].nama
+                + ' resumes on Autorun)' : '')
+    : st.stopReq ? 'cycle stop: finishing the job in hand'
+    : bawa && !st.auto ? 'board in gripper - Autorun resumes delivery to '
+        + st.stasiun[st.jobDst].nama + '. Opening the gripper DROPS it'
+    : (st.drop ? st.drop + ' board(s) dropped' : '-');
 
   // Baris stasiun: keadaan + sisa waktu tiap mesin. Ini yang menjawab "kenapa robotnya
   // diam" - biasanya karena kedua ICC masih menghitung.
@@ -879,15 +879,15 @@ function panelTampil() {
     r.timer.textContent = st.stTimer[s] > 0.05 ? st.stTimer[s].toFixed(0) + 's' : '';
     r.nama.className = 'stnama' + (st.auto && st.tujuan === s ? ' tuju' : '');
   }
-  el('cTabrak').textContent = !st.collide ? 'bebas'
-    : (st.collideSt >= 0 && st.stasiun[st.collideSt] ? 'menyentuh ' + st.stasiun[st.collideSt].nama
-       : 'menyentuh lantai');
+  el('cTabrak').textContent = !st.collide ? 'clear'
+    : (st.collideSt >= 0 && st.stasiun[st.collideSt] ? 'touching ' + st.stasiun[st.collideSt].nama
+       : 'touching the floor');
   el('cTabrak').className = st.collide ? 'v bad' : 'v';
 
   if (!seretOvr) el('ovrNilai').textContent = Math.round(st.ovr) + '%';
   el('gripPos').textContent = f2(st.grip.pos) + ' / ' + f2(st.grip.stroke) + ' mm';
   var gb = el('gripBtn');
-  gb.textContent = st.grip.cmd ? 'Buka' : 'Tutup';
+  gb.textContent = st.grip.cmd ? 'Open' : 'Close';
   gb.className = st.grip.cmd ? '' : 'act';
 
   var d = st.dim;
@@ -895,11 +895,11 @@ function panelTampil() {
   for (var q = 0; q < refDim.length; q++) refDim[q].textContent = f2(nilai[q]);
 }
 
-var NAMA_STATE = ['manual', 'sedang home', 'auto siap', 'jalan', 'stop di akhir siklus',
-                  'PERLU HOME', 'EMERGENCY'];
-var NAMA_ABORT = { 0: 'berhenti', 1: 'emergency ditekan', 2: 'selector diubah saat jalan',
-                   3: 'menabrak' };
-var NAMA_STST = { 0: 'kosong', 1: 'proses', 2: 'siap' };
+var NAMA_STATE = ['MANUAL', 'HOMING', 'AUTO READY', 'RUNNING', 'STOPPING AT END OF CYCLE',
+                  'HOME REQUIRED', 'EMERGENCY'];
+var NAMA_ABORT = { 0: 'stopped', 1: 'emergency pressed', 2: 'selector changed while running',
+                   3: 'collision' };
+var NAMA_STST = { 0: 'empty', 1: 'busy', 2: 'ready' };
 
 // Tombol mengirim TEPI, bukan keadaan: PLC yang memutuskan boleh atau tidak
 // (selector, home, emergency), dan halaman tidak pernah menulis SIM_AUTO langsung.
@@ -957,7 +957,7 @@ function pasangKontrol() {
   };
   el('move').onclick = function () {
     var pose = [+el('tx').value, +el('ty').value, +el('tz').value, +el('tt').value];
-    if (pose.some(function (x) { return !isFinite(x); })) { el('err').textContent = 'isi keempat angkanya'; return; }
+    if (pose.some(function (x) { return !isFinite(x); })) { el('err').textContent = 'fill in all four numbers'; return; }
     el('err').textContent = '';
     if (!st.plc) { offlineMinta(pose); return; }
     // SIM_WORLD_CMD dulu, BARU tepi naik SIM_MOVE_EXEC. Terbalik, PLC membaca
