@@ -1,15 +1,16 @@
-# URUTAN PENTING: di .gitattributes baris BELAKANG menang. Aturan umum ditulis
-# duluan, pengecualian di bawahnya - kebalik, `* text=auto` menimpa `*.st -text`
-# dan berkas ST-nya masuk git dengan LF tanpa satu pun peringatan.
-* text=auto
-
-# Berkas ST dan TSV disimpan APA ADANYA - git tidak boleh menyentuh akhiran barisnya.
+# TIDAK ADA konversi akhiran baris di repo ini. Sekali lagi: tidak ada.
 #
-# extract/*.st itu badan FB verbatim dari project mesin, dan akhiran barisnya CRLF
-# milik Studio. Dibiarkan dinormalisasi, klon di mesin lain dapat LF - dan ST ber-LF
-# yang ditulis balik ke .smc2 menghasilkan section yang MUNCUL di Studio dengan rung
-# KOSONG, bukan berkas rusak yang mengeluh. tests/extract.test.js juga mengadu byte
-# berkas ini ke isi .smc2, jadi konversi diam-diam bikin tesnya merah di mesin lain
-# tanpa ada yang berubah.
-*.st  -text
-*.tsv -text
+# Sebabnya bukan selera. Hampir semua berkas di sini DIBANGKITKAN, dan tesnya
+# membandingkan hasil generate dengan berkas yang ter-commit BYTE PER BYTE
+# (`gen_sim.js --check`, `gen_xml.js --check`, `extract.test.js`). Begitu git
+# menukar LF jadi CRLF waktu checkout, generator menulis LF, berkasnya CRLF, dan
+# seluruh gerbang itu merah di klon segar - tanpa satu pun yang benar-benar berubah.
+#
+# Yang paling parah `extract/*.st`: itu badan FB verbatim dari project mesin dengan
+# CRLF milik Studio. Dinormalkan jadi LF, lalu ditulis balik ke `.smc2`, hasilnya
+# section yang MUNCUL di Studio dengan rung KOSONG - bukan berkas rusak yang mengeluh.
+#
+# Catatan buat yang mengira ini juga berlaku ke `<ST>` di dalam XML: TIDAK. Pembaca
+# XML menormalkan CRLF jadi LF sebelum teksnya sampai ke Studio (XML 1.0 2.11), jadi
+# di sana LF memang yang benar. Dua jalur, dua aturan.
+* -text
