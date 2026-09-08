@@ -7,6 +7,7 @@
 //
 // Tanpa halaman, buat memeriksa simulator dari terminal (sesi dan peta tag YANG SAMA):
 //
+//   node bridge/bridge.js --tree SIM_       <- pakai ini kalau tag tidak ketemu
 //   node bridge/bridge.js --list SIM_
 //   node bridge/bridge.js --write SIM_JOG_MODE=0 "SIM_JOG_P[1]=true"
 //   node bridge/bridge.js --watch SIM_JOINT_POS SIM_WORLD_POS
@@ -118,25 +119,55 @@ async function putus() {
 }
 
 // Telusuri pohon OPC UA sampai ketemu simpul variabel, lalu petakan jalur -> nodeId.
-// Cabang standar OPC UA dilewati dan ada pagu keras: tanpa itu telusuran menghabiskan
-// menit di node diagnostik yang tidak ada hubungannya dengan program mesin.
+// Cabang diagnostik OPC UA dilewati - isinya ribuan node yang tidak ada hubungannya
+// dengan program mesin, dan menelusurinya menghabiskan menit.
+//
+// PENTING: penyaringan ini cuma berlaku di DUA lapis teratas. Dulu berlaku di semua
+// kedalaman, dan itu bahaya senyap: satu variabel atau folder milik program yang
+// kebetulan bernama `Server` atau `Types` ikut hilang, dan yang kelihatan cuma
+// "tag tidak terbaca".
 const LEWATI = /^(Types|Views|Server|Aliases|Locations|DataTypes|EventTypes|ObjectTypes|ReferenceTypes|VariableTypes)$/;
-async function petaNode() {
+
+async function petaNode(objek) {
   const peta = new Map();
   let dikunjungi = 0;
-  async function telusuri(node, jln, dalam) {
-    if (dalam > 5 || dikunjungi > 6000) return;
+
+  // browse() hanya mengembalikan batch PERTAMA kalau anaknya banyak; sisanya diambil
+  // lewat browseNext dengan continuationPoint. Diabaikan, folder berisi ratusan
+  // variabel terpotong diam-diam - dan yang hilang justru yang di ekor daftar.
+  async function anak(node) {
+    const out = [];
     let hasil;
-    try { hasil = await sesi.browse(node); } catch (e) { return; }
-    for (const ref of hasil.references || []) {
-      if (dikunjungi++ > 6000) return;
+    try { hasil = await sesi.browse(node); } catch (e) { return out; }
+    for (;;) {
+      out.push(...(hasil.references || []));
+      const cp = hasil.continuationPoint;
+      if (!cp || !cp.length) break;
+      try { hasil = await sesi.browseNext(cp, false); } catch (e) { break; }
+    }
+    return out;
+  }
+
+  async function telusuri(node, jln, dalam) {
+    if (dalam > 8 || dikunjungi > 20000) return;
+    for (const ref of await anak(node)) {
+      if (dikunjungi++ > 20000) return;
       const nama = ref.browseName.name;
-      if (LEWATI.test(nama)) continue;
+      if (dalam <= 1 && LEWATI.test(nama)) continue;
       const j = jln ? jln + '.' + nama : nama;
-      if (ref.nodeClass === 2) peta.set(j, ref.nodeId.toString());
-      else if (ref.nodeClass === 1) await telusuri(ref.nodeId, j, dalam + 1);
+      if (ref.nodeClass === 2) {
+        peta.set(j, ref.nodeId.toString());
+        if (objek) objek.push({ jalur: j, kelas: 'Variable' });
+        // Variabel berstruktur punya anak juga (anggota struct). Ikut ditelusuri
+        // supaya `Struct.Member` bisa dipakai kalau suatu saat perlu.
+        await telusuri(ref.nodeId, j, dalam + 1);
+      } else if (ref.nodeClass === 1) {
+        if (objek) objek.push({ jalur: j, kelas: 'Object' });
+        await telusuri(ref.nodeId, j, dalam + 1);
+      }
     }
   }
+
   await telusuri('ObjectsFolder', '', 0);
   return peta;
 }
@@ -399,6 +430,7 @@ server.on('error', e => {
 // klien kedua. Alat terpisah buat "cek cepat" selalu berakhir jadi jalur yang
 // berbeda perilakunya, dan yang berbeda diam-diam itu yang paling mahal.
 //
+//   --tree [saring]              cetak POHON OPC UA apa adanya (tanpa lewat tags.json)
 //   --list [saring]              daftar tag + nilainya
 //   --write NAMA=nilai ...       tulis (NAMA[i]=nilai buat elemen array)
 //   --watch NAMA ...             pantau perubahan sampai Ctrl+C
@@ -409,7 +441,58 @@ function nilaiDari(teks) {
   return n;
 }
 
+// --tree berdiri SENDIRI: dia menyambung, menelusuri, dan mencetak - tanpa lewat
+// tags.json sama sekali. Waktu tag tidak ketemu, yang dibutuhkan justru jawaban yang
+// tidak bergantung pada tebakan kita soal jalur; kalau alat diagnostiknya sendiri
+// memakai peta yang dicurigai salah, dia cuma mengulang kesalahan yang sama.
+async function pohon(saring) {
+  try {
+    await putus();
+    plc.percobaan++;
+    const cm = new OPCUACertificateManager({
+      rootFolder: path.join(__dirname, 'pki'),
+      automaticallyAcceptUnknownCertificate: true
+    });
+    await cm.initialize();
+    klien = OPCUAClient.create({
+      endpointMustExist: false, connectionStrategy: { maxRetry: 1 },
+      clientCertificateManager: cm,
+      securityMode: MessageSecurityMode.None, securityPolicy: SecurityPolicy.None
+    });
+    await klien.connect(ENDPOINT);
+    sesi = USER ? await klien.createSession({ userName: USER, password: PASS })
+                : await klien.createSession();
+  } catch (e) {
+    console.error('GAGAL menyambung ke ' + ENDPOINT + ': ' + String(e.message || e).split('\n')[0]);
+    process.exit(2);
+  }
+
+  const daftar = [];
+  await petaNode(daftar);
+  const cocok = saring ? daftar.filter(d => d.jalur.toLowerCase().indexOf(saring.toLowerCase()) >= 0)
+                       : daftar;
+  for (const d of cocok.slice(0, 400)) console.log('  ' + d.kelas.padEnd(9) + d.jalur);
+  if (cocok.length > 400) console.log('  ... ' + (cocok.length - 400) + ' lagi');
+  console.log(cocok.length + ' simpul' + (saring ? ' cocok "' + saring + '"' : '')
+    + ' dari ' + daftar.length + ' yang terlihat.');
+
+  // Yang paling menentukan: prefix di tags.json cocok atau tidak dengan jalur nyata.
+  const contohVar = daftar.find(d => d.kelas === 'Variable' && /SIM_|ROBOT_|PD1300/.test(d.jalur));
+  if (contohVar) {
+    const prefixNyata = contohVar.jalur.slice(0, contohVar.jalur.lastIndexOf('.') + 1);
+    console.log('');
+    console.log('prefix jalur nyata : "' + prefixNyata + '"');
+    console.log('prefix di tags.json: "' + TAGS.prefix + '"');
+    console.log(prefixNyata === TAGS.prefix
+      ? 'cocok - kalau tag tetap tidak terbaca, sebabnya bukan jalur.'
+      : 'BEDA - ganti "prefix" di bridge/tags.json jadi yang di atas.');
+  }
+  await putus();
+  process.exit(0);
+}
+
 async function cli(mode, sisa) {
+  if (mode === '--tree') return pohon(sisa[0] || '');
   try { await sambung(); } catch (e) {
     console.error('GAGAL menyambung ke ' + ENDPOINT);
     console.error(String(e.message || e).split('\n')[0]);
@@ -452,7 +535,8 @@ async function cli(mode, sisa) {
   process.exit(0);
 }
 
-const MODE = process.argv.find(a => a === '--list' || a === '--write' || a === '--watch');
+const MODE = process.argv.find(a => a === '--list' || a === '--write' || a === '--watch'
+  || a === '--tree');
 if (MODE) {
   const i = process.argv.indexOf(MODE);
   cli(MODE, process.argv.slice(i + 1).filter(a => !a.startsWith('--')));
