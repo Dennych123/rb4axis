@@ -51,7 +51,7 @@ Di Studio: project NX102 baru (langkah 1) → **Multiview Explorer → klik kana
 Programming → Import** (atau menu **File → Import**) → pilih `sim/BlurobotSim.xml`.
 
 Yang ikut di berkas itu: dua FB V2 lengkap dengan pin dan variabelnya, program
-`P_SIM_ROBOT` berikut variabel lokal dan `ExternalVars`-nya, dan seluruh tabel
+`PRG_SIM_ROBOT` berikut variabel lokal dan `ExternalVars`-nya, dan seluruh tabel
 variabel global (termasuk `Constant` dan nilai awal `PI`/`DEGREE_TO_RAD`/
 `RAD_TO_DEGREE`).
 
@@ -62,6 +62,14 @@ Yang **TIDAK** ikut, dan tetap harus dikerjakan tangan:
 * Setelan controller, periode task, dan setelan OPC UA server.
 
 Sesudah import berhasil, **lompat ke langkah 4 butir 4** (penugasan task).
+
+Dua hal yang sudah terbukti di Studio lewat jalur ini, dan sudah dibetulkan di berkas
+yang dibangkitkan sekarang — catat kalau nanti menulis POU baru:
+
+* **Array milik instance FB tidak boleh diindeks.** `IK2.ROBOT_POS_OUTPUT[i]` ditolak
+  waktu Build; `IK2.DONE` tidak. Arraynya disalin utuh dulu ke variabel lokal.
+* **Nama POU tidak boleh diawali `P_`.** Studio menamai ulang sendiri jadi `PR_...`
+  tanpa memberi tahu, dan sesudah itu penugasan task menunjuk nama yang tidak ada.
 
 ## 2B. Dua function block (jalur tempel)
 
@@ -99,7 +107,7 @@ sebagai variabel bernama `Name` bertipe `Data type`. Kolomnya urutan tabel Studi
 `Comment`.
 
 Nilai awalnya sengaja kosong — yang mengisi `ROBOT_L*`, `PD1300_*` dan `SIM_*` adalah
-blok init di `P_SIM_ROBOT.st`, dari `robot.config.json`. Satu sumber angka, bukan dua.
+blok init di `PRG_SIM_ROBOT.st`, dari `robot.config.json`. Satu sumber angka, bukan dua.
 
 Kecuali `PI`, `DEGREE_TO_RAD`, `RAD_TO_DEGREE`: itu `Constant` dengan nilai awal dari
 project mesin, dan memang tidak boleh ditulis program mana pun.
@@ -111,14 +119,14 @@ server simulator; path-nya `GlobalVars.<nama>`.
 
 Kalau lewat jalur A, butir 1–3 sudah selesai; langsung ke butir 4.
 
-1. **Programming → POUs → Programs → Add → ST**, namanya `P_SIM_ROBOT`.
+1. **Programming → POUs → Programs → Add → ST**, namanya `PRG_SIM_ROBOT`.
 2. Tabel variabel programnya: tempel [`ProgramVariables.tsv`](ProgramVariables.tsv).
    Kolomnya `Name`, `Data type`, `Initial value`, `Retain`, `Constant`, `Comment`
    (tabel program tidak punya kolom Network Publish). Kalau susunan kolom di versi
    Studio-mu berbeda, ketik 19 barisnya manual — jangan tempel yang kolomnya melenceng,
    Studio menerimanya tanpa keluhan dan yang salah baru ketahuan waktu Build.
-3. Badan programnya: copy-paste [`P_SIM_ROBOT.st`](P_SIM_ROBOT.st).
-4. **Task Settings → PrimaryTask → Program Assignment → tambahkan `P_SIM_ROBOT`.**
+3. Badan programnya: copy-paste [`PRG_SIM_ROBOT.st`](PRG_SIM_ROBOT.st).
+4. **Task Settings → PrimaryTask → Program Assignment → tambahkan `PRG_SIM_ROBOT`.**
    Program yang tidak ditugaskan ke task **tidak dieksekusi, dan Studio tidak
    mengeluh** — gejalanya: semua tag ada di OPC UA, semuanya diam, `SIM_HEARTBEAT`
    tidak pernah naik.
@@ -174,6 +182,8 @@ Sesudah itu baru jalankan bridge + halaman viz — lihat [`../README.md`](../REA
 | Build gagal menyebut `BLUE_ROBOT_AXIS1` | yang ditempel FB V1 dari `extract/`, bukan V2 dari `sim/` |
 | `(Import failed)` tanpa nomor baris | jalankan `pwsh scripts/validate_xml.ps1` dulu — dia menyebut elemen dan barisnya |
 | `(DefinitionError)` sesudah import XML | susunan pin FB tidak cocok; catat nama POU-nya, itu bahan buat memperbaiki `gen_xml.js` |
+| `Cannot use an element of array or a member of structure for the reference of function block instance variables` | ada `FK2.ARRAY[i]` — array milik instance FB tidak boleh diindeks. Salin arraynya UTUH dulu ke variabel lokal. Anggota skalar (`IK2.DONE`) tidak kena |
+| nama program di daftar error bukan yang kamu import | Studio menamai ulang POU yang awalannya `P_` (awalan itu milik variabel sistem: `P_On`, `P_First_Run`) — **tanpa satu pun pesan**. Karena itu programnya `PRG_SIM_ROBOT`, bukan `P_SIM_ROBOT` |
 | gripper tidak bergerak | `SIM_GRIP_VEL` 0, atau `SIM_GRIP_STROKE` 0 — dua-duanya diisi blok init |
 | TCP meleset sepanjang gripper | panjang gripper dijumlahkan dua kali; di ST harus muncul TEPAT SEKALI, di `ROBOT_TOOL_Y_LREAL` |
 | Build gagal "cannot assign to constant" | `PI`/`DEGREE_TO_RAD`/`RAD_TO_DEGREE` ikut ditempel tanpa kolom Constant |

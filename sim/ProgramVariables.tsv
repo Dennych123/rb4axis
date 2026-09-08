@@ -9,6 +9,9 @@ TH	LREAL		False	False	theta_EE radian, buat jog mode tool
 STEP_M	LREAL		False	False	langkah motion model satu scan
 D	LREAL		False	False	sisa jarak ke target
 GRIP_TARGET	LREAL		False	False	bukaan gripper yang dituju
+IK_OUT	ARRAY[0..3] OF LREAL		False	False	salinan ROBOT_POS_OUTPUT milik IK2
+FK_WORLD	ARRAY[0..3] OF REAL		False	False	salinan ROBOT_POS_WORLD_OUTPUT milik FK2
+FK_JOINT	ARRAY[0..3] OF REAL		False	False	salinan ROBOT_POS_JOINT_OUTPUT milik FK2
 LAST_P	ARRAY[0..3] OF BOOL		False	False	keadaan tombol plus scan sebelumnya
 LAST_N	ARRAY[0..3] OF BOOL		False	False	keadaan tombol minus scan sebelumnya
 EDGE_P	ARRAY[0..3] OF BOOL		False	False	tepi naik tombol plus

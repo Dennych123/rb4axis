@@ -3,7 +3,7 @@
 // Yang paling mahal di alur ini bukan rumus yang salah, tapi satu nama yang salah
 // ketik: Studio baru mengeluh setelah project dibuat, FB ditempel, tabel variabel
 // ditempel, dan Build dijalankan - satu putaran penuh untuk satu huruf. Jadi tes
-// ini mengadu SETIAP nama yang disebut P_SIM_ROBOT.st ke dua tabel variabel yang
+// ini mengadu SETIAP nama yang disebut PRG_SIM_ROBOT.st ke dua tabel variabel yang
 // ikut ditempel, plus memastikan blok init masih sama dengan robot.config.json.
 'use strict';
 const fs = require('fs');
@@ -11,7 +11,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const SIM = path.join(__dirname, '..', 'sim');
-const ST = fs.readFileSync(path.join(SIM, 'P_SIM_ROBOT.st'), 'utf8');
+const ST = fs.readFileSync(path.join(SIM, 'PRG_SIM_ROBOT.st'), 'utf8');
 const cfg = JSON.parse(fs.readFileSync(path.join(SIM, 'robot.config.json'), 'utf8'));
 
 let fail = 0;
@@ -115,6 +115,32 @@ for (const nama of V2) {
   chk(nama + ': DONE benar-benar ditulis', /\bDONE\s*:=/.test(body));
   chk(nama + ': EXECUTE benar-benar dibaca', /IF\s+EXECUTE\s+THEN/.test(body));
 }
+
+// ------------------------------------- array milik instance FB tidak boleh diindeks
+// DITOLAK STUDIO, sudah kejadian di Build (bukan di import):
+//   "Cannot use an element of array or a member of structure for the reference of
+//    function block instance variables."
+// `IK2.ROBOT_POS_OUTPUT[i]` kena; `IK2.DONE` tidak - yang dilarang MENGINDEKS anggota
+// milik instance. Jalan keluarnya menyalin arraynya UTUH ke variabel lokal dulu.
+//
+// Nama instance-nya dibaca dari tabel variabel program, bukan didaftar tangan: daftar
+// tangan berhenti menangkap begitu ada instance FB baru.
+const instFb = p.map(l => l.split('\t')).filter(c => /_V2$/.test(c[1])).map(c => c[0]);
+chk('instance FB terbaca dari tabel program (' + instFb.join(' ') + ')', instFb.length >= 2);
+const indeksInstance = instFb.filter(n => new RegExp('\\b' + n + '\\.\\w+\\s*\\[').test(kode));
+chk('tidak ada array milik instance FB yang diindeks langsung', indeksInstance.length === 0,
+    indeksInstance.length ? indeksInstance.join(' ') + ' - salin arraynya utuh dulu ke variabel lokal' : '');
+chk('salinan array keluaran FB ada di variabel lokal',
+    /IK_OUT\s*:=\s*IK2\.ROBOT_POS_OUTPUT;/.test(kode)
+    && /FK_WORLD\s*:=\s*FK2\.ROBOT_POS_WORLD_OUTPUT;/.test(kode));
+
+// Nama POU tidak boleh diawali `P_`: itu awalan variabel sistem Sysmac (P_On,
+// P_First_Run). Program bernama P_SIM_ROBOT DINAMAI ULANG SENDIRI oleh Studio jadi
+// PR_SIM_ROBOT waktu import - tanpa pesan, dan sesudah itu penugasan task serta tiap
+// dokumen menunjuk POU yang tidak ada.
+const namaPou = ['PRG_SIM_ROBOT'].concat(V2);
+chk('nama POU tidak diawali P_ / angka / garis bawah',
+    namaPou.every(n => !/^(P_|_|\d)/.test(n)), namaPou.join(' '));
 
 // V1 tetap ada sebagai catatan, tapi TIDAK di-instance: instance yang tidak dipakai
 // bikin orang mengira dua-duanya ikut menentukan gerakan.

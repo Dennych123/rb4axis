@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// robot.config.json -> blok init di P_SIM_ROBOT.st + dua tabel variabel.
+// robot.config.json -> blok init di PRG_SIM_ROBOT.st + dua tabel variabel.
 //
 //   node blurobot/tools/gen_sim.js            tulis
 //   node blurobot/tools/gen_sim.js --check    cuma periksa, exit 1 kalau sudah basi
@@ -19,7 +19,7 @@ const path = require('path');
 
 const SIM = path.join(__dirname, '..', 'sim');
 const CFG = path.join(SIM, 'robot.config.json');
-const ST = path.join(SIM, 'P_SIM_ROBOT.st');
+const ST = path.join(SIM, 'PRG_SIM_ROBOT.st');
 const GTSV = path.join(SIM, 'GlobalVariables.tsv');
 const PTSV = path.join(SIM, 'ProgramVariables.tsv');
 const TAGS = path.join(__dirname, '..', 'bridge', 'tags.json');
@@ -106,6 +106,13 @@ const LOKAL = [
   ['STEP_M', 'LREAL', 'langkah motion model satu scan'],
   ['D', 'LREAL', 'sisa jarak ke target'],
   ['GRIP_TARGET', 'LREAL', 'bukaan gripper yang dituju'],
+  // Penampung keluaran FB. Studio MENOLAK mengindeks array milik instance FB
+  // ("Cannot use an element of array or a member of structure for the reference of
+  // function block instance variables"), jadi arraynya disalin UTUH dulu ke sini.
+  // Anggota skalar seperti IK2.DONE tidak kena aturan itu.
+  ['IK_OUT', 'ARRAY[0..3] OF LREAL', 'salinan ROBOT_POS_OUTPUT milik IK2'],
+  ['FK_WORLD', 'ARRAY[0..3] OF REAL', 'salinan ROBOT_POS_WORLD_OUTPUT milik FK2'],
+  ['FK_JOINT', 'ARRAY[0..3] OF REAL', 'salinan ROBOT_POS_JOINT_OUTPUT milik FK2'],
   ['LAST_P', 'ARRAY[0..3] OF BOOL', 'keadaan tombol plus scan sebelumnya'],
   ['LAST_N', 'ARRAY[0..3] OF BOOL', 'keadaan tombol minus scan sebelumnya'],
   ['EDGE_P', 'ARRAY[0..3] OF BOOL', 'tepi naik tombol plus'],
@@ -209,7 +216,7 @@ function stBaru(lama, cfg) {
   const a = baris.findIndex(l => l.trimEnd() === AWAL.trimEnd());
   const b = baris.findIndex(l => l.trimEnd() === AKHIR.trimEnd());
   if (a < 0 || b < 0 || b < a) {
-    console.error('GAGAL: penanda blok init tidak ketemu di P_SIM_ROBOT.st');
+    console.error('GAGAL: penanda blok init tidak ketemu di PRG_SIM_ROBOT.st');
     process.exit(2);
   }
   return baris.slice(0, a + 1).concat(blokInit(cfg), baris.slice(b)).join('\n');

@@ -65,7 +65,7 @@ Satuan: sumbu 0 mm, sumbu 1–3 derajat (konversi lewat `DEGREE_TO_RAD` di dalam
 | `P105_RB_MOTION/Main` | `FORWARD_KINEMATIC` | 1 |
 
 Sembilan instance IK per mode jog itu **satu instance per arah/sumbu**, bukan sembilan
-rumus berbeda. Di `P_SIM_ROBOT.st` semuanya jadi SATU panggilan berparameter. Yang
+rumus berbeda. Di `PRG_SIM_ROBOT.st` semuanya jadi SATU panggilan berparameter. Yang
 berubah cuma jumlah instance; rumusnya tidak disentuh sama sekali.
 
 Gerak sumbunya di project asli lewat `MC_*` (`MC_Power` ×4, `MC_MoveJog` ×5,

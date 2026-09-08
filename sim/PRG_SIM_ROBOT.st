@@ -1,4 +1,9 @@
-// P_SIM_ROBOT - program simulasi robot Blurobot untuk simulator Sysmac Studio.
+// PRG_SIM_ROBOT - program simulasi robot Blurobot untuk simulator Sysmac Studio.
+//
+// NAMANYA JANGAN diawali `P_`. Awalan itu milik variabel sistem Sysmac (P_On,
+// P_First_Run, ...), dan program bernama `P_SIM_ROBOT` DINAMAI ULANG SENDIRI oleh
+// Studio waktu di-import - jadi `PR_SIM_ROBOT`, tanpa satu pun pesan. Sesudah itu
+// penugasan task, dokumen, dan tiap rujukan ke nama lama menunjuk POU yang tidak ada.
 //
 // Ditempel ke project NX102 KOSONG bersama FORWARD_KINEMATIC_V2 dan
 // INVERSE_KINEMATIC_V2. Langkah lengkapnya di SETUP.md. Yang perlu diingat sebelum
@@ -182,9 +187,15 @@ END_IF;
 // dipakai sekarang jawaban FB-nya sendiri: DONE, ERROR_ID.
 IF NEED_IK THEN
 	IK2(EXECUTE := TRUE, ROBOT_POS_INPUT := POSE_REQ, ELBOW_UP := SIM_ELBOW_UP);
+	// Array keluaran FB disalin UTUH dulu ke variabel lokal, baru diindeks.
+	// Studio MENOLAK IK2.ROBOT_POS_OUTPUT[i]: "Cannot use an element of array or a
+	// member of structure for the reference of function block instance variables."
+	// Anggota skalar (IK2.DONE, IK2.ERROR_ID) tidak kena aturan itu - yang dilarang
+	// mengindeks anggota milik instance.
+	IK_OUT := IK2.ROBOT_POS_OUTPUT;
 	IF IK2.DONE THEN
 		FOR i := 0 TO 3 DO
-			SIM_JOINT_CMD[i] := IK2.ROBOT_POS_OUTPUT[i];
+			SIM_JOINT_CMD[i] := IK_OUT[i];
 		END_FOR;
 		SIM_ERROR := FALSE;
 		SIM_ERROR_ID := 0;
@@ -238,9 +249,11 @@ SIM_MOVE_DONE := NOT SIM_BUSY;
 // (di V1 tidak), jadi menaruh FALSE di sini berarti pose world berhenti diperbarui -
 // lengan tetap bergerak, angkanya membeku.
 FK2(EXECUTE := TRUE, ROBOT_POS_INPUT := SIM_JOINT_POS);
+FK_WORLD := FK2.ROBOT_POS_WORLD_OUTPUT;
+FK_JOINT := FK2.ROBOT_POS_JOINT_OUTPUT;
 FOR i := 0 TO 3 DO
-	SIM_WORLD_POS[i] := FK2.ROBOT_POS_WORLD_OUTPUT[i];
-	SIM_JOINT_OUT[i] := FK2.ROBOT_POS_JOINT_OUTPUT[i];
+	SIM_WORLD_POS[i] := FK_WORLD[i];
+	SIM_JOINT_OUT[i] := FK_JOINT[i];
 END_FOR;
 
 // Batas dinilai atas posisi SEKARANG, bukan atas pose yang diminta - yang diminta

@@ -35,7 +35,7 @@ const OUT = path.join(SIM, 'BlurobotSim.xml');
 const CFG = JSON.parse(fs.readFileSync(path.join(SIM, 'robot.config.json'), 'utf8'));
 
 const SMC = 'https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd';
-const PROGRAM = 'P_SIM_ROBOT';
+const PROGRAM = 'PRG_SIM_ROBOT';
 const FB = ['FORWARD_KINEMATIC_V2', 'INVERSE_KINEMATIC_V2'];
 const DEVICE = { modelName: 'NX102', version: '1.40' };
 

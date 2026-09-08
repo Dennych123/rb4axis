@@ -36,7 +36,7 @@ const xml = fs.readFileSync(XML_PATH, 'utf8');
 chk('dua FB + satu program ada',
     /<FunctionBlock name="FORWARD_KINEMATIC_V2">/.test(xml)
     && /<FunctionBlock name="INVERSE_KINEMATIC_V2">/.test(xml)
-    && /<Program name="P_SIM_ROBOT">/.test(xml));
+    && /<Program name="PRG_SIM_ROBOT">/.test(xml));
 chk('FB V1 TIDAK ikut ter-import', !/name="(FORWARD|INVERSE)_KINEMATIC"/.test(xml),
     'yang di extract/ itu catatan, bukan bagian project sim');
 chk('badan ST dipakai bentuk Omron (BodyContent xsi:type="ST")',
@@ -68,7 +68,7 @@ function unesc(s) {
 }
 const isiST = [...xml.matchAll(/<ST>([\s\S]*?)<\/ST>/g)].map(m => unesc(m[1]));
 chk('tiga badan ST terbaca balik', isiST.length === 3);
-for (const f of ['FORWARD_KINEMATIC_V2.st', 'INVERSE_KINEMATIC_V2.st', 'P_SIM_ROBOT.st']) {
+for (const f of ['FORWARD_KINEMATIC_V2.st', 'INVERSE_KINEMATIC_V2.st', 'PRG_SIM_ROBOT.st']) {
   const asli = fs.readFileSync(path.join(SIM, f), 'utf8').replace(/\r\n/g, '\n').replace(/\s+$/, '');
   chk(f + ': isinya identik sesudah di-unescape', isiST.some(s => s === asli),
       'kalau merah, ada escape yang meleset - XML-nya tetap sah, ST-nya yang berubah');
@@ -98,12 +98,12 @@ chk('konstanta ada di kontainer constant="true"', (() => {
 })(), 'kalau constant ditulis sebagai atribut Variable, XSD menolak');
 chk('nilai awal konstanta ikut', /<InitialValue><SimpleValue value="3.141592654" \/>/.test(xml));
 
-// ExternalVars per program: simbol global yang dipakai P_SIM_ROBOT harus dideklarasi
+// ExternalVars per program: simbol global yang dipakai PRG_SIM_ROBOT harus dideklarasi
 // ULANG di programnya. Yang lupa lolos XSD, lolos import, lalu muncul sebagai
 // variabel merah di Studio - tidak ada yang memberi tahu.
-const iProg = xml.indexOf('<Program name="P_SIM_ROBOT">');
+const iProg = xml.indexOf('<Program name="PRG_SIM_ROBOT">');
 const extBlok = xml.slice(iProg, xml.indexOf('</ExternalVars>', iProg));
-const kode = fs.readFileSync(path.join(SIM, 'P_SIM_ROBOT.st'), 'utf8')
+const kode = fs.readFileSync(path.join(SIM, 'PRG_SIM_ROBOT.st'), 'utf8')
   .split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
 const kurang = glob.map(c => c[0])
   .filter(n => new RegExp('\\b' + n + '\\b').test(kode) && !extBlok.includes('name="' + n + '"'));

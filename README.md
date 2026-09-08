@@ -50,7 +50,7 @@ Langkah di Studio yang tidak bisa diotomatiskan ada di [`sim/SETUP.md`](sim/SETU
 ```
 BLUEROBOT ECU.smc2  --extract.js-->  extract/*.st          (verbatim, tidak dirapikan)
                                      extract/variables.tsv
-robot.config.json   --gen_sim.js-->  sim/P_SIM_ROBOT.st    (blok init saja)
+robot.config.json   --gen_sim.js-->  sim/PRG_SIM_ROBOT.st    (blok init saja)
                                      sim/*.tsv             (tempel ke Studio)
                                      bridge/tags.json
 sim/*_V2.st         (tulis tangan)   FB yang dibetulkan, dipakai simulator
@@ -85,7 +85,7 @@ sim/*.st + *.tsv    --gen_xml.js-->  sim/BlurobotSim.xml   (satu berkas, di-impo
 | `extract/ANALYSIS.md` | struktur robot, peta pemanggil, empat cacat asli. **Ditulis tangan** |
 | `sim/robot.config.json` | dimensi, batas, kecepatan, periode task. Satu-satunya tempat angka |
 | `sim/*_V2.st` + `*.vars.tsv` | FB kinematik yang sudah dibetulkan + tabel variabelnya |
-| `sim/P_SIM_ROBOT.st` | program sim: jog, move point, motion model, gripper, FK tiap scan |
+| `sim/PRG_SIM_ROBOT.st` | program sim: jog, move point, motion model, gripper, FK tiap scan |
 | `sim/SETUP.md` | langkah Studio sampai OPC UA hidup, plus tabel gejala→sebab |
 | `bridge/bridge.js` | satu sesi OPC UA, SSE ke halaman, POST buat menulis |
 | `web/kin.js` | port JS FK/IK + `chainPoints()`. Dipakai tes DAN mode offline halaman |
