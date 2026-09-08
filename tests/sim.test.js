@@ -39,10 +39,18 @@ chk('tanpa instruksi MC_*', !/\bMC_[A-Za-z]/.test(ST),
 const KATA = new Set([
   'IF', 'THEN', 'ELSE', 'ELSIF', 'END_IF', 'FOR', 'TO', 'DO', 'END_FOR',
   'CASE', 'OF', 'END_CASE', 'AND', 'OR', 'NOT', 'TRUE', 'FALSE',
-  'ABS', 'SQRT', 'SIN', 'COS', 'ATAN', 'REAL_TO_LREAL',
-  'EXECUTE', 'ROBOT_POS_INPUT', 'ROBOT_POS_OUTPUT',
-  'ROBOT_POS_WORLD_OUTPUT', 'ROBOT_POS_JOINT_OUTPUT'
+  'ABS', 'SQRT', 'SIN', 'COS', 'ATAN', 'ACOS', 'REAL_TO_LREAL', 'LREAL_TO_REAL'
 ]);
+
+// Nama pin FB (dipakai sebagai IK2.DONE, FK2.ROBOT_POS_WORLD_OUTPUT, ...) diambil
+// dari tabel variabel FB yang dibangkitkan, BUKAN didaftar tangan di sini. Daftar
+// tangan di tes itu tempat drift berikutnya: pin FB berubah, tesnya tetap hijau.
+for (const f of fs.readdirSync(SIM).filter(n => n.endsWith('.vars.tsv'))) {
+  for (const line of fs.readFileSync(path.join(SIM, f), 'utf8').split('\n')) {
+    const n = line.split('\t')[0];
+    if (n) KATA.add(n);
+  }
+}
 
 const kolom0 = f => fs.readFileSync(path.join(SIM, f), 'utf8').split('\n')
   .filter(Boolean).map(l => l.split('\t')[0]);
@@ -84,8 +92,53 @@ chk('external kedua FB ikut di tabel global',
 // FB instance harus bertipe FB-nya sendiri; salah tipe di sini = (DefinitionError)
 // yang pesannya tidak menyebut sebabnya.
 const p = fs.readFileSync(path.join(SIM, 'ProgramVariables.tsv'), 'utf8').split('\n').filter(Boolean);
-chk('FK1/IK1 bertipe FB-nya',
-    p.some(l => l.startsWith('FK1\tFORWARD_KINEMATIC\t')) && p.some(l => l.startsWith('IK1\tINVERSE_KINEMATIC\t')));
+chk('FK2/IK2 bertipe FB V2',
+    p.some(l => l.startsWith('FK2\tFORWARD_KINEMATIC_V2\t'))
+    && p.some(l => l.startsWith('IK2\tINVERSE_KINEMATIC_V2\t')));
+
+// ----------------------------------------------------- FB V2 yang dipakai sim
+const V2 = ['FORWARD_KINEMATIC_V2', 'INVERSE_KINEMATIC_V2'];
+for (const nama of V2) {
+  const stFile = path.join(SIM, nama + '.st');
+  const varFile = path.join(SIM, nama + '.vars.tsv');
+  chk(nama + ': ST + tabel variabelnya ada', fs.existsSync(stFile) && fs.existsSync(varFile));
+  if (!fs.existsSync(stFile)) continue;
+  const body = fs.readFileSync(stFile, 'utf8').split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+
+  // ATAN2 TIDAK ada di daftar 353 instruksi W560 (docs/SYSMAC_INSTRUCTIONS.md),
+  // jadi belum terbukti ter-import. Kuadran dibetulkan lewat ATAN + koreksi.
+  chk(nama + ': tanpa ATAN2 (bukan instruksi yang terbukti)', !/\bATAN2\b/.test(body),
+      'kalau perlu, buktikan dulu lewat probe import - bukan dengan menganggapnya ada');
+  chk(nama + ': tidak menulis balik ke variabel global tool',
+      !/ROBOT_TOOL_[YZ]_LREAL\s*:=/.test(body),
+      'V1 menimpa globalnya sendiri waktu toolY=0, dan efeknya permanen');
+  chk(nama + ': DONE benar-benar ditulis', /\bDONE\s*:=/.test(body));
+  chk(nama + ': EXECUTE benar-benar dibaca', /IF\s+EXECUTE\s+THEN/.test(body));
+}
+
+// V1 tetap ada sebagai catatan, tapi TIDAK di-instance: instance yang tidak dipakai
+// bikin orang mengira dua-duanya ikut menentukan gerakan.
+chk('FB V1 tidak di-instance di program sim',
+    !p.some(l => /\t(FORWARD|INVERSE)_KINEMATIC\t/.test(l)));
+chk('kuadran IK dibetulkan (ada cabang Y3 < 0)',
+    /ELSIF\s+Y3\s*<\s*0\.0\s+THEN/.test(fs.readFileSync(path.join(SIM, 'INVERSE_KINEMATIC_V2.st'), 'utf8')),
+    'tanpa cabang itu, separuh ruang kerja meleset 180 derajat');
+chk('jangkauan diperiksa SEBELUM ACOS dipanggil', (() => {
+  // Komentar dibuang dulu: kepala berkas menyebut ACOS jauh di atas kodenya, dan
+  // membandingkan posisi di teks mentah bikin tes ini menjawab pertanyaan lain.
+  const b = fs.readFileSync(path.join(SIM, 'INVERSE_KINEMATIC_V2.st'), 'utf8')
+    .split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+  return b.indexOf('ERROR_ID := 1') < b.indexOf('ACOS');
+})(), 'memeriksa sesudah ACOS tidak menolong - yang meledak ACOS-nya');
+
+// --------------------------------------------------------------- gripper
+chk('tag gripper ada di tabel global',
+    ['SIM_GRIP_CMD', 'SIM_GRIP_POS', 'SIM_GRIP_STROKE', 'SIM_GRIP_LEN'].every(n => glob.includes(n)));
+chk('panjang gripper dijumlahkan ke tool TEPAT SEKALI',
+    (kode.match(/ROBOT_TOOL_Y_LREAL\s*:=/g) || []).length === 1
+    && kode.includes('ROBOT_TOOL_Y_LREAL := ' + (cfg.tool.Y + cfg.gripper.panjang)),
+    'dijumlahkan dua kali, lengannya panjang dua kali gripper - dan itu tidak kelihatan salah di layar');
+chk('gripper punya motion model sendiri', /SIM_GRIP_POS\s*:=\s*SIM_GRIP_POS\s*[+-]/.test(kode));
 
 // Konstanta project TIDAK boleh ikut ditulis init sim: di tabel mereka Constant,
 // dan Studio menolak assignment ke variabel Constant waktu Build.

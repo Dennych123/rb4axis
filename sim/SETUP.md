@@ -7,8 +7,8 @@ Sebelum mulai, pastikan berkasnya segar:
 
 ```bash
 node blurobot/tools/extract.js     # extract/*.st + variables.tsv dari project mesin
-node blurobot/tools/gen_sim.js     # blok init ST + dua tabel variabel dari config
-node blurobot/tests/run.js         # 3 suite - jangan ke Studio kalau ini merah
+node blurobot/tools/gen_sim.js     # blok init ST + tabel variabel + tags.json dari config
+node blurobot/tests/run.js         # 4 suite - jangan ke Studio kalau ini merah
 ```
 
 ## 1. Project baru
@@ -26,32 +26,28 @@ server untuk simulator memang ada di situ.
 
 ## 2. Dua function block
 
-Untuk `FORWARD_KINEMATIC` dan `INVERSE_KINEMATIC`, masing-masing:
+Yang ditempel ke Studio adalah **versi V2** — yang sudah dibetulkan:
+[`FORWARD_KINEMATIC_V2.st`](FORWARD_KINEMATIC_V2.st) dan
+[`INVERSE_KINEMATIC_V2.st`](INVERSE_KINEMATIC_V2.st).
+
+Yang verbatim dari mesin ada di [`../extract/`](../extract/) dan **tidak ditempel** —
+dia catatan tentang apa yang jalan di mesin, bukan bagian dari sim. Daftar bedanya
+ada di kepala kedua berkas V2 dan di [`../extract/ANALYSIS.md`](../extract/ANALYSIS.md).
+
+Untuk masing-masing:
 
 1. **Programming → POUs → Function Blocks → klik kanan → Add → ST**.
-   Namanya harus **PERSIS** `FORWARD_KINEMATIC` dan `INVERSE_KINEMATIC` — nama itu
-   yang dipakai `ProgramVariables.tsv` sebagai tipe instance.
-2. Tabel variabel FB diisi dari [`../extract/interfaces.md`](../extract/interfaces.md).
-   Urutan pin (`Ord`) menentukan bentuk kotaknya; untuk pemanggilan dari ST urutan
-   tidak berpengaruh, tapi **nama** berpengaruh mutlak.
-   * `VAR_INPUT`: `EXECUTE : BOOL`, `ROBOT_POS_INPUT : ARRAY[0..3] OF LREAL`
-   * `VAR_OUTPUT` FK: `DONE : BOOL`, `ROBOT_POS_JOINT_OUTPUT : ARRAY[0..3] OF REAL`,
-     `ROBOT_POS_WORLD_OUTPUT : ARRAY[0..3] OF REAL`
-   * `VAR_OUTPUT` IK: `DONE : BOOL`, `ROBOT_POS_OUTPUT : ARRAY[0..3] OF LREAL`
-   * `VAR` (temp) dan `VAR_EXTERNAL`: lihat tabelnya di `interfaces.md`.
-     Yang bertanda **TIDAK** di kolom "Dipakai badan ST" tetap didaftar — itu bentuk
-     aslinya, dan `_sAXIS_REF` di FK memang tidak dipakai rumusnya.
-3. Badan ST-nya **copy-paste dari `../extract/FORWARD_KINEMATIC.st` dan
-   `../extract/INVERSE_KINEMATIC.st`**. Jangan diketik ulang, jangan dirapikan.
-   Kalau ada yang ingin membetulkan `ATAN` jadi `ATAN2`: baca dulu
-   [`../extract/ANALYSIS.md`](../extract/ANALYSIS.md) — sim yang lebih benar dari
-   mesinnya menjawab pertanyaan yang salah.
+   Namanya harus **PERSIS** `FORWARD_KINEMATIC_V2` dan `INVERSE_KINEMATIC_V2` —
+   nama itu yang dipakai `ProgramVariables.tsv` sebagai tipe instance.
+2. Tabel variabelnya tempel dari `<nama>.vars.tsv`. Kolomnya
+   `Name`, `Data type`, `Initial value`, `Grup` — grup di kolom keempat itu penunjuk
+   ke mana barisnya masuk (`VAR_INPUT`, `VAR_OUTPUT`, `VAR`, `VAR_EXTERNAL`); di
+   Studio tiap grup punya bloknya sendiri, jadi tempel per blok, bukan sekaligus.
+3. Badan ST-nya copy-paste dari `<nama>.st`.
 
-`_sAXIS_REF` butuh axis terdaftar. Karena project sim tidak punya axis, **hapus empat
-baris `BLUE_ROBOT_AXIS1..4` dari `VAR_EXTERNAL` FK** — badan ST-nya tidak menyentuh
-mereka sama sekali (`interfaces.md` menandainya **TIDAK**), jadi ini satu-satunya
-tempat di seluruh alur ini yang boleh menyimpang dari project asli. Kalau tidak
-dihapus, Build gagal dengan keluhan variabel axis yang tidak ada.
+**Tidak ada `_sAXIS_REF` di FB V2**, jadi tidak ada yang perlu dihapus seperti dulu:
+V1 mendeklarasi empat `BLUE_ROBOT_AXIS` yang badan ST-nya tidak pernah sentuh, dan
+di project tanpa axis itu bikin Build gagal.
 
 ## 3. Variabel global
 
@@ -78,7 +74,7 @@ server simulator; path-nya `GlobalVars.<nama>`.
 2. Tabel variabel programnya: tempel [`ProgramVariables.tsv`](ProgramVariables.tsv).
    Kolomnya `Name`, `Data type`, `Initial value`, `Retain`, `Constant`, `Comment`
    (tabel program tidak punya kolom Network Publish). Kalau susunan kolom di versi
-   Studio-mu berbeda, ketik 24 barisnya manual — jangan tempel yang kolomnya melenceng,
+   Studio-mu berbeda, ketik 19 barisnya manual — jangan tempel yang kolomnya melenceng,
    Studio menerimanya tanpa keluhan dan yang salah baru ketahuan waktu Build.
 3. Badan programnya: copy-paste [`P_SIM_ROBOT.st`](P_SIM_ROBOT.st).
 4. **Task Settings → PrimaryTask → Program Assignment → tambahkan `P_SIM_ROBOT`.**
@@ -115,6 +111,8 @@ Yang dicari bukan "daftarnya keluar", tapi tiga hal:
 |---|---|
 | `GlobalVars.SIM_HEARTBEAT` naik | program benar-benar dieksekusi task, bukan cuma ada di project |
 | `GlobalVars.SIM_JOINT_POS` = pose home (`0, 90, -90, 0`) | blok init jalan, config sampai ke controller |
+| `GlobalVars.SIM_GRIP_POS` = 80 lalu 0 waktu `SIM_GRIP_CMD` ditulis TRUE | gripper hidup |
+| `GlobalVars.ROBOT_TOOL_Y_LREAL` = 140 (50 tool + 90 gripper) | TCP di ujung jari, dijumlahkan sekali |
 | `GlobalVars.SIM_WORLD_POS` masuk akal | FK dipanggil dan hasilnya keluar |
 
 Lalu tekan tombol dari luar:
@@ -132,7 +130,9 @@ Sesudah itu baru jalankan bridge + halaman viz — lihat [`../README.md`](../REA
 | gejala | sebabnya hampir selalu |
 |---|---|
 | tag ada, semua diam, `SIM_HEARTBEAT` tetap 0 | program belum ditugaskan ke task |
-| Build gagal menyebut `BLUE_ROBOT_AXIS1` | empat baris `_sAXIS_REF` di FK belum dihapus (langkah 2) |
+| Build gagal menyebut `BLUE_ROBOT_AXIS1` | yang ditempel FB V1 dari `extract/`, bukan V2 dari `sim/` |
+| gripper tidak bergerak | `SIM_GRIP_VEL` 0, atau `SIM_GRIP_STROKE` 0 — dua-duanya diisi blok init |
+| TCP meleset sepanjang gripper | panjang gripper dijumlahkan dua kali; di ST harus muncul TEPAT SEKALI, di `ROBOT_TOOL_Y_LREAL` |
 | Build gagal "cannot assign to constant" | `PI`/`DEGREE_TO_RAD`/`RAD_TO_DEGREE` ikut ditempel tanpa kolom Constant |
 | menu OPC UA abu-abu | simulator belum Run |
 | klien OPC UA ditolak, pesannya seperti salah password | Security policy `None` belum dicentang |

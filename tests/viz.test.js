@@ -13,33 +13,38 @@ const path = require('path');
 const K = require(path.join(__dirname, '..', 'web', 'kin.js'));
 
 const raw = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'sim', 'robot.config.json'), 'utf8'));
+// toolY SUDAH termasuk panjang gripper - dijumlahkan sekali, sama seperti yang
+// ditulis gen_sim.js ke ROBOT_TOOL_Y_LREAL dan sama seperti yang dibaca halaman.
 const cfg = { L1: raw.link.L1, L2: raw.link.L2, L3: raw.link.L3, L4: raw.link.L4,
-              toolY: raw.tool.Y, toolZ: raw.tool.Z };
+              toolY: raw.tool.Y + raw.gripper.panjang, toolZ: raw.tool.Z,
+              gripLen: raw.gripper.panjang };
 
 let fail = 0;
 const chk = (l, c, x) => { if (!c) fail++; console.log((c ? '  OK  ' : '>>BAD ') + l + (x ? '   ' + x : '')); };
 
 // ------------------------------------------------ ujung rantai == hasil FK
-let maks = 0;
+// Yang diadu FK V2 (yang dipakai sim DAN halaman), bukan V1.
+let maks = 0, n = 0;
 for (const x of [-200, 0, 350]) {
   for (const t1 of [0, 30, 90, 135]) {
     for (const t2 of [-120, -60, 0]) {
       for (const t3 of [-45, 0, 45]) {
         const j = [x, t1, t2, t3];
         const p = K.chainPoints(j, cfg);
-        const w = K.forwardKinematic(j, cfg).world;
+        const w = K.forwardKinematicV2(j, cfg).worldL;
+        n++;
         maks = Math.max(maks,
-          Math.abs(p[5].x - w[0]), Math.abs(p[5].y - w[1]), Math.abs(p[5].z - w[2]));
+          Math.abs(p[6].x - w[0]), Math.abs(p[6].y - w[1]), Math.abs(p[6].z - w[2]));
       }
     }
   }
 }
-chk('titik tool = world hasil FK (108 pose)', maks < 1e-3,
-    'selisih terbesar ' + maks.toExponential(2) + ' mm - batasnya pembulatan REAL 32-bit di FK');
+chk('TCP = world hasil FK V2 (' + n + ' pose)', maks < 1e-9,
+    'selisih terbesar ' + maks.toExponential(2) + ' mm');
 
 // ------------------------------------------------------- bentuk rantainya
 const p = K.chainPoints([250, 0, 0, 0], cfg);
-chk('6 titik: kereta, bahu, siku, pergelangan, ujung L4, tool', p.length === 6);
+chk('7 titik: kereta, bahu, siku, pergelangan, ujung L4, pangkal gripper, TCP', p.length === 7);
 chk('kereta ikut sumbu 0 (prismatik, bukan sudut)', p[0].x === 250 && p[0].y === 0 && p[0].z === 0,
     JSON.stringify(p[0]));
 chk('seluruh rantai di satu bidang X yang sama', p.every(t => t.x === 250),
@@ -63,6 +68,40 @@ for (const t1 of [10, 80, 160]) {
   }
 }
 chk('panjang ruas tetap di semua pose', bedaPanjang < 1e-9, bedaPanjang.toExponential(2));
+
+// ------------------------------------------------------------------ gripper
+// Panjang gripper sudah termasuk di toolY. Kalau ada yang menjumlahkannya LAGI di
+// chainPoints, jarak pangkal->TCP jadi dua kali panjangnya - dan di layar itu cuma
+// terlihat seperti lengan yang sedikit lebih panjang.
+const pg = K.chainPoints([0, 45, -60, 10], cfg);
+chk('pangkal->TCP = panjang gripper, bukan dua kalinya',
+    Math.abs(jarak(pg[5], pg[6]) - raw.gripper.panjang) < 1e-9,
+    jarak(pg[5], pg[6]).toFixed(3) + ' vs ' + raw.gripper.panjang);
+chk('tanpa gripper, pangkal dan TCP berimpit', (() => {
+  const q = K.chainPoints([0, 45, -60, 10], Object.assign({}, cfg, { gripLen: 0 }));
+  return jarak(q[5], q[6]) < 1e-12;
+})());
+
+const g = K.gripperPoints([0, 30, -70, 20], cfg, 60);
+chk('dua jari', g.jari.length === 2);
+chk('jarak antar jari = bukaan yang diminta',
+    Math.abs(jarak(g.jari[0].ujung, g.jari[1].ujung) - 60) < 1e-9,
+    jarak(g.jari[0].ujung, g.jari[1].ujung).toFixed(4));
+chk('jari sepanjang gripper dan sejajar',
+    Math.abs(jarak(g.jari[0].atas, g.jari[0].ujung) - raw.gripper.panjang) < 1e-9
+    && Math.abs(jarak(g.jari[1].atas, g.jari[1].ujung) - raw.gripper.panjang) < 1e-9);
+chk('jari membuka TEGAK LURUS arah tool', (() => {
+  // Hasil kali titik arah tool dengan arah bukaan harus nol; kalau tidak, jari
+  // membuka miring dan TCP di tengah-tengahnya bukan lagi titik yang dihitung FK.
+  const arah = { y: g.tcp.y - g.pangkal.y, z: g.tcp.z - g.pangkal.z };
+  const buka = { y: g.jari[0].ujung.y - g.jari[1].ujung.y, z: g.jari[0].ujung.z - g.jari[1].ujung.z };
+  return Math.abs(arah.y * buka.y + arah.z * buka.z) < 1e-9;
+})());
+chk('menutup rapat: kedua jari berimpit di TCP', (() => {
+  const q = K.gripperPoints([0, 30, -70, 20], cfg, 0);
+  return jarak(q.jari[0].ujung, q.jari[1].ujung) < 1e-12
+    && jarak(q.jari[0].ujung, q.tcp) < 1e-12;
+})());
 
 // -------------------------------------------- halaman memakai fungsi itu, bukan salinannya
 const robot = fs.readFileSync(path.join(__dirname, '..', 'web', 'robot.js'), 'utf8');

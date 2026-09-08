@@ -2,29 +2,36 @@
 //
 // Dua sumber gerakan, dan halaman SELALU memberi tahu yang mana sedang dipakai:
 //
-//   PLC    - nilai datang dari simulator NX lewat bridge (SSE). Ini yang sebenarnya.
-//   OFFLINE- simulator mati, halaman menjalankan kin.js + motion model yang sama
-//            di browser. Berguna buat melihat bentuk gerakannya, TAPI itu bukan
-//            bukti program PLC-nya benar. Karena itu ditandai kuning di layar,
-//            bukan diam-diam menggantikan.
+//   PLC     - nilai datang dari simulator NX lewat bridge (SSE). Ini yang sebenarnya.
+//   OFFLINE - simulator mati, halaman menjalankan kin.js + motion model yang sama di
+//             browser. Berguna buat melihat bentuk gerakan, TAPI bukan bukti program
+//             PLC-nya benar. Ditandai kuning di layar, bukan diam-diam menggantikan.
 //
-// Sumbu: PLC (X, Y, Z) -> three (x, z, y). PLC Z itu ketinggian, three pakai Y-up.
-// Rantai planarnya jadi bidang (z, y) di three, berputar pada sumbu x.
+// Kinematik yang dipakai halaman ini V2 - sama dengan yang dipakai program sim.
+// Fungsi V1 di kin.js sengaja masih ada buat tes cacat aslinya, dan TIDAK dipakai
+// di sini: kalau halaman memakai rumus yang beda dari PLC, mode offline dan mode
+// PLC menggambar dua robot berbeda tanpa ada yang mengeluh.
+//
+// Semua posisi datang dari chainPoints()/gripperPoints() di kin.js. Halaman tidak
+// menghitung rantai sendiri - rumus kedua di sini bebas melenceng dari FK sambil
+// tetap menggambar lengan yang tampak wajar.
 'use strict';
 
 var TAG = { joint: 'SIM_JOINT_POS', world: 'SIM_WORLD_POS', limit: 'SIM_LIMIT',
             beat: 'SIM_HEARTBEAT', err: 'SIM_ERROR', errId: 'SIM_ERROR_ID' };
 
+var ERR_TEKS = { 0: '', 1: 'di luar jangkauan (R > L2+L3)', 2: 'terlalu dekat (R < |L2-L3|)',
+                 3: 'singular (R = 0)', 4: 'soft limit ditembus' };
+
 var st = {
-  plc: false,              // bridge bilang PLC tersambung
-  bridge: false,           // bridge-nya sendiri hidup
+  plc: false, bridge: false,
   joint: [0, 90, -90, 0],
   world: [0, 0, 0, 0],
-  cmd: [0, 90, -90, 0],    // target sumbu (dipakai mode offline)
+  cmd: [0, 90, -90, 0],
   limit: [false, false, false, false, false, false, false, false],
-  beat: 0, err: false, errId: 0,
-  cfg: null,
-  dim: { L1: 400, L2: 300, L3: 250, L4: 100, toolY: 50, toolZ: 0,
+  beat: 0, err: false, errId: 0, elbowUp: false,
+  grip: { pos: 80, stroke: 80, len: 90, cmd: false, vel: 120 },
+  dim: { L1: 400, L2: 300, L3: 250, L4: 100, toolY: 140, toolZ: 0,
          offset: [0, 0, 0, 0, 0], limitv: [-500, 500, -90, 180, -150, 0, -120, 120] },
   vel: [200, 30, 30, 45], velW: [100, 100, 100, 30], step: 10, mode: 0, hold: false
 };
@@ -32,15 +39,21 @@ var st = {
 var el = function (id) { return document.getElementById(id); };
 var f2 = function (x) { return (typeof x === 'number' && isFinite(x)) ? x.toFixed(2) : '-'; };
 
+function cfgKin() {
+  return { L1: st.dim.L1, L2: st.dim.L2, L3: st.dim.L3, L4: st.dim.L4,
+           toolY: st.dim.toolY, toolZ: st.dim.toolZ, gripLen: st.grip.len,
+           offset: st.dim.offset, limit: st.dim.limitv };
+}
+
 // ------------------------------------------------------------------ bridge
 function post(url, body) {
   return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify(body) }).then(function (r) { return r.json(); });
 }
 
-// Status ditanyakan ke bridge, TIDAK ditebak dari location.protocol: halaman ini
-// juga bisa dibuka langsung dari file:// sementara bridge-nya jalan, dan tebakan
-// dari protokol bikin alat yang siap dipakai kelihatan mati.
+// Status DITANYAKAN ke bridge, tidak ditebak dari location.protocol: halaman ini
+// juga bisa dibuka dari file:// sementara bridge-nya jalan, dan tebakan dari
+// protokol bikin alat yang siap dipakai kelihatan mati.
 function ping() {
   fetch('/api/ping').then(function (r) { return r.json(); }).then(function (j) {
     st.bridge = true;
@@ -76,6 +89,11 @@ function stream() {
       if (v[TAG.limit]) st.limit = Array.from(v[TAG.limit]);
       if (v[TAG.beat] !== undefined) st.beat = v[TAG.beat];
       st.err = !!v[TAG.err]; st.errId = v[TAG.errId] || 0;
+      if (v.SIM_ELBOW_UP !== undefined) st.elbowUp = !!v.SIM_ELBOW_UP;
+      if (v.SIM_GRIP_POS !== undefined) st.grip.pos = v.SIM_GRIP_POS;
+      if (v.SIM_GRIP_STROKE) st.grip.stroke = v.SIM_GRIP_STROKE;
+      if (v.SIM_GRIP_LEN) st.grip.len = v.SIM_GRIP_LEN;
+      if (v.SIM_GRIP_CMD !== undefined) st.grip.cmd = !!v.SIM_GRIP_CMD;
       if (v.ROBOT_L1_LREAL) {
         st.dim.L1 = v.ROBOT_L1_LREAL; st.dim.L2 = v.ROBOT_L2_LREAL;
         st.dim.L3 = v.ROBOT_L3_LREAL; st.dim.L4 = v.ROBOT_L4_LREAL;
@@ -93,8 +111,6 @@ function stream() {
   es.onerror = function () { st.bridge = false; st.plc = false; statusTampil(null); };
 }
 
-// Perintah ke PLC. Waktu offline perintahnya dijalankan di browser dengan rumus
-// yang sama - supaya tombol tidak mati dan orang bisa melihat bentuk gerakannya.
 function kirim(nama, nilai, indeks) {
   if (!st.plc) return Promise.resolve({ offline: true });
   return post('/api/write', { nama: nama, nilai: nilai, indeks: indeks })
@@ -102,46 +118,63 @@ function kirim(nama, nilai, indeks) {
 }
 
 // ------------------------------------------------------- kinematik offline
-function cfgKin() {
-  return { L1: st.dim.L1, L2: st.dim.L2, L3: st.dim.L3, L4: st.dim.L4,
-           toolY: st.dim.toolY, toolZ: st.dim.toolZ,
-           offset: st.dim.offset, limit: st.dim.limitv };
-}
-
 function offlineMinta(pose) {
-  var c = cfgKin();
-  var rc = reachable(pose, c);
-  if (!rc.ok) {
-    st.err = true; st.errId = (rc.y3 <= 0) ? 2 : 1;
-    el('err').textContent = (rc.y3 <= 0)
-      ? 'ditolak: Y3 <= 0 (ATAN kehilangan kuadran di algoritma asli)'
-      : 'ditolak: di luar jangkauan L2+L3';
-    return;
-  }
-  st.err = false; st.errId = 0; el('err').textContent = '';
-  st.cmd = inverseKinematic(pose, c).joint;
+  var ik = inverseKinematicV2(pose, cfgKin(), st.elbowUp);
+  st.err = !ik.done;
+  st.errId = ik.errorId;
+  el('err').textContent = ik.done ? '' : ('ditolak: ' + (ERR_TEKS[ik.errorId] || ik.errorId));
+  if (ik.done) st.cmd = ik.joint;
 }
 
 var tSebelum = 0;
 function offlineStep(t) {
   var dt = Math.min((t - tSebelum) / 1000, 0.1);
   tSebelum = t;
-  if (st.plc) return;
+  if (st.plc || !dt) return;
+
   for (var i = 0; i < 4; i++) {
     var langkah = st.vel[i] * dt;
     var d = st.cmd[i] - st.joint[i];
     if (Math.abs(d) <= langkah) st.joint[i] = st.cmd[i];
     else st.joint[i] += (d > 0 ? langkah : -langkah);
   }
-  var fk = forwardKinematic(st.joint, cfgKin());
+
+  // Gripper: model yang sama dengan di ST - didorong ke target dengan batas kecepatan.
+  var target = st.grip.cmd ? 0 : st.grip.stroke;
+  var dg = target - st.grip.pos;
+  var lg = st.grip.vel * dt;
+  st.grip.pos = (Math.abs(dg) <= lg) ? target : st.grip.pos + (dg > 0 ? lg : -lg);
+
+  var fk = forwardKinematicV2(st.joint, cfgKin());
   st.world = fk.world;
-  var ik = inverseKinematic(st.world, cfgKin());
+  var ik = inverseKinematicV2(fk.worldL, cfgKin(), st.elbowUp);
   st.limit = ik.limits;
 }
 
 // ------------------------------------------------------------------- scene
-var scene, cam, renderer, sendi = [];
-var orbit = { theta: -0.9, phi: 1.15, jarak: 1600, tX: 0, tY: 300 };
+var scene, cam, renderer, bagian = {};
+var orbit = { theta: -0.85, phi: 0.55, jarak: 1900, tX: 0, tY: 380 };
+
+var MAT = {};
+function bahan(warna, metal, kasar) {
+  return new THREE.MeshStandardMaterial({ color: warna, metalness: metal, roughness: kasar });
+}
+
+function kotak(w, h, d, mat) {
+  var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+// Silinder sendi: sumbu putarnya sumbu X (semua sendi revolute berputar di bidang
+// Y-Z), jadi silinder bawaan three yang berdiri di Y diputar 90 derajat pada Z.
+function silinder(r, panjang, mat) {
+  var m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, panjang, 24), mat);
+  m.rotation.z = Math.PI / 2;
+  m.castShadow = true;
+  return m;
+}
 
 function bikinScene() {
   if (typeof THREE === 'undefined') {
@@ -151,61 +184,97 @@ function bikinScene() {
   }
   var cv = el('cv');
   renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0f1216);
-  cam = new THREE.PerspectiveCamera(50, 1, 10, 12000);
+  scene.background = new THREE.Color(0x0d1117);
+  scene.fog = new THREE.Fog(0x0d1117, 2600, 6000);
+  cam = new THREE.PerspectiveCamera(45, 1, 10, 12000);
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 1.1));
-  var dir = new THREE.DirectionalLight(0xffffff, 0.7);
-  dir.position.set(600, 900, 700);
-  scene.add(dir);
+  MAT.rangka = bahan(0x64748b, 0.55, 0.55);
+  MAT.rel = bahan(0x3f4854, 0.7, 0.4);
+  MAT.kereta = bahan(0x0ea5e9, 0.5, 0.45);
+  MAT.lengan1 = bahan(0x38bdf8, 0.35, 0.5);
+  MAT.lengan2 = bahan(0x22c55e, 0.35, 0.5);
+  MAT.lengan3 = bahan(0xf59e0b, 0.35, 0.5);
+  MAT.sendi = bahan(0xe2e8f0, 0.8, 0.3);
+  MAT.gripper = bahan(0xef4444, 0.6, 0.35);
+  MAT.jari = bahan(0xfca5a5, 0.4, 0.5);
 
-  // Lantai + rel X. Rel digambar sepanjang soft limit sumbu 0, jadi batas kerjanya
-  // kelihatan sebagai benda, bukan cuma angka di panel.
-  var grid = new THREE.GridHelper(2400, 24, 0x374151, 0x1f2937);
+  // Cahaya: satu langit lembut supaya sisi gelap tidak jadi hitam pekat, satu
+  // terarah yang melempar bayangan. Tanpa bayangan, kedalaman hilang total dan
+  // lengan yang di depan tidak bisa dibedakan dari yang di belakang.
+  scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1f2937, 0.85));
+  var sun = new THREE.DirectionalLight(0xffffff, 1.05);
+  sun.position.set(900, 1500, 900);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  var c = sun.shadow.camera;
+  c.left = -1600; c.right = 1600; c.top = 1600; c.bottom = -1600; c.near = 100; c.far = 4200;
+  scene.add(sun);
+  scene.add(new THREE.DirectionalLight(0x93c5fd, 0.25).translateX(-800));
+
+  // Lantai penerima bayangan + grid berskala. Grid 100 mm per petak, jadi ukuran
+  // benda bisa dikira-kira dari layar tanpa melihat panel.
+  var lantai = new THREE.Mesh(new THREE.PlaneGeometry(6000, 4000),
+    new THREE.MeshStandardMaterial({ color: 0x161b22, roughness: 0.95, metalness: 0 }));
+  lantai.rotation.x = -Math.PI / 2;
+  lantai.position.y = -30;
+  lantai.receiveShadow = true;
+  scene.add(lantai);
+  var grid = new THREE.GridHelper(4000, 40, 0x3b4657, 0x232b36);
+  grid.position.y = -29;
   scene.add(grid);
-  var rel = new THREE.Mesh(new THREE.BoxGeometry(1000, 30, 90),
-    new THREE.MeshStandardMaterial({ color: 0x475569 }));
-  rel.name = 'rel';
-  scene.add(rel);
 
-  // Lima ruas, ditaruh DATAR di scene: kereta->bahu (L1), bahu->siku (L2),
-  // siku->pergelangan (L3), pergelangan->ujung (L4), ujung->tool.
-  //
-  // Posisinya datang dari chainPoints() di kin.js, bukan dari rotasi bersarang di
-  // sini. Bersarang juga benar, tapi rumus rantainya jadi ada DUA - satu di kin.js
-  // yang dites, satu di halaman yang tidak - dan yang kedua bebas melenceng sambil
-  // tetap menggambar lengan yang tampak wajar.
-  var warna = [0x94a3b8, 0x38bdf8, 0x22c55e, 0xf59e0b, 0xef4444];
-  var tebal = [34, 30, 26, 22, 14];
-  sendi = [];
-  for (var i = 0; i < 5; i++) {
-    // Geometri tebal 1 di sumbu z: scale.z langsung jadi panjang dalam mm, jadi
-    // ganti dimensi tidak perlu hitung ulang terhadap ukuran kotak bawaan.
-    var m = new THREE.Mesh(new THREE.BoxGeometry(tebal[i], tebal[i], 1),
-      new THREE.MeshStandardMaterial({ color: warna[i] }));
-    scene.add(m);
-    sendi.push(m);
-  }
-  for (var k = 0; k < 5; k++) {
-    var bola = new THREE.Mesh(new THREE.SphereGeometry(k === 4 ? 14 : 22, 16, 12),
-      new THREE.MeshStandardMaterial({ color: 0xe5e7eb }));
-    bola.name = 'sendi' + k;
-    scene.add(bola);
-  }
+  // Rel + dua penahan ujung. Panjangnya mengikuti soft limit sumbu 0, jadi batas
+  // kerjanya jadi benda yang kelihatan, bukan cuma angka di panel.
+  bagian.rel = kotak(1, 26, 150, MAT.rel);
+  scene.add(bagian.rel);
+  bagian.stopA = kotak(24, 90, 170, MAT.rangka);
+  bagian.stopB = kotak(24, 90, 170, MAT.rangka);
+  scene.add(bagian.stopA);
+  scene.add(bagian.stopB);
+
+  bagian.kereta = kotak(150, 74, 190, MAT.kereta);
+  scene.add(bagian.kereta);
+
+  // Tiang bahu (L1) + tiga ruas lengan. Ruasnya kotak pipih, sendinya silinder
+  // supaya arah putarnya kelihatan sebagai benda.
+  bagian.tiang = kotak(84, 1, 84, MAT.rangka);
+  scene.add(bagian.tiang);
+
+  bagian.lengan = [
+    kotak(58, 1, 46, MAT.lengan1),
+    kotak(50, 1, 40, MAT.lengan2),
+    kotak(42, 1, 34, MAT.lengan3)
+  ];
+  bagian.lengan.forEach(function (m) { scene.add(m); });
+
+  bagian.sendi = [silinder(38, 76, MAT.sendi), silinder(32, 66, MAT.sendi),
+                  silinder(27, 58, MAT.sendi), silinder(22, 50, MAT.sendi)];
+  bagian.sendi.forEach(function (m) { scene.add(m); });
+
+  // Gripper: badan + dua jari yang bergerak menjauh/mendekat.
+  bagian.gripBadan = kotak(56, 1, 56, MAT.gripper);
+  scene.add(bagian.gripBadan);
+  bagian.jari = [kotak(26, 1, 14, MAT.jari), kotak(26, 1, 14, MAT.jari)];
+  bagian.jari.forEach(function (m) { scene.add(m); });
+
+  // Penanda TCP: bola kecil di ujung jari. Itu titik yang dijanjikan FK/IK, jadi
+  // kalau dia tidak berimpit dengan angka world di panel, ada yang salah.
+  bagian.tcp = new THREE.Mesh(new THREE.SphereGeometry(11, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xfde047 }));
+  scene.add(bagian.tcp);
 
   pasangOrbit(cv);
   return true;
 }
 
-// PLC (X, Y, Z) -> three (x, y, z). PLC Z itu KETINGGIAN; three pakai Y-up, jadi
-// Z PLC jadi y three dan Y PLC jadi z three. Ketukar, lengan tergambar rebah dan
-// rel-nya berdiri - gambar yang tetap "masuk akal" sampai dibandingkan angkanya.
-function ke3(p) { return new THREE.Vector3(p.x, p.z, p.y); }
-
-// Orbit ditulis sendiri, bukan OrbitControls: OrbitControls bukan bagian dari
-// build inti three.js, jadi memakainya berarti satu unduhan CDN lagi yang bisa
-// gagal sendiri - untuk lima baris matematika.
+// Orbit ditulis sendiri, bukan OrbitControls: OrbitControls bukan bagian dari build
+// inti three.js, jadi memakainya berarti satu unduhan CDN lagi yang bisa gagal
+// sendiri - untuk lima baris matematika.
 function pasangOrbit(cv) {
   var seret = false, lx = 0, ly = 0;
   cv.addEventListener('mousedown', function (e) { seret = true; lx = e.clientX; ly = e.clientY; });
@@ -213,12 +282,12 @@ function pasangOrbit(cv) {
   window.addEventListener('mousemove', function (e) {
     if (!seret) return;
     orbit.theta -= (e.clientX - lx) * 0.008;
-    orbit.phi = Math.max(0.15, Math.min(1.5, orbit.phi - (e.clientY - ly) * 0.006));
+    orbit.phi = Math.max(0.05, Math.min(1.45, orbit.phi - (e.clientY - ly) * 0.006));
     lx = e.clientX; ly = e.clientY;
   });
   cv.addEventListener('wheel', function (e) {
     e.preventDefault();
-    orbit.jarak = Math.max(400, Math.min(6000, orbit.jarak * (1 + e.deltaY * 0.001)));
+    orbit.jarak = Math.max(500, Math.min(6000, orbit.jarak * (1 + e.deltaY * 0.001)));
   }, { passive: false });
 }
 
@@ -230,42 +299,54 @@ function ukur() {
   cam.updateProjectionMatrix();
 }
 
-function gambar() {
-  if (!renderer) return;
-  var d = st.dim;
-  var rel = scene.getObjectByName('rel');
-  var span = Math.max(200, d.limitv[1] - d.limitv[0]);
-  rel.scale.x = span / 1000;
-  rel.position.set((d.limitv[0] + d.limitv[1]) / 2, -15, 0);
+// PLC (X, Y, Z) -> three (x, y, z). PLC Z itu KETINGGIAN; three pakai Y-up, jadi
+// Z PLC jadi y three dan Y PLC jadi z three. Ketukar, lengan tergambar rebah dan
+// rel-nya berdiri - gambar yang tetap "masuk akal" sampai angkanya dibandingkan.
+function ke3(p) { return new THREE.Vector3(p.x, p.z, p.y); }
 
-  // Sumbu 0 itu PRISMATIK - kereta digeser, tidak diputar. Sudah terjaga di
-  // chainPoints(), jadi di sini tinggal menggambar antar titik.
-  var titik = chainPoints(st.joint, cfgKin());
-  for (var i = 0; i < 5; i++) {
-    ruasKe(sendi[i], ke3(titik[i]), ke3(titik[i + 1]));
-    var bola = scene.getObjectByName('sendi' + i);
-    if (bola) bola.position.copy(ke3(titik[i]));
-  }
-  orbit.tY = d.L1;
-
-  cam.position.set(
-    orbit.tX + orbit.jarak * Math.cos(orbit.phi) * Math.sin(orbit.theta),
-    orbit.tY + orbit.jarak * Math.sin(orbit.phi),
-    orbit.jarak * Math.cos(orbit.phi) * Math.cos(orbit.theta));
-  cam.lookAt(orbit.tX, orbit.tY, 0);
-  renderer.render(scene, cam);
-}
-
-// Satu ruas = kotak antara dua titik: ditaruh di tengahnya, dipanjangkan sepanjang
-// jaraknya, lalu diputar menghadap titik ujung. lookAt() mengarahkan +z lokal ke
-// sasaran, dan geometri ruasnya memang memanjang di +z - itu yang bikin dua baris
-// ini cukup, tanpa menyusun quaternion sendiri.
+// Satu ruas = benda antara dua titik: ditaruh di tengahnya, dipanjangkan sepanjang
+// jaraknya, lalu diputar menghadap ujungnya. lookAt() mengarahkan +z lokal ke
+// sasaran, dan geometri ruasnya memang tebal 1 di z - itu yang bikin scale.z
+// langsung berarti panjang dalam mm.
 function ruasKe(mesh, a, b) {
   var panjang = a.distanceTo(b);
   mesh.position.copy(a).add(b).multiplyScalar(0.5);
   mesh.scale.z = Math.max(1, panjang);
   mesh.lookAt(b);
   mesh.visible = panjang > 0.5;
+}
+
+function gambar() {
+  if (!renderer) return;
+  var d = st.dim;
+  var cfg = cfgKin();
+  var titik = chainPoints(st.joint, cfg);
+  var g = gripperPoints(st.joint, cfg, st.grip.pos);
+
+  var span = Math.max(200, d.limitv[1] - d.limitv[0]);
+  var tengah = (d.limitv[0] + d.limitv[1]) / 2;
+  bagian.rel.scale.x = span;
+  bagian.rel.position.set(tengah, -14, 0);
+  bagian.stopA.position.set(d.limitv[0], 18, 0);
+  bagian.stopB.position.set(d.limitv[1], 18, 0);
+
+  bagian.kereta.position.set(st.joint[0], 22, 0);
+
+  ruasKe(bagian.tiang, ke3(titik[0]), ke3(titik[1]));
+  for (var i = 0; i < 3; i++) ruasKe(bagian.lengan[i], ke3(titik[i + 1]), ke3(titik[i + 2]));
+  for (var k = 0; k < 4; k++) bagian.sendi[k].position.copy(ke3(titik[k + 1]));
+
+  ruasKe(bagian.gripBadan, ke3(titik[4]), ke3(g.pangkal));
+  for (var j = 0; j < 2; j++) ruasKe(bagian.jari[j], ke3(g.jari[j].atas), ke3(g.jari[j].ujung));
+  bagian.tcp.position.copy(ke3(g.tcp));
+
+  orbit.tY = d.L1 * 0.8;
+  cam.position.set(
+    orbit.tX + orbit.jarak * Math.cos(orbit.phi) * Math.sin(orbit.theta),
+    orbit.tY + orbit.jarak * Math.sin(orbit.phi),
+    orbit.jarak * Math.cos(orbit.phi) * Math.cos(orbit.theta));
+  cam.lookAt(orbit.tX, orbit.tY, 0);
+  renderer.render(scene, cam);
 }
 
 // -------------------------------------------------------------------- panel
@@ -287,8 +368,8 @@ function bikinJog() {
       [['-', 'SIM_JOG_N'], ['+', 'SIM_JOG_P']].forEach(function (b) {
         var t = document.createElement('button');
         t.textContent = b[0];
-        // Tombol jog dikirim sebagai TEKAN dan LEPAS terpisah, bukan satu klik:
-        // mode tahan-jalan butuh tombolnya benar-benar bertahan ON di PLC.
+        // Tekan dan lepas dikirim TERPISAH: mode tahan-jalan butuh tombolnya
+        // benar-benar bertahan ON di PLC, bukan satu pulsa per klik.
         t.onmousedown = function () { jogTekan(b[1], i, true); };
         t.onmouseup = function () { jogTekan(b[1], i, false); };
         t.onmouseleave = function () { jogTekan(b[1], i, false); };
@@ -302,19 +383,17 @@ function bikinJog() {
 function jogTekan(tag, i, on) {
   if (st.plc) { kirim(tag, on, i); return; }
   if (!on) return;
-  // Offline: satu langkah per tekan (tahan-jalan tidak ditiru di sini - yang
-  // penting bentuk gerakannya, bukan mengulang mekanik tombolnya).
   var arah = (tag === 'SIM_JOG_P') ? 1 : -1;
-  var d = arah * st.step;
-  if (st.mode === 0) { st.cmd[i] += d; return; }
+  var dl = arah * st.step;
+  if (st.mode === 0) { st.cmd[i] += dl; return; }
   var pose = st.world.slice();
-  if (st.mode === 1) pose[i] += d;
+  if (st.mode === 1) pose[i] += dl;
   else {
     var th = pose[3] * KIN_DEGREE_TO_RAD;
-    if (i === 0) pose[0] += d;
-    else if (i === 1) { pose[1] += d * Math.cos(th); pose[2] += d * Math.sin(th); }
-    else if (i === 2) { pose[1] -= d * Math.sin(th); pose[2] += d * Math.cos(th); }
-    else pose[3] += d;
+    if (i === 0) pose[0] += dl;
+    else if (i === 1) { pose[1] += dl * Math.cos(th); pose[2] += dl * Math.sin(th); }
+    else if (i === 2) { pose[1] -= dl * Math.sin(th); pose[2] += dl * Math.cos(th); }
+    else pose[3] += dl;
   }
   offlineMinta(pose);
 }
@@ -332,7 +411,14 @@ function panelTampil() {
        + (k % 2 ? '<br>' : ' &nbsp; ');
   }
   el('limits').innerHTML = h;
-  el('beat').textContent = 'heartbeat ' + st.beat + (st.err ? '   -   error ' + st.errId : '');
+  el('beat').textContent = 'heartbeat ' + st.beat
+    + (st.err ? '   -   ' + (ERR_TEKS[st.errId] || ('error ' + st.errId)) : '');
+
+  el('gripPos').textContent = f2(st.grip.pos) + ' / ' + f2(st.grip.stroke) + ' mm';
+  var gb = el('gripBtn');
+  gb.textContent = st.grip.cmd ? 'Buka' : 'Tutup';
+  gb.className = st.grip.cmd ? '' : 'act';
+
   var d = st.dim;
   el('dims').innerHTML =
     '<tr><td class="k">L1</td><td class="v">' + f2(d.L1) + '</td>'
@@ -340,7 +426,9 @@ function panelTampil() {
     + '<tr><td class="k">L3</td><td class="v">' + f2(d.L3) + '</td>'
     + '<td class="k">L4</td><td class="v">' + f2(d.L4) + '</td></tr>'
     + '<tr><td class="k">tool Y</td><td class="v">' + f2(d.toolY) + '</td>'
-    + '<td class="k">tool Z</td><td class="v">' + f2(d.toolZ) + '</td></tr>';
+    + '<td class="k">tool Z</td><td class="v">' + f2(d.toolZ) + '</td></tr>'
+    + '<tr><td class="k">gripper</td><td class="v">' + f2(st.grip.len) + '</td>'
+    + '<td class="k">stroke</td><td class="v">' + f2(st.grip.stroke) + '</td></tr>';
 }
 
 function pasangKontrol() {
@@ -350,9 +438,15 @@ function pasangKontrol() {
     panelTampil();
   };
   el('hold').onchange = function () { st.hold = this.checked; kirim('SIM_JOG_HOLD', st.hold); };
+  el('elbow').onchange = function () { st.elbowUp = this.checked; kirim('SIM_ELBOW_UP', st.elbowUp); };
   el('stepSet').onclick = function () {
     st.step = +el('step').value || 10;
     kirim('SIM_JOG_STEP', st.step);
+  };
+  el('gripBtn').onclick = function () {
+    st.grip.cmd = !st.grip.cmd;
+    kirim('SIM_GRIP_CMD', st.grip.cmd);
+    panelTampil();
   };
   el('here').onclick = function () {
     el('tx').value = st.world[0].toFixed(1); el('ty').value = st.world[1].toFixed(1);
@@ -364,11 +458,11 @@ function pasangKontrol() {
     el('err').textContent = '';
     if (!st.plc) { offlineMinta(pose); return; }
     // SIM_WORLD_CMD dulu, BARU tepi naik SIM_MOVE_EXEC. Terbalik, PLC membaca
-    // target lama - dan lengannya bergerak ke tempat yang benar cuma kalau
-    // kebetulan targetnya belum berubah.
-    kirim('SIM_WORLD_CMD', pose).then(function () {
-      return kirim('SIM_MOVE_EXEC', false);
-    }).then(function () { return kirim('SIM_MOVE_EXEC', true); });
+    // target lama - dan lengannya ke tempat yang benar cuma kalau targetnya
+    // kebetulan belum berubah.
+    kirim('SIM_WORLD_CMD', pose)
+      .then(function () { return kirim('SIM_MOVE_EXEC', false); })
+      .then(function () { return kirim('SIM_MOVE_EXEC', true); });
   };
   el('home').onclick = function () {
     if (!st.plc) { st.cmd = [0, 90, -90, 0]; return; }
@@ -379,16 +473,20 @@ function pasangKontrol() {
 
 function muatConfig() {
   return fetch('/api/config').then(function (r) { return r.json(); }).then(function (c) {
-    st.cfg = c;
     st.dim.L1 = c.link.L1; st.dim.L2 = c.link.L2; st.dim.L3 = c.link.L3; st.dim.L4 = c.link.L4;
-    st.dim.toolY = c.tool.Y; st.dim.toolZ = c.tool.Z;
+    // Sama seperti gen_sim.js: panjang gripper dijumlahkan ke tool SATU kali.
+    // Halaman tidak boleh menjumlahkannya lagi waktu menggambar.
+    st.dim.toolY = c.tool.Y + c.gripper.panjang;
+    st.dim.toolZ = c.tool.Z;
     st.dim.offset = c.offset.nilai;
     st.dim.limitv = [c.limit.PD1300_000, c.limit.PD1300_001, c.limit.PD1300_002, c.limit.PD1300_003,
                      c.limit.PD1300_004, c.limit.PD1300_005, c.limit.PD1300_006, c.limit.PD1300_007];
     st.vel = c.jog.sumbu; st.velW = c.jog.world; st.step = c.jog.langkah;
+    st.grip = { pos: c.gripper.bukaan_awal, stroke: c.gripper.stroke, len: c.gripper.panjang,
+                cmd: false, vel: c.gripper.kecepatan };
     st.joint = c.home.sumbu.slice(); st.cmd = c.home.sumbu.slice();
     el('step').value = st.step;
-  }).catch(function () { /* bridge mati: pakai bawaan di st.dim */ });
+  }).catch(function () { /* bridge mati: pakai bawaan di st */ });
 }
 
 function putar(t) {

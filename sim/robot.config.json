@@ -16,10 +16,25 @@
   },
 
   "tool": {
-    "_catatan": "X tidak dipakai rumus mana pun; tool digeser polar dari Y dan Z saja. toolY=0 memicu penjaga bagi-nol di ST (dipaksa 1e-15) yang bikin THETA_TOOL jadi ~90 derajat - hindari 0 kecuali memang mau menguji cabang itu.",
+    "_catatan": "Offset flange -> pangkal gripper. X tidak dipakai rumus mana pun; tool digeser POLAR dari Y dan Z saja. Panjang gripper TIDAK ditulis di sini - lihat blok gripper, gen_sim.js yang menjumlahkannya. Catatan lama: di FB V1 nilai Y=0 memicu penjaga bagi-nol yang menimpa variabel globalnya sendiri dengan 1e-15; V2 tidak lagi begitu.",
     "X": 0.0,
     "Y": 50.0,
     "Z": 0.0
+  },
+
+  "gripper": {
+    "_catatan": [
+      "Gripper dua jari di ujung tool. PANJANG-nya masuk ke TCP: gen_sim.js menulis",
+      "ROBOT_TOOL_Y_LREAL = tool.Y + gripper.panjang, jadi FK/IK memang menghitung sampai",
+      "ujung jari. Dijumlahkan di SATU tempat itu supaya tidak pernah terhitung dua kali -",
+      "jangan menambahkannya lagi ke tool.Y.",
+      "stroke = bukaan penuh (jarak antar jari) dalam mm; 0 berarti menutup rapat."
+    ],
+    "panjang": 90.0,
+    "stroke": 80.0,
+    "bukaan_awal": 80.0,
+    "kecepatan": 120.0,
+    "tebal_jari": 12.0
   },
 
   "offset": {

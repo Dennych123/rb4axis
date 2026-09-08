@@ -82,6 +82,26 @@
   </fieldset>
 
   <fieldset>
+    <legend>Gripper</legend>
+    <div class="jogrow">
+      <span class="lbl">bukaan</span>
+      <span id="gripPos">-</span>
+      <button id="gripBtn">Tutup</button>
+    </div>
+    <div class="hint">Panjang gripper ikut TCP: <code>ROBOT_TOOL_Y = tool.Y + gripper.panjang</code>,
+      dijumlahkan sekali di <code>gen_sim.js</code>. Bola kuning di layar itu TCP-nya.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Solusi IK</legend>
+    <div class="jogrow">
+      <label style="font-size:12px"><input type="checkbox" id="elbow"> elbow up (cermin)</label>
+    </div>
+    <div class="hint">Mati = cabang yang sama dengan mesin. Pilihan ini cuma ada di FB V2 —
+      V1 selalu elbow down, jadi pose yang butuh cermin tidak pernah punya solusi.</div>
+  </fieldset>
+
+  <fieldset>
     <legend>Move point (world)</legend>
     <div class="jogrow"><span class="lbl">X mm</span><input class="num" id="tx" type="number" step="1"></div>
     <div class="jogrow"><span class="lbl">Y mm</span><input class="num" id="ty" type="number" step="1"></div>

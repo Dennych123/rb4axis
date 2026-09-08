@@ -148,6 +148,104 @@ function reachable(pos, cfg) {
 /** Bandingan: rumus yang BENAR untuk ALFA. Tidak dipakai sim - buat tes saja. */
 function atan2Fix(z3, y3) { return Math.atan2(z3, y3); }
 
+// ===========================================================================
+// V2 - versi yang DIPERBAIKI. Cerminan baris per baris dari
+// blurobot/sim/FORWARD_KINEMATIC_V2.st dan INVERSE_KINEMATIC_V2.st.
+//
+// Kuadran dibetulkan dengan ATAN + koreksi eksplisit, BUKAN Math.atan2 - persis
+// seperti ST-nya, yang juga tidak boleh memakai ATAN2 karena instruksi itu tidak
+// ada di daftar 353 instruksi W560. Kalau di sini dipakai Math.atan2 dan di sana
+// konstruksi manual, dua-duanya "benar" tapi hasilnya bisa beda di tepi kuadran -
+// dan perbandingan PLC vs JS berhenti berarti.
+// ===========================================================================
+
+/** Sudut polar dengan kuadran benar, dibangun dari ATAN saja. */
+function atanKuadran(z, y) {
+  if (y > 0) return Math.atan(z / y);
+  if (y < 0) return Math.atan(z / y) + KIN_PI;
+  return z >= 0 ? KIN_PI / 2 : -KIN_PI / 2;
+}
+
+/** Tool polar tanpa efek samping. R=0 berarti tidak ada arah, bukan 90 derajat. */
+function toolPolarV2(cfg) {
+  const r = Math.sqrt(cfg.toolY * cfg.toolY + cfg.toolZ * cfg.toolZ);
+  return { r, theta: r === 0 ? 0 : atanKuadran(cfg.toolZ, cfg.toolY) };
+}
+
+/**
+ * FORWARD_KINEMATIC_V2.
+ * @returns {{joint:number[], world:number[], worldL:number[], done:boolean}}
+ *          world = REAL (dibulatkan 32-bit, seperti yang dibaca HMI/OPC UA),
+ *          worldL = LREAL penuh (yang dipakai round-trip supaya tidak berisik)
+ */
+function forwardKinematicV2(pos, cfg, execute) {
+  if (execute === false) return { joint: [0, 0, 0, 0], world: [0, 0, 0, 0], worldL: [0, 0, 0, 0], done: false };
+  const tool = toolPolarV2(cfg);
+  const a1 = pos[1] * KIN_DEGREE_TO_RAD;
+  const a2 = a1 + pos[2] * KIN_DEGREE_TO_RAD;
+  const a3 = a2 + pos[3] * KIN_DEGREE_TO_RAD;
+
+  const wy = cfg.L2 * Math.cos(a1) + cfg.L3 * Math.cos(a2) + cfg.L4 * Math.cos(a3);
+  const wz = cfg.L1 + cfg.L2 * Math.sin(a1) + cfg.L3 * Math.sin(a2) + cfg.L4 * Math.sin(a3);
+
+  const worldL = [
+    pos[0],
+    wy + tool.r * Math.cos(tool.theta + a3),
+    wz + tool.r * Math.sin(tool.theta + a3),
+    pos[1] + pos[2] + pos[3]
+  ];
+  return { joint: pos.map(toREAL), world: worldL.map(toREAL), worldL, done: true };
+}
+
+/**
+ * INVERSE_KINEMATIC_V2.
+ * @param {boolean} elbowUp  false = cabang yang sama dengan mesin
+ * @returns {{joint:number[], done:boolean, error:boolean, errorId:number,
+ *            limits:boolean[], limitAny:boolean}}
+ *          errorId: 1 di luar jangkauan, 2 terlalu dekat, 3 singular, 4 soft limit
+ */
+function inverseKinematicV2(pos, cfg, elbowUp) {
+  const gagal = id => ({ joint: [NaN, NaN, NaN, NaN], done: false, error: true, errorId: id,
+                         limits: [false, false, false, false, false, false, false, false],
+                         limitAny: false });
+  const tool = toolPolarV2(cfg);
+  const thEe = pos[3] * KIN_DEGREE_TO_RAD;
+
+  const y3 = (pos[1] - tool.r * Math.cos(tool.theta + thEe)) - cfg.L4 * Math.cos(thEe);
+  const z3 = ((pos[2] - tool.r * Math.sin(tool.theta + thEe)) - cfg.L1) - cfg.L4 * Math.sin(thEe);
+  const r = Math.sqrt(y3 * y3 + z3 * z3);
+
+  // Jangkauan diperiksa DULU. Sesudah ACOS tidak menolong: yang meledak ACOS-nya.
+  if (r > cfg.L2 + cfg.L3) return gagal(1);
+  if (r < Math.abs(cfg.L2 - cfg.L3)) return gagal(2);
+  if (r === 0) return gagal(3);
+
+  const beta = Math.acos((cfg.L2 * cfg.L2 + cfg.L3 * cfg.L3 - r * r) / (2 * cfg.L2 * cfg.L3));
+  const gamma = Math.acos((r * r + cfg.L2 * cfg.L2 - cfg.L3 * cfg.L3) / (2 * cfg.L2 * r));
+  const alfa = atanKuadran(z3, y3);
+
+  const rad1 = elbowUp ? alfa - gamma : alfa + gamma;
+  const rad2 = elbowUp ? KIN_PI - beta : beta - KIN_PI;
+  const rad3 = thEe - rad1 - rad2;
+
+  const d1 = rad1 * KIN_RAD_TO_DEGREE, d2 = rad2 * KIN_RAD_TO_DEGREE, d3 = rad3 * KIN_RAD_TO_DEGREE;
+  const off = cfg.offset || [0, 0, 0, 0, 0];
+  const joint = [pos[0] - off[0], d1 - off[1], d2 - off[2], d3 - off[3]];
+
+  const L = cfg.limit || [];
+  const limits = [
+    joint[0] < (L[0] + 1), joint[0] > (L[1] - 1),
+    d1 < (L[2] + 1), d1 > (L[3] - 1),
+    d2 < (L[4] + 1), d2 > (L[5] - 1),
+    d3 < (L[6] + 1), d3 > (L[7] - 1)
+  ];
+  const limitAny = limits.some(Boolean);
+
+  // Sudutnya tetap dikeluarkan walau batas ditembus - yang ditahan cuma DONE, jadi
+  // pemanggil bisa menunjukkan "seharusnya ke sini, ditolak batas".
+  return { joint, done: !limitAny, error: limitAny, errorId: limitAny ? 4 : 0, limits, limitAny };
+}
+
 /**
  * Titik-titik rantai dalam koordinat PLC (X, Y, Z) - buat menggambar lengannya.
  *
@@ -157,13 +255,19 @@ function atan2Fix(z3, y3) { return Math.atan2(z3, y3); }
  * robot yang lain. Titik terakhir di sini WAJIB sama dengan world hasil
  * forwardKinematic(); tests/viz.test.js yang menjaganya.
  *
- * @returns {{x:number,y:number,z:number}[]} kereta, bahu, siku, pergelangan, ujung L4, tool
+ * Titiknya TUJUH: kereta, bahu, siku, pergelangan, ujung L4, pangkal gripper, TCP.
+ * Pangkal gripper dihitung mundur dari TCP sejauh `cfg.gripLen` - panjang gripper
+ * SUDAH termasuk di cfg.toolY (dijumlahkan sekali waktu gen_sim menulis
+ * ROBOT_TOOL_Y_LREAL), jadi menambahkannya lagi di sini bikin lengan panjang dua
+ * kali gripper. Tanpa gripper (gripLen 0) titik ke-6 dan ke-7 berimpit.
+ *
+ * @returns {{x:number,y:number,z:number}[]}
  */
 function chainPoints(pos, cfg) {
   const a1 = pos[1] * KIN_DEGREE_TO_RAD;
   const a2 = a1 + pos[2] * KIN_DEGREE_TO_RAD;
   const a3 = a2 + pos[3] * KIN_DEGREE_TO_RAD;
-  const tool = toolPolar(cfg);
+  const tool = toolPolarV2(cfg);
   const p = [{ x: pos[0], y: 0, z: 0 }];
   p.push({ x: pos[0], y: 0, z: cfg.L1 });
   const tambah = (r, sudut) => {
@@ -173,12 +277,40 @@ function chainPoints(pos, cfg) {
   tambah(cfg.L2, a1);
   tambah(cfg.L3, a2);
   tambah(cfg.L4, a3);
-  tambah(tool.r, tool.theta + a3);
+
+  const gripLen = Math.min(cfg.gripLen || 0, tool.r);
+  tambah(tool.r - gripLen, tool.theta + a3);     // pangkal gripper
+  tambah(gripLen, tool.theta + a3);              // TCP = ujung jari
   return p;
+}
+
+/**
+ * Titik ujung dua jari gripper, buat digambar. Jari membuka TEGAK LURUS terhadap
+ * arah tool, di dalam bidang Y-Z yang sama dengan lengannya - jadi bukaannya
+ * kelihatan dari sudut kamera mana pun yang bisa melihat lengannya.
+ *
+ * @param {number} bukaan  jarak antar jari (mm), 0 = menutup rapat
+ */
+function gripperPoints(pos, cfg, bukaan) {
+  const p = chainPoints(pos, cfg);
+  const pangkal = p[5], tcp = p[6];
+  const dy = tcp.y - pangkal.y, dz = tcp.z - pangkal.z;
+  const n = Math.hypot(dy, dz) || 1;
+  // Normal di dalam bidang: putar arah tool 90 derajat.
+  const ny = -dz / n, nz = dy / n;
+  const h = bukaan / 2;
+  return {
+    pangkal, tcp,
+    jari: [1, -1].map(s => ({
+      atas: { x: pangkal.x, y: pangkal.y + s * h * ny, z: pangkal.z + s * h * nz },
+      ujung: { x: tcp.x, y: tcp.y + s * h * ny, z: tcp.z + s * h * nz }
+    }))
+  };
 }
 
 if (typeof module !== 'undefined') {
   module.exports = { forwardKinematic, inverseKinematic, reachable, atan2Fix, toolPolar, toREAL,
-                     chainPoints,
+                     forwardKinematicV2, inverseKinematicV2, toolPolarV2, atanKuadran,
+                     chainPoints, gripperPoints,
                      KIN_PI, KIN_DEGREE_TO_RAD, KIN_RAD_TO_DEGREE };
 }

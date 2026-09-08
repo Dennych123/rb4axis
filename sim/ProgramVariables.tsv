@@ -1,19 +1,14 @@
-FK1	FORWARD_KINEMATIC		False	False	instance FB dari extract/ - JANGAN diganti isinya
-IK1	INVERSE_KINEMATIC		False	False	instance FB dari extract/ - JANGAN diganti isinya
+FK2	FORWARD_KINEMATIC_V2		False	False	instance FB kinematik maju yang sudah dibetulkan
+IK2	INVERSE_KINEMATIC_V2		False	False	instance FB kinematik balik yang sudah dibetulkan
 i	INT		False	False	pencacah FOR
 AX	INT		False	False	sumbu yang tombolnya sedang ditekan, -1 kalau tidak ada
 DELTA	LREAL		False	False	besar langkah jog scan ini, sudah bertanda
-POSE_REQ	ARRAY[0..3] OF LREAL		False	False	pose world yang diminta, sebelum diperiksa penjaga
+POSE_REQ	ARRAY[0..3] OF LREAL		False	False	pose world yang diminta
 NEED_IK	BOOL		False	False	permintaan scan ini perlu inverse kinematic
-REACH_OK	BOOL		False	False	pose diminta lolos penjaga jangkauan
-TH	LREAL		False	False	theta_EE radian
-TH_TOOL	LREAL		False	False	sudut tool polar
-R_TOOL	LREAL		False	False	jarak tool polar
-Y3	LREAL		False	False	titik pergelangan sebelum tool dan L4
-Z3	LREAL		False	False	titik pergelangan sebelum tool dan L4
-RR	LREAL		False	False	jarak bahu ke pergelangan
+TH	LREAL		False	False	theta_EE radian, buat jog mode tool
 STEP_M	LREAL		False	False	langkah motion model satu scan
 D	LREAL		False	False	sisa jarak ke target
+GRIP_TARGET	LREAL		False	False	bukaan gripper yang dituju
 LAST_P	ARRAY[0..3] OF BOOL		False	False	keadaan tombol plus scan sebelumnya
 LAST_N	ARRAY[0..3] OF BOOL		False	False	keadaan tombol minus scan sebelumnya
 EDGE_P	ARRAY[0..3] OF BOOL		False	False	tepi naik tombol plus

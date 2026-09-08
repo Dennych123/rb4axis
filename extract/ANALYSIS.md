@@ -74,11 +74,30 @@ Gerak sumbunya di project asli lewat `MC_*` (`MC_Power` ×4, `MC_MoveJog` ×5,
 yang membuat project sim tidak butuh setting axis, axes group, maupun EtherCAT, dan
 tidak ada satu pun titik gagal yang datang dari konfigurasi motion.
 
-## Empat cacat di algoritma asli — DIREPLIKASI, tidak diperbaiki
+## Empat cacat di algoritma asli
 
-Sim yang lebih benar dari mesinnya menjawab pertanyaan yang salah. Keempatnya punya
-tes yang MENUNTUT perilaku aslinya (`blurobot/tests/kin.test.js`); yang "memperbaiki"
-rumusnya bakal ketahuan di situ.
+Berkas di folder ini **tetap verbatim** — keempat cacat di bawah masih ada di sini,
+dan punya tes yang MENUNTUT perilaku aslinya (`blurobot/tests/kin.test.js`). Itu yang
+membuat folder ini bisa diadu ke project mesin kapan pun.
+
+Yang DIPAKAI simulasi adalah versi perbaikannya, `blurobot/sim/FORWARD_KINEMATIC_V2.st`
+dan `INVERSE_KINEMATIC_V2.st` — berdampingan, bukan menggantikan. Tesnya berpasangan:
+satu menuntut perilaku salah (V1), satu menuntut yang benar (V2), plus satu yang
+membuktikan keduanya memang berbeda di pose yang sama. Kalau nanti mesin aslinya mau
+ikut dibetulkan, selisih itu yang jadi buktinya.
+
+| cacat | V1 (mesin) | V2 (sim) |
+|---|---|---|
+| `DONE` | selalu TRUE | TRUE hanya kalau solusinya sah dan di dalam soft limit |
+| kuadran `ALFA` | `ATAN` polos, `Y3 < 0` meleset 180° | `ATAN` + koreksi kuadran eksplisit |
+| `ACOS` | tanpa penjaga, argumen bisa > 1 | jangkauan diperiksa DULU, ditolak lewat `ERROR_ID` |
+| `EXECUTE`/`DONE` di FK | tidak pernah disentuh | dibaca dan ditulis |
+| elbow | selalu elbow-down | `ELBOW_UP` bisa dipilih; FALSE = cabang mesin |
+| tool | menimpa variabel global waktu `toolY = 0` | dibaca ke lokal, global tidak disentuh |
+
+`ATAN2` **tidak** dipakai di V2: instruksi itu tidak ada di daftar 353 instruksi W560,
+jadi belum terbukti ter-import. Kuadrannya dibetulkan dengan `ATAN` + koreksi, dan port
+JS-nya melakukan hal yang sama supaya hasil PLC dan hasil JS tetap bisa diadu.
 
 ### 1. `INVERSE_KINEMATIC.DONE` selalu TRUE
 
@@ -101,14 +120,16 @@ menghasilkan sudut yang meleset **tepat 180°** — sudah diukur di tes, bukan p
 Penjaga bagi-nol cuma ada untuk `ROBOT_TOOL_Y_LREAL`, tidak untuk `Y3` sendiri.
 
 Di mesin nyata ini tidak pernah kelihatan karena jangkauan kerjanya memang di
-`Y > 0`. Di sim jangkauan itu tidak dibatasi apa pun, jadi penjaganya ditaruh di
-**pemanggil** (`reachable()` / penjaga di `P_SIM_ROBOT.st`).
+`Y > 0`. Di V2 kuadrannya dibetulkan, jadi pose ke belakang punya solusi yang benar —
+dengan satu akibat yang dicatat di kepala `INVERSE_KINEMATIC_V2.st`: `THETA1` keluar
+sebagai +200° dan bukan −160°, dan soft limit membandingkan angka itu apa adanya.
 
 ### 3. `ACOS` tanpa penjaga jangkauan
 
 `BETA` dan `GAMMA` menerima argumen > 1 kalau titiknya di luar `L2+L3`. Di PLC itu
-**error runtime**, bukan angka salah. Penjaga jangkauan (`R ≤ L2+L3`, `R ≥ |L2−L3|`,
-`Y3 ≠ 0`) ditambahkan di pemanggil supaya FB-nya tetap identik dengan yang di mesin.
+**error runtime**, bukan angka salah. Di V2 jangkauan (`R ≤ L2+L3`, `R ≥ |L2−L3|`,
+`R ≠ 0`) diperiksa **sebelum** `ACOS` dipanggil dan pose yang gagal ditolak lewat
+`ERROR_ID` — memeriksa sesudahnya tidak menolong, karena yang meledak `ACOS`-nya.
 
 ### 4. `FORWARD_KINEMATIC` tidak menyentuh `EXECUTE` maupun `DONE`
 
@@ -126,6 +147,12 @@ diisi 0, nilainya berubah permanen di controller, bukan cuma di dalam FB.
 ditulis satu rung pun — sudah dicek lewat semua pin blok fungsi di 1219 rung.
 Semuanya `REAL` retain yang diisi dari HMI Pro-face waktu mesin dipasang, lalu
 di-`REAL_TO_LREAL` ke pasangan `*_LREAL`-nya.
+
+Gripper juga tidak ada di project mesin sama sekali — itu tambahan sim. Panjangnya
+dijumlahkan ke `ROBOT_TOOL_Y_LREAL` **satu kali**, waktu `gen_sim.js` menulis blok
+init, jadi TCP kinematiknya di ujung jari. Menjumlahkannya lagi di viz atau di rung
+bikin lengan panjang dua kali gripper, dan di layar itu cuma tampak seperti lengan
+yang sedikit lebih panjang.
 
 Konsekuensinya untuk sim: angkanya **placeholder** di
 [`../sim/robot.config.json`](../sim/robot.config.json) sampai ada yang mengukur robot

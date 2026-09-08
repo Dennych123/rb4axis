@@ -123,5 +123,117 @@ chk('reachable() menangkapnya SEBELUM IK dipanggil', K.reachable([0, 5000, 5000,
 chk('reachable() meloloskan titik yang memang terjangkau',
     K.reachable(K.forwardKinematic([0, 45, -60, 0], cfg).world, cfg).ok === true);
 
+// ===========================================================================
+// V2 - versi yang DIPERBAIKI (blurobot/sim/*_V2.st, dicerminkan di kin.js).
+//
+// Tes di atas MENUNTUT perilaku yang salah karena itu yang jalan di mesin. Tes di
+// bawah menuntut yang benar. Dua-duanya harus hijau berbarengan: kalau yang atas
+// ikut hijau cuma karena V1 diam-diam diganti V2, cacatnya berhenti terdokumentasi
+// dan tidak ada lagi yang bisa diadu ke project mesin.
+// ===========================================================================
+console.log('  --- V2');
+
+// Panjang gripper ikut TCP, sama seperti yang ditulis gen_sim ke ROBOT_TOOL_Y.
+const cfg2 = Object.assign({}, cfg, { toolY: raw.tool.Y + raw.gripper.panjang,
+                                      gripLen: raw.gripper.panjang });
+
+// 1. Round-trip di SELURUH kuadran, termasuk yang di V1 meleset 180 derajat.
+let r2 = 0, n2 = 0, dilewati = 0;
+for (const t1 of [15, 45, 90, 135, 170]) {
+  for (const t2 of [-140, -100, -60, -25]) {
+    for (const t3 of [-40, 0, 40]) {
+      const j = [80, t1, t2, t3];
+      const fk = K.forwardKinematicV2(j, cfg2);
+      const ik = K.inverseKinematicV2(fk.worldL, cfg2, false);
+      if (ik.errorId === 1 || ik.errorId === 2 || ik.errorId === 3) { dilewati++; continue; }
+      n2++;
+      for (let i = 0; i < 4; i++) r2 = Math.max(r2, Math.abs(ik.joint[i] - j[i]));
+    }
+  }
+}
+// Toleransi 1e-5, dan batas itu BUKAN kelonggaran: DEGREE_TO_RAD dan RAD_TO_DEGREE
+// di project mesin dipotong 9 angka, jadi perkaliannya bukan 1 melainkan
+// 1 - 2.98e-8. Round-trip sudut 170 derajat karena itu tidak mungkin lebih rapat
+// dari ~5e-6 - berapa pun benarnya rumusnya. Menuntut lebih rapat berarti menuntut
+// konstanta yang lain, dan konstanta itu yang dipakai PLC.
+const BATAS_KONSTANTA = 1e-5;
+chk('V2: round-trip menutup di semua kuadran (' + n2 + ' pose, ' + dilewati + ' di luar jangkauan)',
+    n2 >= 40 && r2 < BATAS_KONSTANTA, 'selisih terbesar ' + r2.toExponential(2)
+    + ' - lantainya pembulatan konstanta project, bukan rumusnya');
+chk('konstanta project memang bukan invers eksak',
+    Math.abs(K.KIN_DEGREE_TO_RAD * K.KIN_RAD_TO_DEGREE - 1) > 1e-9,
+    'D2R x R2D - 1 = ' + (K.KIN_DEGREE_TO_RAD * K.KIN_RAD_TO_DEGREE - 1).toExponential(3)
+    + ' - itu sebabnya toleransi round-trip tidak bisa 1e-9');
+
+// 2. Kuadran: pose yang di V1 meleset TEPAT 180 derajat, di V2 kembali utuh.
+const jY3 = [0, 165, -40, 0];
+const fkY3 = K.forwardKinematicV2(jY3, cfg2);
+const ikY3v1 = K.inverseKinematic(fkY3.worldL, cfg2);
+const ikY3v2 = K.inverseKinematicV2(fkY3.worldL, cfg2, false);
+chk('V2: pose Y3 < 0 kembali benar', Math.abs(ikY3v2.joint[1] - 165) < BATAS_KONSTANTA,
+    'V1 di pose yang sama: ' + ikY3v1.joint[1].toFixed(1) + ' derajat');
+chk('V1 dan V2 memang BEDA di pose itu', Math.abs(ikY3v1.joint[1] - ikY3v2.joint[1]) > 100,
+    'ini bukti perbaikannya nyata, bukan dua nama untuk rumus yang sama');
+// atanKuadran sama dengan atan2 MODULO 2 PI, bukan sama persis: jangkauannya
+// (-PI/2, 3PI/2] sementara atan2 (-PI, PI]. Bedanya disengaja dan harus dicatat,
+// karena berpengaruh ke SOFT LIMIT: pose yang menjangkau ke belakang menghasilkan
+// theta1 sekitar +200 derajat, bukan -160. Dua-duanya pose yang sama, tapi yang
+// dibandingkan ke PD1300_003 (maks 180) angkanya - jadi batas atas kena, batas
+// bawah tidak. Kalau nanti perlu -160, normalisasinya ditambahkan SEKALI di FB dan
+// batasnya ikut ditinjau, bukan ditambal di pemanggil.
+chk('atanKuadran = Math.atan2 modulo 2 PI di keempat kuadran',
+    [[1, 1], [1, -1], [-1, -1], [-1, 1], [1, 0], [-1, 0]].every(([z, y]) => {
+      const d = Math.abs(K.atanKuadran(z, y) - Math.atan2(z, y));
+      return d < 1e-8 || Math.abs(d - 2 * Math.PI) < 1e-8;
+    }),
+    'dibangun dari ATAN karena ATAN2 tidak ada di daftar instruksi W560');
+chk('jangkauan atanKuadran (-PI/2, 3PI/2] - bukan jangkauan atan2',
+    K.atanKuadran(-1, -1) > Math.PI && Math.atan2(-1, -1) < 0,
+    'theta1 buat pose ke belakang keluar sebagai +200 derajat, bukan -160');
+
+// 3. Di luar jangkauan: DITOLAK, bukan NaN.
+const jauh2 = K.inverseKinematicV2([0, 5000, 5000, 0], cfg2, false);
+chk('V2: di luar jangkauan -> DONE FALSE + ERROR_ID 1', !jauh2.done && jauh2.errorId === 1);
+// Titik yang terlalu DEKAT: pergelangan cuma 10 mm dari bahu, sementara lengan
+// terpendek yang bisa dibentuk |L2-L3| = 50 mm. Pose sebelumnya ([0,0,L1,0]) salah
+// dipakai buat ini - pergelangannya justru jatuh 240 mm di belakang bahu, masih
+// terjangkau, jadi yang dilaporkan soft limit (4), bukan terlalu dekat (2).
+const dekat = K.inverseKinematicV2([0, cfg2.toolY + cfg2.L4 + 10, cfg2.L1, 0], cfg2, false);
+chk('V2: terlalu dekat -> ERROR_ID 2', !dekat.done && dekat.errorId === 2, 'ERROR_ID ' + dekat.errorId);
+
+// 4. DONE sekarang BERARTI sesuatu - itu perbaikan yang paling menentukan.
+const luarBatas = K.forwardKinematicV2([9999, 45, -60, 0], cfg2);
+const ikBatas = K.inverseKinematicV2(luarBatas.worldL, cfg2, false);
+chk('V2: soft limit ditembus -> DONE FALSE, ERROR_ID 4',
+    !ikBatas.done && ikBatas.errorId === 4 && ikBatas.limits[1] === true);
+chk('V2: sudutnya tetap dikeluarkan walau ditolak', isFinite(ikBatas.joint[1]),
+    'pemanggil bisa menunjukkan "seharusnya ke sini, ditolak batas"');
+const dalamBatas = K.inverseKinematicV2(K.forwardKinematicV2([100, 45, -60, 0], cfg2).worldL, cfg2, false);
+chk('V2: pose sah -> DONE TRUE', dalamBatas.done && dalamBatas.errorId === 0);
+
+// 5. FK V2 menghormati EXECUTE dan menulis DONE.
+chk('V2: FK EXECUTE=false -> DONE FALSE', K.forwardKinematicV2([0, 45, -60, 0], cfg2, false).done === false);
+chk('V2: FK EXECUTE=true -> DONE TRUE', K.forwardKinematicV2([0, 45, -60, 0], cfg2).done === true);
+
+// 6. Elbow up: cabang cermin yang di V1 tidak pernah ada.
+const poseE = K.forwardKinematicV2([0, 60, -80, 20], cfg2).worldL;
+const eDown = K.inverseKinematicV2(poseE, cfg2, false);
+const eUp = K.inverseKinematicV2(poseE, cfg2, true);
+chk('V2: elbow down = cabang mesin (theta2 negatif)', eDown.joint[2] < 0, eDown.joint[2].toFixed(1));
+chk('V2: elbow up = cermin (theta2 positif)', eUp.joint[2] > 0, eUp.joint[2].toFixed(1));
+chk('V2: dua-duanya sampai ke pose yang SAMA', (() => {
+  const a = K.forwardKinematicV2(eDown.joint, cfg2).worldL;
+  const b = K.forwardKinematicV2(eUp.joint, cfg2).worldL;
+  return a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+})(), 'kalau tidak, cabang cerminnya salah rumus - bukan solusi lain, tapi pose lain');
+
+// 7. Tool tanpa panjang: V2 tidak lagi mengarang sudut 90 derajat.
+const t0 = K.toolPolarV2({ toolY: 0, toolZ: 0 });
+chk('V2: tool panjang nol -> sudutnya nol, bukan 90 derajat', t0.r === 0 && t0.theta === 0,
+    'V1 memaksa Y jadi 1e-15, dan itu bikin THETA_TOOL melompat ke ~90');
+chk('V2: tool arah -Y dibedakan dari +Y',
+    Math.abs(K.toolPolarV2({ toolY: -50, toolZ: 0 }).theta - K.KIN_PI) < 1e-8,
+    'ATAN polos memberi 0 untuk dua-duanya');
+
 console.log(fail ? 'GAGAL ' + fail : 'LULUS');
 process.exit(fail ? 1 : 0);

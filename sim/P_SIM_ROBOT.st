@@ -1,17 +1,20 @@
 // P_SIM_ROBOT - program simulasi robot Blurobot untuk simulator Sysmac Studio.
 //
-// Ditempel ke project NX102 KOSONG bersama dua FB dari blurobot/extract/. Langkah
-// lengkapnya di SETUP.md. Yang perlu diingat sebelum menyunting berkas ini:
+// Ditempel ke project NX102 KOSONG bersama FORWARD_KINEMATIC_V2 dan
+// INVERSE_KINEMATIC_V2. Langkah lengkapnya di SETUP.md. Yang perlu diingat sebelum
+// menyunting berkas ini:
 //
-//   * Rumus kinematiknya TIDAK ada di sini. Semuanya di FORWARD_KINEMATIC dan
-//     INVERSE_KINEMATIC, verbatim dari project mesin. Program ini cuma PEMANGGIL.
-//   * Penjaga jangkauan (REACH_OK) memang ada di pemanggil, bukan di dalam FB.
-//     FB-nya sengaja dibiarkan identik dengan yang jalan di mesin, dan tanpa
-//     penjaga ini ACOS di dalam IK dapat argumen > 1 -> error runtime di PLC.
-//   * Soft limit dihitung ULANG di sini. Di FB aslinya hasilnya dibuang: rantai
-//     IF/ELSIF/ELSE menulis DONE:=TRUE di semua cabang. Lihat extract/ANALYSIS.md.
+//   * Rumus kinematiknya TIDAK ada di sini - semuanya di dua FB itu. Program ini
+//     cuma PEMANGGIL: tombol, target, motion model, gripper.
+//   * FB yang dipakai versi V2 (sudah dibetulkan). Yang verbatim dari mesin ada di
+//     ../extract/ dan sengaja TIDAK di-instance - dia catatan, bukan bagian sim.
+//     Daftar bedanya di ../extract/ANALYSIS.md dan di kepala kedua berkas V2.
+//   * Penjaga jangkauan ADA DI DALAM IK V2, bukan di sini. Program cuma membaca
+//     DONE dan ERROR_ID-nya. Dua penjaga untuk satu hal pasti berbeda pendapat.
 //   * TIDAK ada MC_* sama sekali. Posisi sumbu diintegrasi sendiri, jadi project
 //     sim tidak butuh setting axis, axes group, maupun EtherCAT.
+//   * TCP di UJUNG JARI gripper: panjang gripper sudah dijumlahkan ke
+//     ROBOT_TOOL_Y_LREAL waktu blok init dibangkitkan. Jangan menjumlahkannya lagi.
 //
 // Satuan: sumbu 0 mm (rel linear), sumbu 1-3 derajat (rantai planar di bidang Y-Z).
 
@@ -30,8 +33,15 @@ IF NOT SIM_INIT_DONE THEN
 	ROBOT_L2_LREAL := 300.0;
 	ROBOT_L3_LREAL := 250.0;
 	ROBOT_L4_LREAL := 100.0;
-	ROBOT_TOOL_Y_LREAL := 50.0;
+
+	// tool.Y (50.0) + gripper.panjang (90.0) - TCP di ujung jari
+	ROBOT_TOOL_Y_LREAL := 140.0;
 	ROBOT_TOOL_Z_LREAL := 0.0;
+
+	SIM_GRIP_LEN := 90.0;
+	SIM_GRIP_STROKE := 80.0;
+	SIM_GRIP_VEL := 120.0;
+	SIM_GRIP_POS := 80.0;
 
 	ROBOT_ROBOT_ORG_OFFSET_LREAL[0] := 0.0;
 	ROBOT_ROBOT_ORG_OFFSET_LREAL[1] := 0.0;
@@ -165,48 +175,44 @@ ELSIF EDGE_HOME THEN
 	END_FOR;
 END_IF;
 
-// --------------------------------------------------- penjaga jangkauan + IK
+// ------------------------------------------------------ inverse kinematic
+// Penjaga jangkauan ADA DI DALAM INVERSE_KINEMATIC_V2, bukan di sini lagi. Dulu
+// program ini menghitung sendiri Y3/Z3/R buat memutuskan boleh atau tidak - dua
+// penjaga untuk satu hal, dan yang di luar tidak pernah tahu rumus di dalam. Yang
+// dipakai sekarang jawaban FB-nya sendiri: DONE, ERROR_ID.
 IF NEED_IK THEN
-	// Hitungan tool yang sama dengan di dalam FB, tapi TANPA menulis balik ke
-	// ROBOT_TOOL_Y_LREAL. FB aslinya memang menimpa variabel globalnya sendiri
-	// waktu toolY = 0; ditiru di sini, efeknya jadi permanen tanpa ada yang minta.
-	IF ROBOT_TOOL_Y_LREAL = 0.0 THEN
-		R_TOOL := ABS(ROBOT_TOOL_Z_LREAL);
-		TH_TOOL := PI / 2.0;
-	ELSE
-		R_TOOL := SQRT(ROBOT_TOOL_Y_LREAL * ROBOT_TOOL_Y_LREAL + ROBOT_TOOL_Z_LREAL * ROBOT_TOOL_Z_LREAL);
-		TH_TOOL := ATAN(ROBOT_TOOL_Z_LREAL / ROBOT_TOOL_Y_LREAL);
-	END_IF;
-
-	TH := POSE_REQ[3] * DEGREE_TO_RAD;
-	Y3 := (POSE_REQ[1] - R_TOOL * COS(TH_TOOL + TH)) - ROBOT_L4_LREAL * COS(TH);
-	Z3 := ((POSE_REQ[2] - R_TOOL * SIN(TH_TOOL + TH)) - ROBOT_L1_LREAL) - ROBOT_L4_LREAL * SIN(TH);
-	RR := SQRT(Y3 * Y3 + Z3 * Z3);
-
-	// Tiga syarat, tiga sebab yang beda:
-	//   Y3 = 0   -> ATAN(Z3/Y3) bagi nol
-	//   Y3 < 0   -> ATAN kehilangan kuadran, hasilnya meleset 180 derajat
-	//   RR       -> ACOS dapat argumen > 1 kalau titiknya di luar jangkauan
-	REACH_OK := (Y3 > 0.0)
-		AND (RR <= (ROBOT_L2_LREAL + ROBOT_L3_LREAL))
-		AND (RR >= ABS(ROBOT_L2_LREAL - ROBOT_L3_LREAL))
-		AND (RR > 0.0);
-
-	IF REACH_OK THEN
-		IK1(EXECUTE := TRUE, ROBOT_POS_INPUT := POSE_REQ);
+	IK2(EXECUTE := TRUE, ROBOT_POS_INPUT := POSE_REQ, ELBOW_UP := SIM_ELBOW_UP);
+	IF IK2.DONE THEN
 		FOR i := 0 TO 3 DO
-			SIM_JOINT_CMD[i] := IK1.ROBOT_POS_OUTPUT[i];
+			SIM_JOINT_CMD[i] := IK2.ROBOT_POS_OUTPUT[i];
 		END_FOR;
 		SIM_ERROR := FALSE;
 		SIM_ERROR_ID := 0;
 	ELSE
-		// Perintahnya DIBUANG, posisi sekarang dipertahankan. Menjalankan IK di
-		// sini tetap menghasilkan angka - angka yang salah - dan lengan di layar
-		// melompat ke pose yang robotnya tidak pernah bisa capai.
+		// Perintahnya DIBUANG, posisi sekarang dipertahankan. Memakai keluaran FB
+		// yang DONE-nya FALSE berarti lengan melompat ke pose yang robotnya tidak
+		// pernah bisa capai - dan di layar itu tampak seperti gerakan biasa.
 		SIM_ERROR := TRUE;
-		IF Y3 <= 0.0 THEN SIM_ERROR_ID := 2; ELSE SIM_ERROR_ID := 1; END_IF;
+		SIM_ERROR_ID := IK2.ERROR_ID;
 	END_IF;
 END_IF;
+
+// ------------------------------------------------------------------ gripper
+// Dua jari, bukaan = jarak antar jari. Modelnya sama dengan sumbu: didorong ke
+// target dengan batas kecepatan. Panjang gripper TIDAK diurus di sini - dia sudah
+// ikut di ROBOT_TOOL_Y_LREAL, jadi TCP kinematiknya memang di ujung jari.
+IF SIM_GRIP_CMD THEN GRIP_TARGET := 0.0; ELSE GRIP_TARGET := SIM_GRIP_STROKE; END_IF;
+D := GRIP_TARGET - SIM_GRIP_POS;
+STEP_M := SIM_GRIP_VEL * SIM_DT;
+IF ABS(D) <= STEP_M THEN
+	SIM_GRIP_POS := GRIP_TARGET;
+ELSIF D > 0.0 THEN
+	SIM_GRIP_POS := SIM_GRIP_POS + STEP_M;
+ELSE
+	SIM_GRIP_POS := SIM_GRIP_POS - STEP_M;
+END_IF;
+SIM_GRIP_CLOSED := SIM_GRIP_POS <= 0.0;
+SIM_GRIP_OPEN := SIM_GRIP_POS >= SIM_GRIP_STROKE;
 
 // ------------------------------------------------------------ motion model
 // Pengganti MC_*: tiap sumbu didorong ke target dengan batas kecepatan sendiri.
@@ -228,17 +234,19 @@ END_FOR;
 SIM_MOVE_DONE := NOT SIM_BUSY;
 
 // ------------------------------------------------------ forward kinematic + batas
-// FK dipanggil TIAP SCAN. EXECUTE-nya memang tidak berpengaruh: badan FB tidak
-// pernah membacanya, dan DONE-nya tidak pernah ditulis. Lihat extract/ANALYSIS.md.
-FK1(EXECUTE := TRUE, ROBOT_POS_INPUT := SIM_JOINT_POS);
+// FK dipanggil TIAP SCAN dengan EXECUTE TRUE. Di V2 pin itu benar-benar dibaca
+// (di V1 tidak), jadi menaruh FALSE di sini berarti pose world berhenti diperbarui -
+// lengan tetap bergerak, angkanya membeku.
+FK2(EXECUTE := TRUE, ROBOT_POS_INPUT := SIM_JOINT_POS);
 FOR i := 0 TO 3 DO
-	SIM_WORLD_POS[i] := FK1.ROBOT_POS_WORLD_OUTPUT[i];
-	SIM_JOINT_OUT[i] := FK1.ROBOT_POS_JOINT_OUTPUT[i];
+	SIM_WORLD_POS[i] := FK2.ROBOT_POS_WORLD_OUTPUT[i];
+	SIM_JOINT_OUT[i] := FK2.ROBOT_POS_JOINT_OUTPUT[i];
 END_FOR;
 
-// Pemeriksaan yang di FB aslinya dihitung lalu dibuang. Perbandingannya dibuat
-// PERSIS seperti di ST asli, min+1 dan max-1 termasuk - satu satuan di tiap ujung
-// memang sengaja tidak terpakai di sana.
+// Batas dinilai atas posisi SEKARANG, bukan atas pose yang diminta - yang diminta
+// sudah dinilai IK V2 sendiri lewat LIMIT_HIT. Dua-duanya perlu: yang satu menolak
+// perintah, yang satu memberi tahu di mana lengannya berdiri sekarang.
+// Perbandingannya sama persis dengan ST asli (min+1 dan max-1).
 SIM_LIMIT[0] := SIM_JOINT_POS[0] < (REAL_TO_LREAL(PD1300_000) + 1.0);
 SIM_LIMIT[1] := SIM_JOINT_POS[0] > (REAL_TO_LREAL(PD1300_001) - 1.0);
 SIM_LIMIT[2] := SIM_JOINT_POS[1] < (REAL_TO_LREAL(PD1300_002) + 1.0);

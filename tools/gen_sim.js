@@ -71,28 +71,41 @@ const GLOBAL_SIM = [
   ['SIM_BUSY', 'BOOL', 'R', 'masih ada sumbu yang bergerak'],
 
   ['SIM_LIMIT', 'ARRAY[0..7] OF BOOL', 'R', 'soft limit yang KENA - pasangan min/max per sumbu'],
-  ['SIM_ERROR', 'BOOL', 'R', 'perintah terakhir ditolak penjaga jangkauan'],
-  ['SIM_ERROR_ID', 'INT', 'R', '0 tidak ada, 1 di luar jangkauan, 2 Y3 <= 0 (ATAN kehilangan kuadran)']
+  ['SIM_ERROR', 'BOOL', 'R', 'perintah terakhir ditolak'],
+  ['SIM_ERROR_ID', 'INT', 'R', '0 tidak ada, 1 di luar jangkauan, 2 terlalu dekat, 3 singular, 4 soft limit'],
+  ['SIM_ELBOW_UP', 'BOOL', 'RW',
+    'FALSE = cabang elbow yang sama dengan mesin. TRUE = cermin, cuma ada di FB V2'],
+
+  ['SIM_GRIP_CMD', 'BOOL', 'RW', 'TRUE tutup, FALSE buka'],
+  ['SIM_GRIP_POS', 'LREAL', 'R', 'bukaan sekarang - jarak antar jari, mm'],
+  ['SIM_GRIP_STROKE', 'LREAL', 'RW', 'bukaan penuh, mm'],
+  ['SIM_GRIP_VEL', 'LREAL', 'RW', 'kecepatan jari, mm/s'],
+  ['SIM_GRIP_OPEN', 'BOOL', 'R', 'jari sudah terbuka penuh'],
+  ['SIM_GRIP_CLOSED', 'BOOL', 'R', 'jari sudah menutup rapat'],
+  ['SIM_GRIP_LEN', 'LREAL', 'R', 'panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz']
 ];
 
 // ------------------------------------------------------ variabel lokal program
+// FB yang dipakai sim itu yang V2 - yang sudah dibetulkan. Yang V1 (di extract/)
+// tetap ada sebagai catatan apa yang jalan di mesin, dan tidak di-instance di sini:
+// instance yang tidak dipakai tetap memakan memori dan bikin orang mengira dua-duanya
+// ikut menentukan gerakan.
+//
+// Penjaga jangkauan yang dulu di program (REACH_OK, Y3, Z3, RR, R_TOOL, TH_TOOL)
+// SUDAH PINDAH ke dalam INVERSE_KINEMATIC_V2. Dua penjaga untuk satu hal pasti
+// berbeda pendapat suatu hari, dan yang di luar tidak pernah tahu rumus di dalam.
 const LOKAL = [
-  ['FK1', 'FORWARD_KINEMATIC', 'instance FB dari extract/ - JANGAN diganti isinya'],
-  ['IK1', 'INVERSE_KINEMATIC', 'instance FB dari extract/ - JANGAN diganti isinya'],
+  ['FK2', 'FORWARD_KINEMATIC_V2', 'instance FB kinematik maju yang sudah dibetulkan'],
+  ['IK2', 'INVERSE_KINEMATIC_V2', 'instance FB kinematik balik yang sudah dibetulkan'],
   ['i', 'INT', 'pencacah FOR'],
   ['AX', 'INT', 'sumbu yang tombolnya sedang ditekan, -1 kalau tidak ada'],
   ['DELTA', 'LREAL', 'besar langkah jog scan ini, sudah bertanda'],
-  ['POSE_REQ', 'ARRAY[0..3] OF LREAL', 'pose world yang diminta, sebelum diperiksa penjaga'],
+  ['POSE_REQ', 'ARRAY[0..3] OF LREAL', 'pose world yang diminta'],
   ['NEED_IK', 'BOOL', 'permintaan scan ini perlu inverse kinematic'],
-  ['REACH_OK', 'BOOL', 'pose diminta lolos penjaga jangkauan'],
-  ['TH', 'LREAL', 'theta_EE radian'],
-  ['TH_TOOL', 'LREAL', 'sudut tool polar'],
-  ['R_TOOL', 'LREAL', 'jarak tool polar'],
-  ['Y3', 'LREAL', 'titik pergelangan sebelum tool dan L4'],
-  ['Z3', 'LREAL', 'titik pergelangan sebelum tool dan L4'],
-  ['RR', 'LREAL', 'jarak bahu ke pergelangan'],
+  ['TH', 'LREAL', 'theta_EE radian, buat jog mode tool'],
   ['STEP_M', 'LREAL', 'langkah motion model satu scan'],
   ['D', 'LREAL', 'sisa jarak ke target'],
+  ['GRIP_TARGET', 'LREAL', 'bukaan gripper yang dituju'],
   ['LAST_P', 'ARRAY[0..3] OF BOOL', 'keadaan tombol plus scan sebelumnya'],
   ['LAST_N', 'ARRAY[0..3] OF BOOL', 'keadaan tombol minus scan sebelumnya'],
   ['EDGE_P', 'ARRAY[0..3] OF BOOL', 'tepi naik tombol plus'],
@@ -103,6 +116,50 @@ const LOKAL = [
   ['EDGE_HOME', 'BOOL', 'tepi naik SIM_HOME_EXEC']
 ];
 
+// ------------------------------------------- tabel variabel kedua FB V2
+// Ditulis di sini, bukan diketik ulang di Studio: susunan pin FB itu yang dicocokkan
+// Studio ke pemanggilnya, dan satu nama yang meleset menghasilkan (DefinitionError)
+// yang pesannya tidak menyebut pin mana.
+const FB_EXT_UMUM = [
+  ['ROBOT_L1_LREAL', 'LREAL'], ['ROBOT_L2_LREAL', 'LREAL'],
+  ['ROBOT_L3_LREAL', 'LREAL'], ['ROBOT_L4_LREAL', 'LREAL'],
+  ['ROBOT_TOOL_Y_LREAL', 'LREAL'], ['ROBOT_TOOL_Z_LREAL', 'LREAL'],
+  ['PI', 'LREAL'], ['DEGREE_TO_RAD', 'LREAL']
+];
+
+const FB_V2 = [
+  {
+    nama: 'FORWARD_KINEMATIC_V2',
+    IN: [['EXECUTE', 'BOOL'], ['ROBOT_POS_INPUT', 'ARRAY[0..3] OF LREAL']],
+    OUT: [['DONE', 'BOOL'], ['ROBOT_POS_JOINT_OUTPUT', 'ARRAY[0..3] OF REAL'],
+          ['ROBOT_POS_WORLD_OUTPUT', 'ARRAY[0..3] OF REAL'],
+          ['WORLD_LREAL', 'ARRAY[0..3] OF LREAL']],
+    VAR: [['TY', 'LREAL'], ['TZ', 'LREAL'], ['R_TOOL', 'LREAL'], ['TH_TOOL', 'LREAL'],
+          ['A1', 'LREAL'], ['A2', 'LREAL'], ['A3', 'LREAL'],
+          ['WY', 'LREAL'], ['WZ', 'LREAL'], ['I', 'INT']],
+    EXT: FB_EXT_UMUM
+  },
+  {
+    nama: 'INVERSE_KINEMATIC_V2',
+    IN: [['EXECUTE', 'BOOL'], ['ROBOT_POS_INPUT', 'ARRAY[0..3] OF LREAL'], ['ELBOW_UP', 'BOOL']],
+    OUT: [['DONE', 'BOOL'], ['ERROR', 'BOOL'], ['ERROR_ID', 'INT'],
+          ['ROBOT_POS_OUTPUT', 'ARRAY[0..3] OF LREAL'],
+          ['LIMIT_HIT', 'ARRAY[0..7] OF BOOL'], ['LIMIT_ANY', 'BOOL']],
+    VAR: [['TY', 'LREAL'], ['TZ', 'LREAL'], ['R_TOOL', 'LREAL'], ['TH_TOOL', 'LREAL'],
+          ['TH_EE', 'LREAL'], ['Y_EE', 'LREAL'], ['Z_EE', 'LREAL'],
+          ['Y3', 'LREAL'], ['Z3', 'LREAL'], ['R', 'LREAL'],
+          ['BETA', 'LREAL'], ['GAMMA', 'LREAL'], ['ALFA', 'LREAL'],
+          ['THETA_RAD1', 'LREAL'], ['THETA_RAD2', 'LREAL'], ['THETA_RAD3', 'LREAL'],
+          ['THETA_DEGREE1', 'LREAL'], ['THETA_DEGREE2', 'LREAL'], ['THETA_DEGREE3', 'LREAL'],
+          ['I', 'INT']],
+    EXT: FB_EXT_UMUM.concat([
+      ['RAD_TO_DEGREE', 'LREAL'], ['ROBOT_ROBOT_ORG_OFFSET_LREAL', 'ARRAY[0..4] OF LREAL'],
+      ['PD1300_000', 'REAL'], ['PD1300_001', 'REAL'], ['PD1300_002', 'REAL'], ['PD1300_003', 'REAL'],
+      ['PD1300_004', 'REAL'], ['PD1300_005', 'REAL'], ['PD1300_006', 'REAL'], ['PD1300_007', 'REAL']
+    ])
+  }
+];
+
 function blokInit(cfg) {
   const L = [];
   const t = s => '\t' + s;
@@ -110,9 +167,22 @@ function blokInit(cfg) {
   L.push(t('ROBOT_L2_LREAL := ' + lreal(cfg.link.L2) + ';'));
   L.push(t('ROBOT_L3_LREAL := ' + lreal(cfg.link.L3) + ';'));
   L.push(t('ROBOT_L4_LREAL := ' + lreal(cfg.link.L4) + ';'));
+  L.push('');
   // ROBOT_TOOL_X TIDAK diikutkan: tidak ada satu rumus pun yang membacanya.
-  L.push(t('ROBOT_TOOL_Y_LREAL := ' + lreal(cfg.tool.Y) + ';'));
+  //
+  // Panjang gripper dijumlahkan DI SINI, satu kali, supaya TCP berada di ujung jari
+  // dan FK/IK memang menghitung sampai situ. Kalau dijumlahkan lagi di tempat lain
+  // (viz, config, atau rung), lengannya panjang dua kali gripper - dan itu tidak
+  // kelihatan salah di layar, cuma meleset beberapa sentimeter.
+  L.push(t('// tool.Y (' + lreal(cfg.tool.Y) + ') + gripper.panjang ('
+    + lreal(cfg.gripper.panjang) + ') - TCP di ujung jari'));
+  L.push(t('ROBOT_TOOL_Y_LREAL := ' + lreal(cfg.tool.Y + cfg.gripper.panjang) + ';'));
   L.push(t('ROBOT_TOOL_Z_LREAL := ' + lreal(cfg.tool.Z) + ';'));
+  L.push('');
+  L.push(t('SIM_GRIP_LEN := ' + lreal(cfg.gripper.panjang) + ';'));
+  L.push(t('SIM_GRIP_STROKE := ' + lreal(cfg.gripper.stroke) + ';'));
+  L.push(t('SIM_GRIP_VEL := ' + lreal(cfg.gripper.kecepatan) + ';'));
+  L.push(t('SIM_GRIP_POS := ' + lreal(cfg.gripper.bukaan_awal) + ';'));
   L.push('');
   cfg.offset.nilai.forEach((v, i) => {
     L.push(t('ROBOT_ROBOT_ORG_OFFSET_LREAL[' + i + '] := ' + lreal(v) + ';'));
@@ -195,7 +265,20 @@ function main() {
   };
   const tagsJson = JSON.stringify(tags, null, 2) + '\n';
 
-  const berkas = [[ST, st], [GTSV, gtsv], [PTSV, ptsv], [TAGS, tagsJson]];
+  // Tabel variabel tiap FB V2, satu berkas per FB. Ditempel ke tabel variabel FB-nya
+  // di Studio; VAR_INPUT/VAR_OUTPUT ditulis dengan urutan Ord yang sama dengan
+  // urutan pin di sini, karena itu yang menentukan bentuk kotaknya di ladder.
+  const fbTsv = FB_V2.map(fb => {
+    const b = [];
+    const blok = (grup, list) => list.forEach(r => b.push([r[0], r[1], '', grup].join('\t')));
+    blok('VAR_INPUT', fb.IN);
+    blok('VAR_OUTPUT', fb.OUT);
+    blok('VAR', fb.VAR);
+    blok('VAR_EXTERNAL', fb.EXT);
+    return [path.join(SIM, fb.nama + '.vars.tsv'), b.join('\n') + '\n'];
+  });
+
+  const berkas = [[ST, st], [GTSV, gtsv], [PTSV, ptsv], [TAGS, tagsJson]].concat(fbTsv);
   if (cek) {
     const basi = berkas.filter(([p, isi]) => !fs.existsSync(p) || fs.readFileSync(p, 'utf8') !== isi);
     if (basi.length) {
