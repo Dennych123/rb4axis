@@ -1,0 +1,18 @@
+DEGREE_TO_RAD	LREAL	0.017453292		False	True	Do not publish	
+PD1300_000	REAL			True	False	Do not publish	
+PD1300_001	REAL			True	False	Do not publish	
+PD1300_002	REAL			True	False	Do not publish	
+PD1300_003	REAL			True	False	Do not publish	
+PD1300_004	REAL			True	False	Do not publish	
+PD1300_005	REAL			True	False	Do not publish	
+PD1300_006	REAL			True	False	Do not publish	
+PD1300_007	REAL			True	False	Do not publish	
+PI	LREAL	3.141592654		False	True	Do not publish	
+RAD_TO_DEGREE	LREAL	57.29577951		False	True	Do not publish	
+ROBOT_L1_LREAL	LREAL			False	False	Do not publish	
+ROBOT_L2_LREAL	LREAL			False	False	Do not publish	
+ROBOT_L3_LREAL	LREAL			False	False	Do not publish	
+ROBOT_L4_LREAL	LREAL			False	False	Do not publish	
+ROBOT_ROBOT_ORG_OFFSET_LREAL	ARRAY[0..4] OF LREAL			False	False	Do not publish	
+ROBOT_TOOL_Y_LREAL	LREAL			False	False	Do not publish	
+ROBOT_TOOL_Z_LREAL	LREAL			False	False	Do not publish	

@@ -1,0 +1,42 @@
+SIM_INIT_DONE	BOOL			False	False	Do not publish	sudah diinisialisasi dari config
+SIM_RESET	BOOL			False	False	Do not publish	tulis TRUE: paksa init ulang dari nilai config
+SIM_DT	LREAL			False	False	Do not publish	periode task primer detik - HARUS sama dengan setelan task di Studio
+SIM_HEARTBEAT	UDINT			False	False	Do not publish	naik tiap scan - bukti program sim benar-benar jalan
+SIM_JOINT_POS	ARRAY[0..3] OF LREAL			False	False	Do not publish	posisi sumbu sekarang: X mm, theta1-3 derajat
+SIM_JOINT_CMD	ARRAY[0..3] OF LREAL			False	False	Do not publish	target sumbu yang dikejar motion model
+SIM_JOINT_OUT	ARRAY[0..3] OF REAL			False	False	Do not publish	keluaran joint FORWARD_KINEMATIC
+SIM_WORLD_POS	ARRAY[0..3] OF REAL			False	False	Do not publish	pose world hasil FK: X Y Z theta_EE - sudah termasuk tool
+SIM_WORLD_CMD	ARRAY[0..3] OF LREAL			False	False	Do not publish	target move point: X Y Z theta_EE
+SIM_JOG_MODE	INT			False	False	Do not publish	0 joint / 1 world / 2 tool
+SIM_JOG_HOLD	BOOL			False	False	Do not publish	TRUE: tahan-jalan (tambahan viz). FALSE: satu langkah per tekan, seperti mesin
+SIM_JOG_STEP	LREAL			False	False	Do not publish	besar satu langkah jog - mm atau derajat
+SIM_JOG_P	ARRAY[0..3] OF BOOL			False	False	Do not publish	tombol jog arah plus per sumbu
+SIM_JOG_N	ARRAY[0..3] OF BOOL			False	False	Do not publish	tombol jog arah minus per sumbu
+SIM_MOVE_EXEC	BOOL			False	False	Do not publish	tepi naik: jalankan move ke SIM_WORLD_CMD
+SIM_MOVE_DONE	BOOL			False	False	Do not publish	semua sumbu sudah sampai target
+SIM_HOME_EXEC	BOOL			False	False	Do not publish	tepi naik: kembali ke pose home
+SIM_HOME	ARRAY[0..3] OF LREAL			False	False	Do not publish	pose home per sumbu
+SIM_VEL	ARRAY[0..3] OF LREAL			False	False	Do not publish	kecepatan maksimum per sumbu - mm/s atau derajat/s
+SIM_VEL_W	ARRAY[0..3] OF LREAL			False	False	Do not publish	kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE
+SIM_BUSY	BOOL			False	False	Do not publish	masih ada sumbu yang bergerak
+SIM_LIMIT	ARRAY[0..7] OF BOOL			False	False	Do not publish	soft limit yang KENA - pasangan min/max per sumbu
+SIM_ERROR	BOOL			False	False	Do not publish	perintah terakhir ditolak penjaga jangkauan
+SIM_ERROR_ID	INT			False	False	Do not publish	0 tidak ada, 1 di luar jangkauan, 2 Y3 <= 0 (ATAN kehilangan kuadran)
+DEGREE_TO_RAD	LREAL	0.017453292		False	True	Do not publish	
+PD1300_000	REAL			True	False	Do not publish	
+PD1300_001	REAL			True	False	Do not publish	
+PD1300_002	REAL			True	False	Do not publish	
+PD1300_003	REAL			True	False	Do not publish	
+PD1300_004	REAL			True	False	Do not publish	
+PD1300_005	REAL			True	False	Do not publish	
+PD1300_006	REAL			True	False	Do not publish	
+PD1300_007	REAL			True	False	Do not publish	
+PI	LREAL	3.141592654		False	True	Do not publish	
+RAD_TO_DEGREE	LREAL	57.29577951		False	True	Do not publish	
+ROBOT_L1_LREAL	LREAL			False	False	Do not publish	
+ROBOT_L2_LREAL	LREAL			False	False	Do not publish	
+ROBOT_L3_LREAL	LREAL			False	False	Do not publish	
+ROBOT_L4_LREAL	LREAL			False	False	Do not publish	
+ROBOT_ROBOT_ORG_OFFSET_LREAL	ARRAY[0..4] OF LREAL			False	False	Do not publish	
+ROBOT_TOOL_Y_LREAL	LREAL			False	False	Do not publish	
+ROBOT_TOOL_Z_LREAL	LREAL			False	False	Do not publish	

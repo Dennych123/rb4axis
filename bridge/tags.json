@@ -1,0 +1,314 @@
+{
+  "_catatan": "DIBANGKITKAN tools/gen_sim.js - jangan sunting tangan. Path OPC UA = prefix + nama.",
+  "endpoint": "opc.tcp://127.0.0.1:4840",
+  "prefix": "GlobalVars.",
+  "baca": [
+    {
+      "nama": "SIM_INIT_DONE",
+      "tipe": "BOOL",
+      "komen": "sudah diinisialisasi dari config"
+    },
+    {
+      "nama": "SIM_DT",
+      "tipe": "LREAL",
+      "komen": "periode task primer detik - HARUS sama dengan setelan task di Studio"
+    },
+    {
+      "nama": "SIM_HEARTBEAT",
+      "tipe": "UDINT",
+      "komen": "naik tiap scan - bukti program sim benar-benar jalan"
+    },
+    {
+      "nama": "SIM_JOINT_POS",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "posisi sumbu sekarang: X mm, theta1-3 derajat"
+    },
+    {
+      "nama": "SIM_JOINT_CMD",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "target sumbu yang dikejar motion model"
+    },
+    {
+      "nama": "SIM_JOINT_OUT",
+      "tipe": "ARRAY[0..3] OF REAL",
+      "komen": "keluaran joint FORWARD_KINEMATIC"
+    },
+    {
+      "nama": "SIM_WORLD_POS",
+      "tipe": "ARRAY[0..3] OF REAL",
+      "komen": "pose world hasil FK: X Y Z theta_EE - sudah termasuk tool"
+    },
+    {
+      "nama": "SIM_WORLD_CMD",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "target move point: X Y Z theta_EE"
+    },
+    {
+      "nama": "SIM_JOG_MODE",
+      "tipe": "INT",
+      "komen": "0 joint / 1 world / 2 tool"
+    },
+    {
+      "nama": "SIM_JOG_HOLD",
+      "tipe": "BOOL",
+      "komen": "TRUE: tahan-jalan (tambahan viz). FALSE: satu langkah per tekan, seperti mesin"
+    },
+    {
+      "nama": "SIM_JOG_STEP",
+      "tipe": "LREAL",
+      "komen": "besar satu langkah jog - mm atau derajat"
+    },
+    {
+      "nama": "SIM_MOVE_DONE",
+      "tipe": "BOOL",
+      "komen": "semua sumbu sudah sampai target"
+    },
+    {
+      "nama": "SIM_HOME",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "pose home per sumbu"
+    },
+    {
+      "nama": "SIM_VEL",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "kecepatan maksimum per sumbu - mm/s atau derajat/s"
+    },
+    {
+      "nama": "SIM_VEL_W",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE"
+    },
+    {
+      "nama": "SIM_BUSY",
+      "tipe": "BOOL",
+      "komen": "masih ada sumbu yang bergerak"
+    },
+    {
+      "nama": "SIM_LIMIT",
+      "tipe": "ARRAY[0..7] OF BOOL",
+      "komen": "soft limit yang KENA - pasangan min/max per sumbu"
+    },
+    {
+      "nama": "SIM_ERROR",
+      "tipe": "BOOL",
+      "komen": "perintah terakhir ditolak penjaga jangkauan"
+    },
+    {
+      "nama": "SIM_ERROR_ID",
+      "tipe": "INT",
+      "komen": "0 tidak ada, 1 di luar jangkauan, 2 Y3 <= 0 (ATAN kehilangan kuadran)"
+    },
+    {
+      "nama": "PD1300_000",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_001",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_002",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_003",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_004",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_005",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_006",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_007",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_L1_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_L2_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_L3_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_L4_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_ROBOT_ORG_OFFSET_LREAL",
+      "tipe": "ARRAY[0..4] OF LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_TOOL_Y_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_TOOL_Z_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    }
+  ],
+  "tulis": [
+    {
+      "nama": "SIM_RESET",
+      "tipe": "BOOL",
+      "komen": "tulis TRUE: paksa init ulang dari nilai config"
+    },
+    {
+      "nama": "SIM_WORLD_CMD",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "target move point: X Y Z theta_EE"
+    },
+    {
+      "nama": "SIM_JOG_MODE",
+      "tipe": "INT",
+      "komen": "0 joint / 1 world / 2 tool"
+    },
+    {
+      "nama": "SIM_JOG_HOLD",
+      "tipe": "BOOL",
+      "komen": "TRUE: tahan-jalan (tambahan viz). FALSE: satu langkah per tekan, seperti mesin"
+    },
+    {
+      "nama": "SIM_JOG_STEP",
+      "tipe": "LREAL",
+      "komen": "besar satu langkah jog - mm atau derajat"
+    },
+    {
+      "nama": "SIM_JOG_P",
+      "tipe": "ARRAY[0..3] OF BOOL",
+      "komen": "tombol jog arah plus per sumbu"
+    },
+    {
+      "nama": "SIM_JOG_N",
+      "tipe": "ARRAY[0..3] OF BOOL",
+      "komen": "tombol jog arah minus per sumbu"
+    },
+    {
+      "nama": "SIM_MOVE_EXEC",
+      "tipe": "BOOL",
+      "komen": "tepi naik: jalankan move ke SIM_WORLD_CMD"
+    },
+    {
+      "nama": "SIM_HOME_EXEC",
+      "tipe": "BOOL",
+      "komen": "tepi naik: kembali ke pose home"
+    },
+    {
+      "nama": "SIM_HOME",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "pose home per sumbu"
+    },
+    {
+      "nama": "SIM_VEL",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "kecepatan maksimum per sumbu - mm/s atau derajat/s"
+    },
+    {
+      "nama": "SIM_VEL_W",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE"
+    },
+    {
+      "nama": "PD1300_000",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_001",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_002",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_003",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_004",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_005",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_006",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "PD1300_007",
+      "tipe": "REAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_L1_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_L2_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_L3_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_L4_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_ROBOT_ORG_OFFSET_LREAL",
+      "tipe": "ARRAY[0..4] OF LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_TOOL_Y_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    },
+    {
+      "nama": "ROBOT_TOOL_Z_LREAL",
+      "tipe": "LREAL",
+      "komen": "external FB"
+    }
+  ]
+}

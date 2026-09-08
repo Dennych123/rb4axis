@@ -1,0 +1,58 @@
+{
+  "_catatan": [
+    "NILAI DIMENSI DI SINI PLACEHOLDER - project mesin TIDAK menyimpannya.",
+    "ROBOT_L1..L4 dan ROBOT_TOOL_* di project asli variabel retain yang diisi dari HMI",
+    "(Pro-face .prx), dan tidak pernah ditulis satu rung pun. Sudah dicek lewat semua pin",
+    "blok fungsi di 1219 rung. Ganti angkanya di SINI: satu tempat, dan viz 3D ikut karena",
+    "panjang link dibaca viz dari tag PLC, bukan dari halaman.",
+    "Satuan: mm untuk panjang dan sumbu 0 (linear), derajat untuk sumbu 1-3 (revolute)."
+  ],
+
+  "link": {
+    "L1": 400.0,
+    "L2": 300.0,
+    "L3": 250.0,
+    "L4": 100.0
+  },
+
+  "tool": {
+    "_catatan": "X tidak dipakai rumus mana pun; tool digeser polar dari Y dan Z saja. toolY=0 memicu penjaga bagi-nol di ST (dipaksa 1e-15) yang bikin THETA_TOOL jadi ~90 derajat - hindari 0 kecuali memang mau menguji cabang itu.",
+    "X": 0.0,
+    "Y": 50.0,
+    "Z": 0.0
+  },
+
+  "offset": {
+    "_catatan": "ROBOT_ROBOT_ORG_OFFSET_LREAL[0..4] - dikurangkan dari hasil IK, jadi ini beda antara nol mekanik dan nol program.",
+    "nilai": [0.0, 0.0, 0.0, 0.0, 0.0]
+  },
+
+  "limit": {
+    "_catatan": "PD1300_000..007 = pasangan (min, max) per sumbu. ST membandingkan dengan min+1 dan max-1, jadi satu satuan di tiap ujung memang sengaja tidak terpakai.",
+    "PD1300_000": -500.0,
+    "PD1300_001": 500.0,
+    "PD1300_002": -90.0,
+    "PD1300_003": 180.0,
+    "PD1300_004": -150.0,
+    "PD1300_005": 0.0,
+    "PD1300_006": -120.0,
+    "PD1300_007": 120.0
+  },
+
+  "jog": {
+    "_catatan": "Kecepatan per sumbu untuk motion model ST (sumbu 0 mm/s, sumbu 1-3 derajat/s), kecepatan world dipakai mode jog 1/2 waktu SIM_JOG_HOLD menyala, dan langkah = besar satu tekan jog - 10 sama dengan JOG_WORLD_STEP di mesin asli.",
+    "sumbu": [200.0, 30.0, 30.0, 45.0],
+    "world": [100.0, 100.0, 100.0, 30.0],
+    "langkah": 10.0
+  },
+
+  "task": {
+    "_catatan": "Periode task primer di project sim, dipakai motion model sebagai dt. Harus SAMA dengan yang disetel di Studio - kalau beda, kecepatan di layar tidak sama dengan yang diminta.",
+    "periode_ms": 4.0
+  },
+
+  "home": {
+    "_catatan": "Pose sumbu yang dituju SIM_HOME_EXEC.",
+    "sumbu": [0.0, 90.0, -90.0, 0.0]
+  }
+}

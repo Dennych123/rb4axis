@@ -1,0 +1,15 @@
+# URUTAN PENTING: di .gitattributes baris BELAKANG menang. Aturan umum ditulis
+# duluan, pengecualian di bawahnya - kebalik, `* text=auto` menimpa `*.st -text`
+# dan berkas ST-nya masuk git dengan LF tanpa satu pun peringatan.
+* text=auto
+
+# Berkas ST dan TSV disimpan APA ADANYA - git tidak boleh menyentuh akhiran barisnya.
+#
+# extract/*.st itu badan FB verbatim dari project mesin, dan akhiran barisnya CRLF
+# milik Studio. Dibiarkan dinormalisasi, klon di mesin lain dapat LF - dan ST ber-LF
+# yang ditulis balik ke .smc2 menghasilkan section yang MUNCUL di Studio dengan rung
+# KOSONG, bukan berkas rusak yang mengeluh. tests/extract.test.js juga mengadu byte
+# berkas ini ke isi .smc2, jadi konversi diam-diam bikin tesnya merah di mesin lain
+# tanpa ada yang berubah.
+*.st  -text
+*.tsv -text
