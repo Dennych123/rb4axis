@@ -214,7 +214,12 @@ function bikinScene() {
   var c = sun.shadow.camera;
   c.left = -1600; c.right = 1600; c.top = 1600; c.bottom = -1600; c.near = 100; c.far = 4200;
   scene.add(sun);
-  scene.add(new THREE.DirectionalLight(0x93c5fd, 0.25).translateX(-800));
+  // Lampu isi dari sisi berlawanan. Posisinya DISETEL, bukan lewat translateX:
+  // cahaya terarah menyinari dari position ke target, dan light yang posisinya
+  // masih (0,0,0) arahnya tidak tentu - lampunya ada tapi tidak menerangi apa pun.
+  var isi = new THREE.DirectionalLight(0x93c5fd, 0.3);
+  isi.position.set(-900, 600, -700);
+  scene.add(isi);
 
   // Lantai penerima bayangan + grid berskala. Grid 100 mm per petak, jadi ukuran
   // benda bisa dikira-kira dari layar tanpa melihat panel.
@@ -242,13 +247,13 @@ function bikinScene() {
 
   // Tiang bahu (L1) + tiga ruas lengan. Ruasnya kotak pipih, sendinya silinder
   // supaya arah putarnya kelihatan sebagai benda.
-  bagian.tiang = kotak(84, 1, 84, MAT.rangka);
+  bagian.tiang = kotak(84, 84, 1, MAT.rangka);
   scene.add(bagian.tiang);
 
   bagian.lengan = [
-    kotak(58, 1, 46, MAT.lengan1),
-    kotak(50, 1, 40, MAT.lengan2),
-    kotak(42, 1, 34, MAT.lengan3)
+    kotak(58, 46, 1, MAT.lengan1),
+    kotak(50, 40, 1, MAT.lengan2),
+    kotak(42, 34, 1, MAT.lengan3)
   ];
   bagian.lengan.forEach(function (m) { scene.add(m); });
 
@@ -257,9 +262,9 @@ function bikinScene() {
   bagian.sendi.forEach(function (m) { scene.add(m); });
 
   // Gripper: badan + dua jari yang bergerak menjauh/mendekat.
-  bagian.gripBadan = kotak(56, 1, 56, MAT.gripper);
+  bagian.gripBadan = kotak(56, 56, 1, MAT.gripper);
   scene.add(bagian.gripBadan);
-  bagian.jari = [kotak(26, 1, 14, MAT.jari), kotak(26, 1, 14, MAT.jari)];
+  bagian.jari = [kotak(26, 14, 1, MAT.jari), kotak(26, 14, 1, MAT.jari)];
   bagian.jari.forEach(function (m) { scene.add(m); });
 
   // Penanda TCP: bola kecil di ujung jari. Itu titik yang dijanjikan FK/IK, jadi
@@ -305,13 +310,19 @@ function ukur() {
 function ke3(p) { return new THREE.Vector3(p.x, p.z, p.y); }
 
 // Satu ruas = benda antara dua titik: ditaruh di tengahnya, dipanjangkan sepanjang
-// jaraknya, lalu diputar menghadap ujungnya. lookAt() mengarahkan +z lokal ke
-// sasaran, dan geometri ruasnya memang tebal 1 di z - itu yang bikin scale.z
-// langsung berarti panjang dalam mm.
+// jaraknya, lalu diputar menghadap ujungnya. lookAt() mengarahkan +z lokal ke sasaran.
+//
+// Skalanya DIBAGI kedalaman geometrinya sendiri, bukan dianggap 1. Menganggapnya 1
+// itu aturan tak tertulis yang harus diingat di tiap pemanggilan `new BoxGeometry`,
+// dan sekali urutan argumennya tertukar - tebal 1 mendarat di y, kedalaman jadi 46 -
+// ruasnya tergambar 46 KALI lebih panjang. Bentuk gagalnya: lengan memanjang keluar
+// layar seperti rel raksasa, dan tidak ada satu pun angka di panel yang berubah,
+// karena kinematiknya memang benar. Sudah kejadian.
 function ruasKe(mesh, a, b) {
   var panjang = a.distanceTo(b);
+  var dasar = (mesh.geometry.parameters && mesh.geometry.parameters.depth) || 1;
   mesh.position.copy(a).add(b).multiplyScalar(0.5);
-  mesh.scale.z = Math.max(1, panjang);
+  mesh.scale.z = Math.max(1, panjang) / dasar;
   mesh.lookAt(b);
   mesh.visible = panjang > 0.5;
 }
@@ -325,7 +336,7 @@ function gambar() {
 
   var span = Math.max(200, d.limitv[1] - d.limitv[0]);
   var tengah = (d.limitv[0] + d.limitv[1]) / 2;
-  bagian.rel.scale.x = span;
+  bagian.rel.scale.x = span / (bagian.rel.geometry.parameters.width || 1);
   bagian.rel.position.set(tengah, -14, 0);
   bagian.stopA.position.set(d.limitv[0], 18, 0);
   bagian.stopB.position.set(d.limitv[1], 18, 0);
@@ -486,6 +497,10 @@ function muatConfig() {
                 cmd: false, vel: c.gripper.kecepatan };
     st.joint = c.home.sumbu.slice(); st.cmd = c.home.sumbu.slice();
     el('step').value = st.step;
+    // Kamera diatur dari UKURAN robot, bukan angka tetap: ganti L1..L4 di config
+    // jadi dua kali lipat, dan angka tetap bikin lengannya keluar layar.
+    var jangkau = c.link.L1 + c.link.L2 + c.link.L3 + c.link.L4 + c.gripper.panjang;
+    orbit.jarak = jangkau * 2.1;
   }).catch(function () { /* bridge mati: pakai bawaan di st */ });
 }
 

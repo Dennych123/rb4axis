@@ -114,5 +114,25 @@ chk('robot.js tidak menghitung rantai sendiri',
 // bikin Z PLC jadi ketinggian. Ketukar: lengan rebah, rel berdiri.
 chk('pemetaan sumbu PLC->three ada di satu fungsi', /function ke3\(p\)[\s\S]*?p\.x, p\.z, p\.y/.test(robot));
 
+// --------------------------------------------- panjang ruas = jarak, bukan kelipatan
+// SUDAH KEJADIAN: `kotak(58, 1, 46)` menaruh tebal 1 di y dan kedalaman 46 di z,
+// sementara ruasKe menyetel scale.z = panjang. Hasilnya tiap ruas tergambar 46 KALI
+// lebih panjang - lengan memanjang keluar layar seperti rel raksasa - dan tidak satu
+// pun angka di panel berubah, karena kinematiknya memang benar.
+//
+// Yang menutup celahnya bukan "ingat urutan argumen", tapi skala yang dihitung
+// TERHADAP kedalaman geometrinya sendiri.
+chk('ruasKe membagi dengan kedalaman geometri, bukan menganggapnya 1',
+    /geometry\.parameters[\s\S]{0,120}?scale\.z\s*=\s*Math\.max\(1, panjang\)\s*\/\s*dasar/.test(robot),
+    'kalau ini merah, panjang ruas jadi kelipatan ukuran kotaknya');
+chk('rel juga diskalakan terhadap lebar geometrinya',
+    /rel\.scale\.x\s*=\s*span\s*\/\s*\(bagian\.rel\.geometry\.parameters\.width/.test(robot));
+
+// Sabuk pengaman kedua: geometri yang dipakai ruasKe ditulis dengan kedalaman 1,
+// jadi angka skalanya sama dengan milimeter dan gampang dibaca waktu di-debug.
+const geomRuas = (robot.match(/kotak\(\s*\d+\s*,\s*\d+\s*,\s*1\s*,/g) || []).length;
+chk('geometri ruas ditulis dengan kedalaman 1 (' + geomRuas + ' buah)', geomRuas >= 6,
+    'tiang + 3 lengan + badan gripper + 2 jari');
+
 console.log(fail ? 'GAGAL ' + fail : 'LULUS');
 process.exit(fail ? 1 : 0);
