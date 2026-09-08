@@ -77,6 +77,11 @@
       <button id="cstopBtn">Cycle stop</button>
       <button id="home">Home pos</button>
     </div>
+    <div class="jogrow">
+      <span class="lbl">speed</span>
+      <input type="range" id="ovr" min="1" max="100" step="1" value="100" style="flex:1">
+      <span id="ovrNilai" style="width:44px;text-align:right">100%</span>
+    </div>
     <table>
       <tr><td class="k">keadaan</td><td class="v" id="cState">-</td>
           <td class="k">langkah</td><td class="v" id="cStep">-</td></tr>
@@ -91,7 +96,10 @@
       di tempat dan wajib <b>Home</b> dulu sebelum Autorun mau jalan lagi. <b>Cycle stop</b>
       beda: pekerjaan yang sedang dipegang diselesaikan dulu, produk tidak ditinggal di
       udara, dan sesudahnya Autorun bisa langsung dipakai lagi.
-      Sekuensnya jalan di PLC; halaman cuma menggambarnya.</div>
+      Sekuensnya jalan di PLC; halaman cuma menggambarnya.<br>
+      <b>Speed</b> menskalakan kecepatan sumbu &mdash; siklus otomatis maupun jog.
+      Akselerasi TIDAK ikut diskalakan (jarak pengereman tetap), dan gripper juga tidak:
+      di mesin aslinya jarinya pneumatik. Dijepit 1..100 % di PLC, bukan di halaman.</div>
   </fieldset>
 
   <fieldset>

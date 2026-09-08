@@ -19,6 +19,7 @@ SIM_HOME	ARRAY[0..3] OF LREAL			False	False	Publish Only	pose home per sumbu - S
 SIM_VEL	ARRAY[0..3] OF LREAL			False	False	Publish Only	kecepatan maksimum per sumbu - mm/s atau derajat/s
 SIM_ACC	ARRAY[0..3] OF LREAL			False	False	Publish Only	akselerasi per sumbu - tanpa ini gerakannya patah-patah di layar
 SIM_JOINT_VEL	ARRAY[0..3] OF LREAL			False	False	Publish Only	kecepatan sumbu sekarang - keluaran profil trapesium
+SIM_SPEED_OVR	LREAL			False	False	Publish Only	override kecepatan persen (1..100) - menskalakan siklus DAN jog, bukan gripper
 SIM_VEL_W	ARRAY[0..3] OF LREAL			False	False	Publish Only	kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE
 SIM_BUSY	BOOL			False	False	Publish Only	masih ada sumbu yang bergerak
 SIM_LIMIT	ARRAY[0..7] OF BOOL			False	False	Publish Only	soft limit yang KENA - pasangan min/max per sumbu

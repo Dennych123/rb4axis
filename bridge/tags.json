@@ -84,6 +84,11 @@
       "komen": "kecepatan sumbu sekarang - keluaran profil trapesium"
     },
     {
+      "nama": "SIM_SPEED_OVR",
+      "tipe": "LREAL",
+      "komen": "override kecepatan persen (1..100) - menskalakan siklus DAN jog, bukan gripper"
+    },
+    {
       "nama": "SIM_VEL_W",
       "tipe": "ARRAY[0..3] OF LREAL",
       "komen": "kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE"
@@ -439,6 +444,11 @@
       "nama": "SIM_ACC",
       "tipe": "ARRAY[0..3] OF LREAL",
       "komen": "akselerasi per sumbu - tanpa ini gerakannya patah-patah di layar"
+    },
+    {
+      "nama": "SIM_SPEED_OVR",
+      "tipe": "LREAL",
+      "komen": "override kecepatan persen (1..100) - menskalakan siklus DAN jog, bukan gripper"
     },
     {
       "nama": "SIM_VEL_W",

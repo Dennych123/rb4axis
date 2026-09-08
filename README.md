@@ -106,6 +106,14 @@ Menutupnya berhenti di **lebar produk**, bukan di nol: jari yang bertemu di nol 
 barang yang sedang dipegangnya. Panjang gripper masuk TCP - `gen_sim.js` menulis
 `ROBOT_TOOL_Y_LREAL = tool.Y + gripper.panjang`, satu kali, satu tempat.
 
+**Override kecepatan (`SIM_SPEED_OVR`, 1..100 %)** menskalakan semua gerakan sumbu -
+siklus otomatis maupun jog. Dua hal yang TIDAK ikut, dan keduanya sengaja: **akselerasi**
+(override yang ikut mengubahnya bikin jarak pengereman berubah, jadi pelan-pelan
+berhenti lebih aman - padahal itu satu-satunya alasan orang menurunkannya) dan
+**gripper** (jarinya pneumatik di mesin aslinya, kecepatannya tidak disetel controller).
+Dijepitnya di PLC, bukan di halaman: nilainya boleh ditulis dari mana saja lewat OPC UA,
+dan 500 % yang lolos bikin sumbu melompati targetnya tiap scan.
+
 **Gerakannya dihaluskan di dua tempat, dan keduanya perlu.** Di PLC: profil trapesium
 per sumbu (akselerasi + jarak rem), jadi sumbu tidak lagi berangkat dan berhenti pada
 kecepatan penuh dalam satu scan. Di halaman: yang DIGAMBAR dikejar ke nilai PLC terakhir

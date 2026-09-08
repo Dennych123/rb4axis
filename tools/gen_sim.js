@@ -69,6 +69,7 @@ const GLOBAL_SIM = [
   ['SIM_VEL', 'ARRAY[0..3] OF LREAL', 'RW', 'kecepatan maksimum per sumbu - mm/s atau derajat/s'],
   ['SIM_ACC', 'ARRAY[0..3] OF LREAL', 'RW', 'akselerasi per sumbu - tanpa ini gerakannya patah-patah di layar'],
   ['SIM_JOINT_VEL', 'ARRAY[0..3] OF LREAL', 'R', 'kecepatan sumbu sekarang - keluaran profil trapesium'],
+  ['SIM_SPEED_OVR', 'LREAL', 'RW', 'override kecepatan persen (1..100) - menskalakan siklus DAN jog, bukan gripper'],
   ['SIM_VEL_W', 'ARRAY[0..3] OF LREAL', 'RW', 'kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE'],
   ['SIM_BUSY', 'BOOL', 'R', 'masih ada sumbu yang bergerak'],
 
@@ -189,7 +190,8 @@ const LOKAL = [
   ['NOW_ST', 'INT', 'stasiun yang tersentuh, -1 lantai atau tidak ada'],
   ['VT', 'LREAL', 'kecepatan yang dituju profil trapesium scan ini'],
   ['VB', 'LREAL', 'kecepatan tertinggi yang masih bisa direm sebelum target'],
-  ['DV', 'LREAL', 'perubahan kecepatan maksimum satu scan = akselerasi x dt']
+  ['DV', 'LREAL', 'perubahan kecepatan maksimum satu scan = akselerasi x dt'],
+  ['OVR', 'LREAL', 'override kecepatan sebagai pecahan (0.01..1.0)']
 ];
 
 // ------------------------------------------- tabel variabel kedua FB V2
@@ -275,6 +277,7 @@ function blokInit(cfg) {
   cfg.jog.sumbu.forEach((v, i) => L.push(t('SIM_VEL[' + i + '] := ' + lreal(v) + ';')));
   L.push('');
   cfg.jog.akselerasi.forEach((v, i) => L.push(t('SIM_ACC[' + i + '] := ' + lreal(v) + ';')));
+  L.push(t('SIM_SPEED_OVR := ' + lreal(cfg.jog.override_persen) + ';'));
   L.push('');
   cfg.jog.world.forEach((v, i) => L.push(t('SIM_VEL_W[' + i + '] := ' + lreal(v) + ';')));
   L.push('');

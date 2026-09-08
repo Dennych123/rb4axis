@@ -92,6 +92,7 @@ IF NOT SIM_INIT_DONE THEN
 	SIM_ACC[1] := 240.0;
 	SIM_ACC[2] := 240.0;
 	SIM_ACC[3] := 320.0;
+	SIM_SPEED_OVR := 100.0;
 
 	SIM_VEL_W[0] := 100.0;
 	SIM_VEL_W[1] := 100.0;
@@ -195,6 +196,24 @@ LAST_CSTOP := SIM_CYCLE_STOP;
 // dijalankan dari selector AUTO yang memang sudah di situ sejak awal.
 SEL_UBAH := SIM_SEL_AUTO <> LAST_SEL;
 LAST_SEL := SIM_SEL_AUTO;
+
+// -------------------------------------------------------- override kecepatan
+// Satu angka persen yang menskalakan SEMUA gerakan sumbu - siklus otomatis maupun
+// jog. Dijepit DI SINI, di PLC, bukan di halaman: nilainya boleh ditulis dari mana
+// saja lewat OPC UA, dan 500 % atau angka negatif yang lolos bikin sumbu melompati
+// targetnya tiap scan - gerakan yang di layar terlihat seperti lengan yang berkedip,
+// bukan seperti setelan yang salah.
+//
+// Yang diskalakan KECEPATAN saja, bukan akselerasi. Override yang ikut mengubah
+// akselerasi bikin jarak pengereman berubah dua kali lipat arahnya, dan pelan-pelan
+// jadi TIDAK lebih aman - padahal itu satu-satunya alasan orang menurunkannya.
+//
+// Gripper TIDAK ikut: jarinya pneumatik di mesin aslinya, kecepatannya tidak bisa
+// disetel dari controller. Override yang ikut memperlambat gripper bikin waktu siklus
+// di layar tidak sama dengan yang di mesin.
+IF SIM_SPEED_OVR > 100.0 THEN SIM_SPEED_OVR := 100.0; END_IF;
+IF SIM_SPEED_OVR < 1.0 THEN SIM_SPEED_OVR := 1.0; END_IF;
+OVR := SIM_SPEED_OVR / 100.0;
 
 // -------------------------------------------------------- berhenti total (abort)
 // Emergency, selector diubah saat jalan, atau tabrakan. Ketiganya berakhir sama:
@@ -338,15 +357,15 @@ IF NOT SIM_AUTO AND NOT SIM_SEL_AUTO AND NOT SIM_ESTOP THEN
 			IF SIM_JOG_HOLD THEN
 				// Mode tahan: kecepatan x dt. DUA daftar, karena satuannya memang beda -
 				// SIM_VEL derajat/s pada SUMBU, SIM_VEL_W mm/s pada KOORDINAT world.
-				IF SIM_JOG_MODE = 0 THEN DELTA := SIM_VEL[i] * SIM_DT;
-				ELSE DELTA := SIM_VEL_W[i] * SIM_DT; END_IF;
+				IF SIM_JOG_MODE = 0 THEN DELTA := SIM_VEL[i] * OVR * SIM_DT;
+				ELSE DELTA := SIM_VEL_W[i] * OVR * SIM_DT; END_IF;
 			END_IF;
 		ELSIF SIM_JOG_N[i] AND (EDGE_N[i] OR SIM_JOG_HOLD) THEN
 			AX := i;
 			DELTA := -SIM_JOG_STEP;
 			IF SIM_JOG_HOLD THEN
-				IF SIM_JOG_MODE = 0 THEN DELTA := -SIM_VEL[i] * SIM_DT;
-				ELSE DELTA := -SIM_VEL_W[i] * SIM_DT; END_IF;
+				IF SIM_JOG_MODE = 0 THEN DELTA := -SIM_VEL[i] * OVR * SIM_DT;
+				ELSE DELTA := -SIM_VEL_W[i] * OVR * SIM_DT; END_IF;
 			END_IF;
 		END_IF;
 	END_FOR;
@@ -746,7 +765,7 @@ SIM_BUSY := FALSE;
 FOR i := 0 TO 3 DO
 	D := SIM_JOINT_CMD[i] - SIM_JOINT_POS[i];
 	VB := SQRT(2.0 * SIM_ACC[i] * ABS(D));
-	VT := SIM_VEL[i];
+	VT := SIM_VEL[i] * OVR;
 	IF VB < VT THEN VT := VB; END_IF;
 	IF D < 0.0 THEN VT := -VT; END_IF;
 

@@ -67,8 +67,13 @@
       "besar satu tekan jog - 10 sama dengan JOG_WORLD_STEP di mesin asli.",
       "AKSELERASI bukan hiasan: tanpa itu tiap sumbu berangkat dan berhenti pada",
       "kecepatan penuh dalam satu scan, dan yang terlihat di layar patah-patah walau",
-      "angkanya mulus. Satuannya mm/s2 dan derajat/s2."
+      "angkanya mulus. Satuannya mm/s2 dan derajat/s2.",
+      "override_persen = nilai AWAL override kecepatan (1..100). Menskalakan kecepatan",
+      "saja, bukan akselerasi: override yang ikut mengubah akselerasi bikin jarak",
+      "pengereman berubah, dan pelan-pelan jadi tidak lebih aman - padahal itu satu-satunya",
+      "alasan orang menurunkannya. Gripper tidak ikut diskalakan (pneumatik di mesin asli)."
     ],
+    "override_persen": 100.0,
     "sumbu": [900.0, 90.0, 90.0, 120.0],
     "akselerasi": [1800.0, 240.0, 240.0, 320.0],
     "world": [100.0, 100.0, 100.0, 30.0],

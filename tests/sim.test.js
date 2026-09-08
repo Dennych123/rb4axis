@@ -302,6 +302,26 @@ chk('halaman menghaluskan GAMBAR, bukan angkanya', (() => {
   return /function haluskan\(dt\)/.test(r) && /el\('j' \+ i\)\.textContent = f2\(st\.jointPlc\[i\]\)/.test(r);
 })(), 'panel yang ikut dihaluskan menghapus satu-satunya tempat membandingkan layar dengan simulator');
 
+// --------------------------------------------------------- override kecepatan
+// Dijepit DI PLC. Nilainya boleh ditulis dari mana saja lewat OPC UA, dan 500 % atau
+// angka negatif yang lolos bikin sumbu melompati targetnya tiap scan - di layar itu
+// terlihat seperti lengan yang berkedip, bukan seperti setelan yang salah.
+chk('override dijepit 1..100 di PLC, bukan di halaman',
+    /IF SIM_SPEED_OVR > 100\.0 THEN SIM_SPEED_OVR := 100\.0; END_IF;/.test(kode)
+    && /IF SIM_SPEED_OVR < 1\.0 THEN SIM_SPEED_OVR := 1\.0; END_IF;/.test(kode));
+chk('override dipakai motion model', /VT := SIM_VEL\[i\] \* OVR;/.test(kode));
+chk('override ikut ke jog', /SIM_VEL\[i\] \* OVR \* SIM_DT/.test(kode),
+    'jog yang tidak ikut override bikin satu tombol tetap kencang waktu semua diperlambat');
+// Override yang ikut mengubah akselerasi memendekkan DAN memanjangkan jarak pengereman
+// sekaligus - pelan-pelan berhenti jadi lebih aman, padahal itu satu-satunya alasan
+// orang menurunkannya.
+chk('akselerasi TIDAK ikut diskalakan', !/SIM_ACC\[i\] \* OVR/.test(kode));
+chk('gripper TIDAK ikut diskalakan', !/SIM_GRIP_VEL \* OVR/.test(kode),
+    'jarinya pneumatik di mesin asli - kecepatannya tidak bisa disetel controller');
+chk('override ada di tabel global dan nilai awalnya dari config',
+    glob.includes('SIM_SPEED_OVR')
+    && kode.includes('SIM_SPEED_OVR := ' + cfg.jog.override_persen.toFixed(1)));
+
 // ------------------------------------------------------------------ gripper
 chk('gripper menutup ke lebar produk, bukan ke nol',
     /IF SIM_GRIP_CMD THEN GRIP_TARGET := SIM_GRIP_TUTUP;/.test(kode),

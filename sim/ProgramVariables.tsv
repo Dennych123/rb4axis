@@ -45,3 +45,4 @@ NOW_ST	INT		False	False	stasiun yang tersentuh, -1 lantai atau tidak ada
 VT	LREAL		False	False	kecepatan yang dituju profil trapesium scan ini
 VB	LREAL		False	False	kecepatan tertinggi yang masih bisa direm sebelum target
 DV	LREAL		False	False	perubahan kecepatan maksimum satu scan = akselerasi x dt
+OVR	LREAL		False	False	override kecepatan sebagai pecahan (0.01..1.0)

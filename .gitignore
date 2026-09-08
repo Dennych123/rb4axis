@@ -4,3 +4,8 @@ three.min.js
 
 # Kunci privat klien OPC UA. Pernah ikut ter-commit sekali di repo alat.
 pki/
+
+# Video yang kebetulan ditaruh di folder ini. Bukan bagian repo, dan GitHub menolak
+# berkas di atas 100 MB - satu commit yang kelewat bikin push gagal seluruhnya.
+*.mp4
+*.mov

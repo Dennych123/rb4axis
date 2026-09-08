@@ -635,6 +635,9 @@ END_IF;</ST>
               </InstantlyDefinedType>
             </Type>
           </Variable>
+          <Variable name="SIM_SPEED_OVR">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
           <Variable name="SIM_VEL_W">
             <Type>
               <InstantlyDefinedType xsi:type="ArrayTypeSpec">
@@ -1121,6 +1124,10 @@ END_IF;</ST>
             <Documentation xsi:type="SimpleText">perubahan kecepatan maksimum satu scan = akselerasi x dt</Documentation>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
+          <Variable name="OVR">
+            <Documentation xsi:type="SimpleText">override kecepatan sebagai pecahan (0.01..1.0)</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
         </Vars>
         <MainBody>
           <BodyContent xsi:type="ST">
@@ -1218,6 +1225,7 @@ IF NOT SIM_INIT_DONE THEN
 	SIM_ACC[1] := 240.0;
 	SIM_ACC[2] := 240.0;
 	SIM_ACC[3] := 320.0;
+	SIM_SPEED_OVR := 100.0;
 
 	SIM_VEL_W[0] := 100.0;
 	SIM_VEL_W[1] := 100.0;
@@ -1321,6 +1329,24 @@ LAST_CSTOP := SIM_CYCLE_STOP;
 // dijalankan dari selector AUTO yang memang sudah di situ sejak awal.
 SEL_UBAH := SIM_SEL_AUTO &lt;&gt; LAST_SEL;
 LAST_SEL := SIM_SEL_AUTO;
+
+// -------------------------------------------------------- override kecepatan
+// Satu angka persen yang menskalakan SEMUA gerakan sumbu - siklus otomatis maupun
+// jog. Dijepit DI SINI, di PLC, bukan di halaman: nilainya boleh ditulis dari mana
+// saja lewat OPC UA, dan 500 % atau angka negatif yang lolos bikin sumbu melompati
+// targetnya tiap scan - gerakan yang di layar terlihat seperti lengan yang berkedip,
+// bukan seperti setelan yang salah.
+//
+// Yang diskalakan KECEPATAN saja, bukan akselerasi. Override yang ikut mengubah
+// akselerasi bikin jarak pengereman berubah dua kali lipat arahnya, dan pelan-pelan
+// jadi TIDAK lebih aman - padahal itu satu-satunya alasan orang menurunkannya.
+//
+// Gripper TIDAK ikut: jarinya pneumatik di mesin aslinya, kecepatannya tidak bisa
+// disetel dari controller. Override yang ikut memperlambat gripper bikin waktu siklus
+// di layar tidak sama dengan yang di mesin.
+IF SIM_SPEED_OVR &gt; 100.0 THEN SIM_SPEED_OVR := 100.0; END_IF;
+IF SIM_SPEED_OVR &lt; 1.0 THEN SIM_SPEED_OVR := 1.0; END_IF;
+OVR := SIM_SPEED_OVR / 100.0;
 
 // -------------------------------------------------------- berhenti total (abort)
 // Emergency, selector diubah saat jalan, atau tabrakan. Ketiganya berakhir sama:
@@ -1464,15 +1490,15 @@ IF NOT SIM_AUTO AND NOT SIM_SEL_AUTO AND NOT SIM_ESTOP THEN
 			IF SIM_JOG_HOLD THEN
 				// Mode tahan: kecepatan x dt. DUA daftar, karena satuannya memang beda -
 				// SIM_VEL derajat/s pada SUMBU, SIM_VEL_W mm/s pada KOORDINAT world.
-				IF SIM_JOG_MODE = 0 THEN DELTA := SIM_VEL[i] * SIM_DT;
-				ELSE DELTA := SIM_VEL_W[i] * SIM_DT; END_IF;
+				IF SIM_JOG_MODE = 0 THEN DELTA := SIM_VEL[i] * OVR * SIM_DT;
+				ELSE DELTA := SIM_VEL_W[i] * OVR * SIM_DT; END_IF;
 			END_IF;
 		ELSIF SIM_JOG_N[i] AND (EDGE_N[i] OR SIM_JOG_HOLD) THEN
 			AX := i;
 			DELTA := -SIM_JOG_STEP;
 			IF SIM_JOG_HOLD THEN
-				IF SIM_JOG_MODE = 0 THEN DELTA := -SIM_VEL[i] * SIM_DT;
-				ELSE DELTA := -SIM_VEL_W[i] * SIM_DT; END_IF;
+				IF SIM_JOG_MODE = 0 THEN DELTA := -SIM_VEL[i] * OVR * SIM_DT;
+				ELSE DELTA := -SIM_VEL_W[i] * OVR * SIM_DT; END_IF;
 			END_IF;
 		END_IF;
 	END_FOR;
@@ -1872,7 +1898,7 @@ SIM_BUSY := FALSE;
 FOR i := 0 TO 3 DO
 	D := SIM_JOINT_CMD[i] - SIM_JOINT_POS[i];
 	VB := SQRT(2.0 * SIM_ACC[i] * ABS(D));
-	VT := SIM_VEL[i];
+	VT := SIM_VEL[i] * OVR;
 	IF VB &lt; VT THEN VT := VB; END_IF;
 	IF D &lt; 0.0 THEN VT := -VT; END_IF;
 
@@ -2090,6 +2116,11 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
                 <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
               </InstantlyDefinedType>
             </Type>
+          </Variable>
+          <Variable name="SIM_SPEED_OVR">
+            <Documentation xsi:type="SimpleText">override kecepatan persen (1..100) - menskalakan siklus DAN jog, bukan gripper</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
           <Variable name="SIM_VEL_W">
             <Documentation xsi:type="SimpleText">kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE</Documentation>

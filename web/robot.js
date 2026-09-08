@@ -48,11 +48,12 @@ var st = {
   pcb: { panjang: 120, lebar: 80, tebal: 8 },
   dim: { L1: 400, L2: 300, L3: 250, L4: 100, toolY: 140, toolZ: 0,
          offset: [0, 0, 0, 0, 0], limitv: [-500, 500, -90, 180, -150, 0, -120, 120] },
-  vel: [900, 90, 90, 120], acc: [1800, 240, 240, 320],
+  vel: [900, 90, 90, 120], acc: [1800, 240, 240, 320], ovr: 100,
   velW: [100, 100, 100, 30], step: 10, mode: 0, hold: false
 };
 
 var el = function (id) { return document.getElementById(id); };
+var seretOvr = false;               // slider speed sedang diseret - jangan ditimpa nilai PLC
 var f2 = function (x) { return (typeof x === 'number' && isFinite(x)) ? x.toFixed(2) : '-'; };
 
 function cfgKin() {
@@ -169,6 +170,13 @@ function stream() {
       }
       if (v.SIM_VEL) st.vel = keArray(v.SIM_VEL, 4);
       if (v.SIM_ACC) st.acc = keArray(v.SIM_ACC, 4);
+      // Override dibaca BALIK dari PLC: dia yang menjepitnya ke 1..100, dan slider yang
+      // tetap menunjukkan angka yang dikirim halaman berarti layar memperlihatkan
+      // setelan yang tidak dipakai siapa pun.
+      if (v.SIM_SPEED_OVR !== undefined && !seretOvr) {
+        st.ovr = v.SIM_SPEED_OVR;
+        el('ovr').value = Math.round(st.ovr);
+      }
       if (v.SIM_VEL_W) st.velW = keArray(v.SIM_VEL_W, 4);
       for (var i = 0; i < 8; i++) {
         var k = 'PD1300_00' + i;
@@ -229,7 +237,8 @@ function offlineStep(t) {
   if (st.plc) { haluskan(dt); return; }
 
   for (var i = 0; i < 4; i++) {
-    var r = langkahSumbu(st.joint[i], st.cmd[i], st.jointVel[i], st.vel[i], st.acc[i], dt);
+    var r = langkahSumbu(st.joint[i], st.cmd[i], st.jointVel[i],
+                         st.vel[i] * st.ovr / 100, st.acc[i], dt);
     st.joint[i] = r.pos;
     st.jointVel[i] = r.vel;
   }
@@ -764,6 +773,7 @@ function panelTampil() {
        : 'menyentuh lantai');
   el('cTabrak').className = st.collide ? 'v bad' : 'v';
 
+  if (!seretOvr) el('ovrNilai').textContent = Math.round(st.ovr) + '%';
   el('gripPos').textContent = f2(st.grip.pos) + ' / ' + f2(st.grip.stroke) + ' mm';
   var gb = el('gripBtn');
   gb.textContent = st.grip.cmd ? 'Buka' : 'Tutup';
@@ -819,6 +829,19 @@ function pasangKontrol() {
     st.step = +el('step').value || 10;
     kirim('SIM_JOG_STEP', st.step);
   };
+  // Slider dikirim waktu dilepas, bukan tiap piksel: satu tulis OPC UA per gerakan
+  // mouse membanjiri sesi yang sama yang dipakai membaca 76 tag, dan yang kelihatan
+  // justru gerakan robot yang tersendat - persis lawan dari yang mau disetel.
+  var lepasOvr = function () {
+    seretOvr = false;
+    st.ovr = +el('ovr').value || 100;
+    kirim('SIM_SPEED_OVR', st.ovr);
+  };
+  el('ovr').oninput = function () {
+    seretOvr = true;
+    el('ovrNilai').textContent = this.value + '%';
+  };
+  el('ovr').onchange = lepasOvr;
   el('gripBtn').onclick = function () {
     st.grip.cmd = !st.grip.cmd;
     kirim('SIM_GRIP_CMD', st.grip.cmd);
@@ -857,7 +880,8 @@ function muatConfig() {
     st.dim.offset = c.offset.nilai;
     st.dim.limitv = [c.limit.PD1300_000, c.limit.PD1300_001, c.limit.PD1300_002, c.limit.PD1300_003,
                      c.limit.PD1300_004, c.limit.PD1300_005, c.limit.PD1300_006, c.limit.PD1300_007];
-    st.vel = c.jog.sumbu; st.acc = c.jog.akselerasi;
+    st.vel = c.jog.sumbu; st.acc = c.jog.akselerasi; st.ovr = c.jog.override_persen;
+    el('ovr').value = Math.round(st.ovr);
     st.velW = c.jog.world; st.step = c.jog.langkah;
     st.grip = { pos: c.gripper.bukaan_awal, stroke: c.gripper.stroke, tutup: c.gripper.tutup,
                 jari: c.gripper.tebal_jari, len: c.gripper.panjang,
