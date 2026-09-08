@@ -37,8 +37,9 @@ Project mesinnya **hanya dibaca**. Tidak ada satu pun berkas di
 
 ```bash
 node blurobot/tools/extract.js     # .smc2 -> extract/ (ST verbatim + tabel variabel)
-node blurobot/tools/gen_sim.js     # robot.config.json -> blok init ST, 2 TSV, tags.json
-node blurobot/tests/run.js         # 4 suite, tanpa Studio dan tanpa PLC
+node blurobot/tools/gen_sim.js     # robot.config.json -> blok init ST, tabel variabel, tags.json
+node blurobot/tools/gen_xml.js     # sim/*.st + *.tsv -> sim/BlurobotSim.xml (import Sysmac)
+node blurobot/tests/run.js         # 5 suite, tanpa Studio dan tanpa PLC
 node blurobot/bridge/bridge.js     # OPC UA <-> halaman, http://127.0.0.1:7656
 ```
 
@@ -53,6 +54,7 @@ robot.config.json   --gen_sim.js-->  sim/P_SIM_ROBOT.st    (blok init saja)
                                      sim/*.tsv             (tempel ke Studio)
                                      bridge/tags.json
 sim/*_V2.st         (tulis tangan)   FB yang dibetulkan, dipakai simulator
+sim/*.st + *.tsv    --gen_xml.js-->  sim/BlurobotSim.xml   (satu berkas, di-import Studio)
         Studio (manual)  ->  project NX102  ->  simulator + OPC UA 127.0.0.1:4840
         bridge.js        ->  SSE + POST     ->  web/  (three.js)
 ```
@@ -76,6 +78,7 @@ sim/*_V2.st         (tulis tangan)   FB yang dibetulkan, dipakai simulator
 |---|---|
 | `tools/extract.js` | `.smc2` → `extract/`. Parser `.smc2`-nya dipinjam dari `reader/` — jangan tulis parser kedua |
 | `tools/gen_sim.js` | `robot.config.json` → blok init ST + `sim/*.tsv` + `bridge/tags.json`. `--check` buat CI |
+| `tools/gen_xml.js` | `sim/` → `BlurobotSim.xml`: dua FB + program + tabel global dalam satu berkas import. Bentuknya ditiru dari `Sample.xml` Omron, dan diadu ke XSD resmi Studio |
 | `extract/*.st` | badan ST dua FB, **verbatim** (CRLF milik Studio dipertahankan) |
 | `extract/interfaces.md` | pin, temp, external tiap FB + kolom "dipakai badan ST" |
 | `extract/variables.tsv` | variabel global yang dirujuk ST, kolom urutan tabel Studio, tanpa baris judul |
@@ -87,7 +90,7 @@ sim/*_V2.st         (tulis tangan)   FB yang dibetulkan, dipakai simulator
 | `bridge/bridge.js` | satu sesi OPC UA, SSE ke halaman, POST buat menulis |
 | `web/kin.js` | port JS FK/IK + `chainPoints()`. Dipakai tes DAN mode offline halaman |
 | `web/index.html`, `web/robot.js` | viz 3D + panel jog/move |
-| `tests/*.test.js` | 4 suite: extract, kin (V1 + V2), sim, viz (rantai + gripper) |
+| `tests/*.test.js` | 5 suite: extract, kin (V1 + V2), sim, viz (rantai + gripper), xml (bentuk + XSD resmi) |
 
 ## Batasnya — supaya tidak dikira lebih dari yang ada
 
@@ -107,6 +110,13 @@ sim/*_V2.st         (tulis tangan)   FB yang dibetulkan, dipakai simulator
 * **Arti tombol jog TOOL ditetapkan sim.** Penyiap pose kandidat di project asli
   (`ROBOT_POS_JOG_INPUT`) tidak ditulis satu rung pun — kemungkinan besar dari HMI
   Pro-face, yang tidak bisa dibaca alat di repo ini.
+* **Import XML-nya belum dibuktikan di Studio.** `BlurobotSim.xml` lolos XSD resmi
+  Sysmac, tapi XSD cuma memeriksa BENTUK — apakah Studio mau meng-import POU
+  ber-badan ST lewat XML baru terjawab setelah dicoba. Jalur tempel manual di
+  `sim/SETUP.md` tetap jalur yang terbukti.
+* **Penugasan task tidak bisa lewat XML.** XSD IEC 61131-10 tidak punya elemennya
+  sama sekali; program yang tidak ditugaskan ke task tidak dieksekusi, dan Studio
+  tidak mengeluh.
 * **`.prx` (HMI Pro-face) tidak dibaca sama sekali.** Tidak ada pembacanya di repo,
   dan untuk algoritma memang tidak perlu.
 

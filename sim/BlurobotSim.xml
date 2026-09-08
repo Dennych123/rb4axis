@@ -1,0 +1,1351 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:smcext="https://www.ia.omron.com/Smc"
+         xsi:schemaLocation="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd"
+         schemaVersion="1"
+         xmlns="www.iec.ch/public/TC65SC65BWG7TF10">
+  <FileHeader companyName="Blurobot" productName="blurobot/tools/gen_xml.js" productVersion="1.0.0.0" />
+  <ContentHeader name="BlurobotSim" creationDateTime="2026-01-01T00:00:00">
+    <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:DeviceInfo modelName="NX102" version="1.40" /></Data></AddData>
+  </ContentHeader>
+  <Types>
+    <GlobalNamespace>
+      <FunctionBlock name="FORWARD_KINEMATIC_V2">
+        <Parameters>
+          <InputVars>
+            <Variable name="EXECUTE" orderWithinParamSet="0">
+              <Type><TypeName>BOOL</TypeName></Type>
+            </Variable>
+            <Variable name="ROBOT_POS_INPUT" orderWithinParamSet="1">
+              <Type>
+                <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                  <BaseType><TypeName>LREAL</TypeName></BaseType>
+                  <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+                </InstantlyDefinedType>
+              </Type>
+            </Variable>
+          </InputVars>
+          <OutputVars>
+            <Variable name="DONE" orderWithinParamSet="2">
+              <Type><TypeName>BOOL</TypeName></Type>
+            </Variable>
+            <Variable name="ROBOT_POS_JOINT_OUTPUT" orderWithinParamSet="3">
+              <Type>
+                <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                  <BaseType><TypeName>REAL</TypeName></BaseType>
+                  <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+                </InstantlyDefinedType>
+              </Type>
+            </Variable>
+            <Variable name="ROBOT_POS_WORLD_OUTPUT" orderWithinParamSet="4">
+              <Type>
+                <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                  <BaseType><TypeName>REAL</TypeName></BaseType>
+                  <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+                </InstantlyDefinedType>
+              </Type>
+            </Variable>
+            <Variable name="WORLD_LREAL" orderWithinParamSet="5">
+              <Type>
+                <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                  <BaseType><TypeName>LREAL</TypeName></BaseType>
+                  <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+                </InstantlyDefinedType>
+              </Type>
+            </Variable>
+          </OutputVars>
+        </Parameters>
+        <ExternalVars>
+          <Variable name="ROBOT_L1_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L2_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L3_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L4_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_TOOL_Y_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_TOOL_Z_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="PI">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="DEGREE_TO_RAD">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+        </ExternalVars>
+        <Vars accessSpecifier="private">
+          <Variable name="TY">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="TZ">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="R_TOOL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="TH_TOOL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="A1">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="A2">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="A3">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="WY">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="WZ">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="I">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+        </Vars>
+        <MainBody>
+          <BodyContent xsi:type="ST">
+            <ST>// FORWARD_KINEMATIC_V2 - versi yang DIPERBAIKI.
+//
+// Pasangannya FORWARD_KINEMATIC di ../extract/, yang disalin verbatim dari project
+// mesin dan SENGAJA dibiarkan cacat. Berkas ini yang dipakai simulasi; yang di
+// extract/ tetap ada sebagai catatan apa yang benar-benar jalan di mesin.
+//
+// Apa yang dibetulkan di sini (semuanya ada tesnya di ../tests/kin.test.js):
+//
+//   1. EXECUTE dipakai. Di V1 pin itu ada di antarmuka tapi tidak pernah dibaca
+//      badan ST-nya - FB menghitung tiap kali dipanggil, mau diminta atau tidak.
+//   2. DONE ditulis. Di V1 tidak pernah, jadi rung yang menunggu DONE-nya FK
+//      menunggu selamanya.
+//   3. Tool TIDAK menulis balik ke variabel global. V1 menimpa
+//      ROBOT_TOOL_Y_LREAL dengan 0.000000000000001 waktu nilainya 0, dan
+//      perubahan itu bertahan sesudah FB selesai - efek samping permanen yang
+//      tidak diminta siapa pun.
+//   4. Sudut tool dihitung dengan kuadran yang benar. ATAN saja tidak bisa
+//      membedakan tool (Y=+50, Z=0) dari (Y=-50, Z=0).
+//   5. Keluaran LREAL ditambahkan. V1 cuma mengeluarkan REAL, dan pembulatan
+//      32-bit itu yang bikin round-trip FK-&gt;IK tidak pernah menutup rapat.
+//
+// ATAN2 TIDAK dipakai: instruksi itu tidak ada di daftar 353 instruksi W560
+// (docs/SYSMAC_INSTRUCTIONS.md), jadi belum terbukti ter-import. Kuadrannya
+// dibetulkan dengan ATAN + koreksi eksplisit, dan port JS-nya melakukan hal yang
+// sama persis - bukan Math.atan2 - supaya hasil PLC dan hasil JS bisa dibandingkan.
+
+DONE := FALSE;
+
+IF EXECUTE THEN
+
+	// ---------------------------------------------------------------- tool polar
+	// Dibaca ke variabel lokal. Global-nya tidak disentuh.
+	TY := ROBOT_TOOL_Y_LREAL;
+	TZ := ROBOT_TOOL_Z_LREAL;
+	R_TOOL := SQRT(TY * TY + TZ * TZ);
+
+	IF R_TOOL = 0.0 THEN
+		// Tanpa tool, arahnya tidak berarti apa-apa. V1 memaksa Y jadi 1e-15 di
+		// sini, yang bikin THETA_TOOL melompat ke ~90 derajat - sudut palsu untuk
+		// tool yang panjangnya nol.
+		TH_TOOL := 0.0;
+	ELSIF TY &gt; 0.0 THEN
+		TH_TOOL := ATAN(TZ / TY);
+	ELSIF TY &lt; 0.0 THEN
+		TH_TOOL := ATAN(TZ / TY) + PI;
+	ELSIF TZ &gt;= 0.0 THEN
+		TH_TOOL := PI / 2.0;
+	ELSE
+		TH_TOOL := -PI / 2.0;
+	END_IF;
+
+	// ------------------------------------------------------------ rantai planar
+	// Sumbu 0 LINEAR (rel X) - lewat apa adanya, tidak masuk trigonometri.
+	// Sumbu 1-3 rantai planar di bidang Y-Z, sudutnya menumpuk.
+	A1 := ROBOT_POS_INPUT[1] * DEGREE_TO_RAD;
+	A2 := A1 + ROBOT_POS_INPUT[2] * DEGREE_TO_RAD;
+	A3 := A2 + ROBOT_POS_INPUT[3] * DEGREE_TO_RAD;
+
+	WY := ROBOT_L2_LREAL * COS(A1) + ROBOT_L3_LREAL * COS(A2) + ROBOT_L4_LREAL * COS(A3);
+	WZ := ROBOT_L1_LREAL + ROBOT_L2_LREAL * SIN(A1) + ROBOT_L3_LREAL * SIN(A2) + ROBOT_L4_LREAL * SIN(A3);
+
+	// Tool digeser polar, berputar bersama arah end-effector.
+	WORLD_LREAL[0] := ROBOT_POS_INPUT[0];
+	WORLD_LREAL[1] := WY + R_TOOL * COS(TH_TOOL + A3);
+	WORLD_LREAL[2] := WZ + R_TOOL * SIN(TH_TOOL + A3);
+	WORLD_LREAL[3] := ROBOT_POS_INPUT[1] + ROBOT_POS_INPUT[2] + ROBOT_POS_INPUT[3];
+
+	FOR I := 0 TO 3 DO
+		ROBOT_POS_WORLD_OUTPUT[I] := LREAL_TO_REAL(WORLD_LREAL[I]);
+		ROBOT_POS_JOINT_OUTPUT[I] := LREAL_TO_REAL(ROBOT_POS_INPUT[I]);
+	END_FOR;
+
+	DONE := TRUE;
+END_IF;</ST>
+          </BodyContent>
+        </MainBody>
+      </FunctionBlock>
+      <FunctionBlock name="INVERSE_KINEMATIC_V2">
+        <Parameters>
+          <InputVars>
+            <Variable name="EXECUTE" orderWithinParamSet="0">
+              <Type><TypeName>BOOL</TypeName></Type>
+            </Variable>
+            <Variable name="ROBOT_POS_INPUT" orderWithinParamSet="1">
+              <Type>
+                <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                  <BaseType><TypeName>LREAL</TypeName></BaseType>
+                  <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+                </InstantlyDefinedType>
+              </Type>
+            </Variable>
+            <Variable name="ELBOW_UP" orderWithinParamSet="2">
+              <Type><TypeName>BOOL</TypeName></Type>
+            </Variable>
+          </InputVars>
+          <OutputVars>
+            <Variable name="DONE" orderWithinParamSet="3">
+              <Type><TypeName>BOOL</TypeName></Type>
+            </Variable>
+            <Variable name="ERROR" orderWithinParamSet="4">
+              <Type><TypeName>BOOL</TypeName></Type>
+            </Variable>
+            <Variable name="ERROR_ID" orderWithinParamSet="5">
+              <Type><TypeName>INT</TypeName></Type>
+            </Variable>
+            <Variable name="ROBOT_POS_OUTPUT" orderWithinParamSet="6">
+              <Type>
+                <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                  <BaseType><TypeName>LREAL</TypeName></BaseType>
+                  <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+                </InstantlyDefinedType>
+              </Type>
+            </Variable>
+            <Variable name="LIMIT_HIT" orderWithinParamSet="7">
+              <Type>
+                <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                  <BaseType><TypeName>BOOL</TypeName></BaseType>
+                  <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="7" /></DimensionSpec>
+                </InstantlyDefinedType>
+              </Type>
+            </Variable>
+            <Variable name="LIMIT_ANY" orderWithinParamSet="8">
+              <Type><TypeName>BOOL</TypeName></Type>
+            </Variable>
+          </OutputVars>
+        </Parameters>
+        <ExternalVars>
+          <Variable name="ROBOT_L1_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L2_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L3_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L4_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_TOOL_Y_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_TOOL_Z_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="PI">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="DEGREE_TO_RAD">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="RAD_TO_DEGREE">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_ROBOT_ORG_OFFSET_LREAL">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="4" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="PD1300_000">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_001">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_002">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_003">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_004">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_005">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_006">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_007">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+        </ExternalVars>
+        <Vars accessSpecifier="private">
+          <Variable name="TY">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="TZ">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="R_TOOL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="TH_TOOL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="TH_EE">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="Y_EE">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="Z_EE">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="Y3">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="Z3">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="R">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="BETA">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="GAMMA">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ALFA">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="THETA_RAD1">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="THETA_RAD2">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="THETA_RAD3">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="THETA_DEGREE1">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="THETA_DEGREE2">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="THETA_DEGREE3">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="I">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+        </Vars>
+        <MainBody>
+          <BodyContent xsi:type="ST">
+            <ST>// INVERSE_KINEMATIC_V2 - versi yang DIPERBAIKI.
+//
+// Pasangannya INVERSE_KINEMATIC di ../extract/, yang disalin verbatim dari project
+// mesin dan SENGAJA dibiarkan cacat. Berkas ini yang dipakai simulasi.
+//
+// Apa yang dibetulkan (semuanya ada tesnya di ../tests/kin.test.js):
+//
+//   1. DONE berarti sesuatu. Di V1 rantai IF/ELSIF/ELSE menulis DONE:=TRUE di
+//      SEMUA cabang, termasuk ELSE - jadi pemeriksaan soft limit dihitung lalu
+//      dibuang, dan pemanggil yang menunggu DONE selalu dapat &quot;sukses&quot;. Efek
+//      nyatanya di mesin: DONE menempati slot ENO di ladder, jadi seluruh cabang
+//      pencari langkah jog tidak pernah jalan.
+//   2. Kuadran ALFA benar. V1 memakai ATAN(Z3/Y3) polos, jadi pose dengan Y3 &lt; 0
+//      meleset TEPAT 180 derajat - separuh ruang kerja menghasilkan sudut yang
+//      salah tanpa satu pun tanda.
+//   3. ACOS dijaga. V1 memberi ACOS argumen &gt; 1 kalau titiknya di luar jangkauan;
+//      di PLC itu error runtime, bukan angka salah. Di sini jangkauan diperiksa
+//      DULU dan FB menolak dengan ERROR_ID, bukan menghitung lalu meledak.
+//   4. Bagi nol dijaga. Y3 = 0 dan R = 0 sekarang cabangnya sendiri.
+//   5. Batas yang KENA dilaporkan per batas (LIMIT_HIT[0..7]), bukan cuma
+//      &quot;ada masalah&quot; - nomor batasnya yang menyebut sumbu mana dan sisi mana.
+//   6. Elbow bisa dipilih. V1 selalu elbow-down (THETA_RAD2 = BETA - PI); pose
+//      yang cuma bisa dicapai elbow-up tidak pernah punya solusi di sana.
+//      ELBOW_UP = FALSE menghasilkan cabang yang SAMA PERSIS dengan mesin.
+//
+// ATAN2 tidak dipakai - tidak ada di daftar instruksi W560, jadi belum terbukti
+// ter-import. Kuadran dibetulkan lewat ATAN + koreksi eksplisit, dan port JS-nya
+// melakukan hal yang sama supaya hasilnya bisa diadu.
+//
+// AKIBAT yang harus diketahui sebelum menyetel soft limit: koreksi ini menghasilkan
+// ALFA di jangkauan (-PI/2, 3PI/2], bukan (-PI, PI] seperti ATAN2. Pose yang
+// menjangkau ke BELAKANG karena itu keluar sebagai THETA1 sekitar +200 derajat,
+// bukan -160. Posenya sama; yang dibandingkan ke PD1300_002/003 angkanya, jadi yang
+// kena batas atas, bukan batas bawah. Kalau -160 yang diinginkan, normalisasinya
+// ditambahkan SEKALI di sini dan batasnya ikut ditinjau - bukan ditambal di
+// pemanggil, karena di situ dia jadi aturan kedua yang tidak kelihatan dari FB.
+//
+// ERROR_ID: 0 tidak ada, 1 di luar jangkauan (R &gt; L2+L3), 2 terlalu dekat
+//           (R &lt; |L2-L3|), 3 singular (R = 0), 4 soft limit ditembus.
+
+DONE := FALSE;
+ERROR := FALSE;
+ERROR_ID := 0;
+
+IF EXECUTE THEN
+
+	// ---------------------------------------------------------------- tool polar
+	TY := ROBOT_TOOL_Y_LREAL;
+	TZ := ROBOT_TOOL_Z_LREAL;
+	R_TOOL := SQRT(TY * TY + TZ * TZ);
+	IF R_TOOL = 0.0 THEN
+		TH_TOOL := 0.0;
+	ELSIF TY &gt; 0.0 THEN
+		TH_TOOL := ATAN(TZ / TY);
+	ELSIF TY &lt; 0.0 THEN
+		TH_TOOL := ATAN(TZ / TY) + PI;
+	ELSIF TZ &gt;= 0.0 THEN
+		TH_TOOL := PI / 2.0;
+	ELSE
+		TH_TOOL := -PI / 2.0;
+	END_IF;
+
+	// --------------------------------------------- pose -&gt; titik pergelangan
+	TH_EE := ROBOT_POS_INPUT[3] * DEGREE_TO_RAD;
+	Y_EE := ROBOT_POS_INPUT[1] - R_TOOL * COS(TH_TOOL + TH_EE);
+	Z_EE := ROBOT_POS_INPUT[2] - R_TOOL * SIN(TH_TOOL + TH_EE);
+	Y3 := Y_EE - ROBOT_L4_LREAL * COS(TH_EE);
+	Z3 := (Z_EE - ROBOT_L1_LREAL) - ROBOT_L4_LREAL * SIN(TH_EE);
+	R := SQRT(Y3 * Y3 + Z3 * Z3);
+
+	// --------------------------------------------------- jangkauan DULU, baru ACOS
+	// Urutannya yang penting: memeriksa sesudah ACOS tidak menolong sama sekali,
+	// karena yang meledak justru ACOS-nya.
+	IF R &gt; (ROBOT_L2_LREAL + ROBOT_L3_LREAL) THEN
+		ERROR := TRUE;
+		ERROR_ID := 1;
+	ELSIF R &lt; ABS(ROBOT_L2_LREAL - ROBOT_L3_LREAL) THEN
+		ERROR := TRUE;
+		ERROR_ID := 2;
+	ELSIF R = 0.0 THEN
+		ERROR := TRUE;
+		ERROR_ID := 3;
+	ELSE
+		BETA := ACOS((ROBOT_L2_LREAL * ROBOT_L2_LREAL + ROBOT_L3_LREAL * ROBOT_L3_LREAL - R * R)
+			/ (2.0 * ROBOT_L2_LREAL * ROBOT_L3_LREAL));
+		GAMMA := ACOS((R * R + ROBOT_L2_LREAL * ROBOT_L2_LREAL - ROBOT_L3_LREAL * ROBOT_L3_LREAL)
+			/ (2.0 * ROBOT_L2_LREAL * R));
+
+		// Kuadran ALFA - ini inti perbaikan nomor 2.
+		IF Y3 &gt; 0.0 THEN
+			ALFA := ATAN(Z3 / Y3);
+		ELSIF Y3 &lt; 0.0 THEN
+			ALFA := ATAN(Z3 / Y3) + PI;
+		ELSIF Z3 &gt;= 0.0 THEN
+			ALFA := PI / 2.0;
+		ELSE
+			ALFA := -PI / 2.0;
+		END_IF;
+
+		IF ELBOW_UP THEN
+			THETA_RAD1 := ALFA - GAMMA;
+			THETA_RAD2 := PI - BETA;
+		ELSE
+			// Cabang yang dipakai mesin.
+			THETA_RAD1 := ALFA + GAMMA;
+			THETA_RAD2 := BETA - PI;
+		END_IF;
+		THETA_RAD3 := TH_EE - THETA_RAD1 - THETA_RAD2;
+
+		THETA_DEGREE1 := THETA_RAD1 * RAD_TO_DEGREE;
+		THETA_DEGREE2 := THETA_RAD2 * RAD_TO_DEGREE;
+		THETA_DEGREE3 := THETA_RAD3 * RAD_TO_DEGREE;
+
+		ROBOT_POS_OUTPUT[0] := ROBOT_POS_INPUT[0] - ROBOT_ROBOT_ORG_OFFSET_LREAL[0];
+		ROBOT_POS_OUTPUT[1] := THETA_DEGREE1 - ROBOT_ROBOT_ORG_OFFSET_LREAL[1];
+		ROBOT_POS_OUTPUT[2] := THETA_DEGREE2 - ROBOT_ROBOT_ORG_OFFSET_LREAL[2];
+		ROBOT_POS_OUTPUT[3] := THETA_DEGREE3 - ROBOT_ROBOT_ORG_OFFSET_LREAL[3];
+
+		// ------------------------------------------------------------ soft limit
+		// Perbandingannya sama persis dengan V1 (min+1 dan max-1, satu satuan di
+		// tiap ujung memang sengaja tidak terpakai) - yang berubah cuma HASILNYA
+		// sekarang dipakai.
+		LIMIT_HIT[0] := ROBOT_POS_OUTPUT[0] &lt; (REAL_TO_LREAL(PD1300_000) + 1.0);
+		LIMIT_HIT[1] := ROBOT_POS_OUTPUT[0] &gt; (REAL_TO_LREAL(PD1300_001) - 1.0);
+		LIMIT_HIT[2] := THETA_DEGREE1 &lt; (REAL_TO_LREAL(PD1300_002) + 1.0);
+		LIMIT_HIT[3] := THETA_DEGREE1 &gt; (REAL_TO_LREAL(PD1300_003) - 1.0);
+		LIMIT_HIT[4] := THETA_DEGREE2 &lt; (REAL_TO_LREAL(PD1300_004) + 1.0);
+		LIMIT_HIT[5] := THETA_DEGREE2 &gt; (REAL_TO_LREAL(PD1300_005) - 1.0);
+		LIMIT_HIT[6] := THETA_DEGREE3 &lt; (REAL_TO_LREAL(PD1300_006) + 1.0);
+		LIMIT_HIT[7] := THETA_DEGREE3 &gt; (REAL_TO_LREAL(PD1300_007) - 1.0);
+
+		LIMIT_ANY := FALSE;
+		FOR I := 0 TO 7 DO
+			IF LIMIT_HIT[I] THEN LIMIT_ANY := TRUE; END_IF;
+		END_FOR;
+
+		IF LIMIT_ANY THEN
+			// Sudutnya tetap dikeluarkan supaya pemanggil bisa menunjukkan
+			// &quot;seharusnya ke sini, tapi ditolak batas&quot; - yang ditahan cuma DONE.
+			ERROR := TRUE;
+			ERROR_ID := 4;
+		ELSE
+			DONE := TRUE;
+		END_IF;
+	END_IF;
+END_IF;</ST>
+          </BodyContent>
+        </MainBody>
+      </FunctionBlock>
+      <Program name="P_SIM_ROBOT">
+        <ExternalVars>
+          <Variable name="SIM_INIT_DONE">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_RESET">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_DT">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_HEARTBEAT">
+            <Type><TypeName>UDINT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_JOINT_POS">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_JOINT_CMD">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_JOINT_OUT">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>REAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_WORLD_POS">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>REAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_WORLD_CMD">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_JOG_MODE">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_JOG_HOLD">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_JOG_STEP">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_JOG_P">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_JOG_N">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_MOVE_EXEC">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_MOVE_DONE">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_HOME_EXEC">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_HOME">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_VEL">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_VEL_W">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_BUSY">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_LIMIT">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="7" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ERROR">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ERROR_ID">
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ELBOW_UP">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_CMD">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_POS">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_STROKE">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_VEL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_OPEN">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_CLOSED">
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_LEN">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="DEGREE_TO_RAD">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_000">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_001">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_002">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_003">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_004">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_005">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_006">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_007">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L1_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L2_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L3_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L4_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_ROBOT_ORG_OFFSET_LREAL">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="4" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="ROBOT_TOOL_Y_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_TOOL_Z_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+        </ExternalVars>
+        <Vars accessSpecifier="private">
+          <Variable name="FK2">
+            <Documentation xsi:type="SimpleText">instance FB kinematik maju yang sudah dibetulkan</Documentation>
+            <Type><TypeName>FORWARD_KINEMATIC_V2</TypeName></Type>
+          </Variable>
+          <Variable name="IK2">
+            <Documentation xsi:type="SimpleText">instance FB kinematik balik yang sudah dibetulkan</Documentation>
+            <Type><TypeName>INVERSE_KINEMATIC_V2</TypeName></Type>
+          </Variable>
+          <Variable name="i">
+            <Documentation xsi:type="SimpleText">pencacah FOR</Documentation>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="AX">
+            <Documentation xsi:type="SimpleText">sumbu yang tombolnya sedang ditekan, -1 kalau tidak ada</Documentation>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="DELTA">
+            <Documentation xsi:type="SimpleText">besar langkah jog scan ini, sudah bertanda</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="POSE_REQ">
+            <Documentation xsi:type="SimpleText">pose world yang diminta</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="NEED_IK">
+            <Documentation xsi:type="SimpleText">permintaan scan ini perlu inverse kinematic</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="TH">
+            <Documentation xsi:type="SimpleText">theta_EE radian, buat jog mode tool</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="STEP_M">
+            <Documentation xsi:type="SimpleText">langkah motion model satu scan</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="D">
+            <Documentation xsi:type="SimpleText">sisa jarak ke target</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="GRIP_TARGET">
+            <Documentation xsi:type="SimpleText">bukaan gripper yang dituju</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="LAST_P">
+            <Documentation xsi:type="SimpleText">keadaan tombol plus scan sebelumnya</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="LAST_N">
+            <Documentation xsi:type="SimpleText">keadaan tombol minus scan sebelumnya</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="EDGE_P">
+            <Documentation xsi:type="SimpleText">tepi naik tombol plus</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="EDGE_N">
+            <Documentation xsi:type="SimpleText">tepi naik tombol minus</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="LAST_MOVE">
+            <Documentation xsi:type="SimpleText">keadaan SIM_MOVE_EXEC scan sebelumnya</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="LAST_HOME">
+            <Documentation xsi:type="SimpleText">keadaan SIM_HOME_EXEC scan sebelumnya</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="EDGE_MOVE">
+            <Documentation xsi:type="SimpleText">tepi naik SIM_MOVE_EXEC</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="EDGE_HOME">
+            <Documentation xsi:type="SimpleText">tepi naik SIM_HOME_EXEC</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+        </Vars>
+        <MainBody>
+          <BodyContent xsi:type="ST">
+            <ST>// P_SIM_ROBOT - program simulasi robot Blurobot untuk simulator Sysmac Studio.
+//
+// Ditempel ke project NX102 KOSONG bersama FORWARD_KINEMATIC_V2 dan
+// INVERSE_KINEMATIC_V2. Langkah lengkapnya di SETUP.md. Yang perlu diingat sebelum
+// menyunting berkas ini:
+//
+//   * Rumus kinematiknya TIDAK ada di sini - semuanya di dua FB itu. Program ini
+//     cuma PEMANGGIL: tombol, target, motion model, gripper.
+//   * FB yang dipakai versi V2 (sudah dibetulkan). Yang verbatim dari mesin ada di
+//     ../extract/ dan sengaja TIDAK di-instance - dia catatan, bukan bagian sim.
+//     Daftar bedanya di ../extract/ANALYSIS.md dan di kepala kedua berkas V2.
+//   * Penjaga jangkauan ADA DI DALAM IK V2, bukan di sini. Program cuma membaca
+//     DONE dan ERROR_ID-nya. Dua penjaga untuk satu hal pasti berbeda pendapat.
+//   * TIDAK ada MC_* sama sekali. Posisi sumbu diintegrasi sendiri, jadi project
+//     sim tidak butuh setting axis, axes group, maupun EtherCAT.
+//   * TCP di UJUNG JARI gripper: panjang gripper sudah dijumlahkan ke
+//     ROBOT_TOOL_Y_LREAL waktu blok init dibangkitkan. Jangan menjumlahkannya lagi.
+//
+// Satuan: sumbu 0 mm (rel linear), sumbu 1-3 derajat (rantai planar di bidang Y-Z).
+
+// ---------------------------------------------------------------- inisialisasi
+// Nilai dari blurobot/sim/robot.config.json. Sengaja hanya scan pertama: sesudah
+// itu semuanya boleh ditulis dari luar lewat OPC UA (halaman viz mengubah dimensi
+// tanpa build ulang). SIM_RESET mengembalikannya ke nilai config.
+IF SIM_RESET THEN
+	SIM_INIT_DONE := FALSE;
+	SIM_RESET := FALSE;
+END_IF;
+
+IF NOT SIM_INIT_DONE THEN
+	// &lt;&lt;&lt; DIBANGKITKAN dari robot.config.json oleh tools/gen_sim.js - jangan sunting tangan
+	ROBOT_L1_LREAL := 400.0;
+	ROBOT_L2_LREAL := 300.0;
+	ROBOT_L3_LREAL := 250.0;
+	ROBOT_L4_LREAL := 100.0;
+
+	// tool.Y (50.0) + gripper.panjang (90.0) - TCP di ujung jari
+	ROBOT_TOOL_Y_LREAL := 140.0;
+	ROBOT_TOOL_Z_LREAL := 0.0;
+
+	SIM_GRIP_LEN := 90.0;
+	SIM_GRIP_STROKE := 80.0;
+	SIM_GRIP_VEL := 120.0;
+	SIM_GRIP_POS := 80.0;
+
+	ROBOT_ROBOT_ORG_OFFSET_LREAL[0] := 0.0;
+	ROBOT_ROBOT_ORG_OFFSET_LREAL[1] := 0.0;
+	ROBOT_ROBOT_ORG_OFFSET_LREAL[2] := 0.0;
+	ROBOT_ROBOT_ORG_OFFSET_LREAL[3] := 0.0;
+	ROBOT_ROBOT_ORG_OFFSET_LREAL[4] := 0.0;
+
+	PD1300_000 := -500.0;
+	PD1300_001 := 500.0;
+	PD1300_002 := -90.0;
+	PD1300_003 := 180.0;
+	PD1300_004 := -150.0;
+	PD1300_005 := 0.0;
+	PD1300_006 := -120.0;
+	PD1300_007 := 120.0;
+
+	SIM_VEL[0] := 200.0;
+	SIM_VEL[1] := 30.0;
+	SIM_VEL[2] := 30.0;
+	SIM_VEL[3] := 45.0;
+
+	SIM_VEL_W[0] := 100.0;
+	SIM_VEL_W[1] := 100.0;
+	SIM_VEL_W[2] := 100.0;
+	SIM_VEL_W[3] := 30.0;
+
+	SIM_HOME[0] := 0.0;
+	SIM_HOME[1] := 90.0;
+	SIM_HOME[2] := -90.0;
+	SIM_HOME[3] := 0.0;
+
+	SIM_DT := 0.004;
+	SIM_JOG_STEP := 10.0;
+	// &gt;&gt;&gt; DIBANGKITKAN
+
+	FOR i := 0 TO 3 DO
+		SIM_JOINT_POS[i] := SIM_HOME[i];
+		SIM_JOINT_CMD[i] := SIM_HOME[i];
+	END_FOR;
+
+	SIM_ERROR := FALSE;
+	SIM_ERROR_ID := 0;
+	SIM_INIT_DONE := TRUE;
+END_IF;
+
+// ------------------------------------------------------------------ tepi tombol
+// Jog di mesin asli itu LANGKAH per tekan, bukan tahan-jalan: cabang pencari
+// langkah di ladder (JOG_WORLD_STEP + 1) digerbang DONE milik IK, dan DONE itu
+// selalu TRUE, jadi langkahnya tidak pernah tumbuh dan tetap 10. Perilaku itu yang
+// ditiru di sini. SIM_JOG_HOLD menyalakan mode tahan-jalan - itu TAMBAHAN untuk
+// viz, bukan sifat mesin.
+FOR i := 0 TO 3 DO
+	EDGE_P[i] := SIM_JOG_P[i] AND NOT LAST_P[i];
+	EDGE_N[i] := SIM_JOG_N[i] AND NOT LAST_N[i];
+	LAST_P[i] := SIM_JOG_P[i];
+	LAST_N[i] := SIM_JOG_N[i];
+END_FOR;
+EDGE_MOVE := SIM_MOVE_EXEC AND NOT LAST_MOVE;
+LAST_MOVE := SIM_MOVE_EXEC;
+EDGE_HOME := SIM_HOME_EXEC AND NOT LAST_HOME;
+LAST_HOME := SIM_HOME_EXEC;
+
+// Sumbu mana yang ditekan, dan sebesar apa langkahnya. Satu sumbu sekali jalan:
+// dua tombol sekaligus di mesin asli juga saling mengunci lewat latch START_*.
+AX := -1;
+DELTA := 0.0;
+FOR i := 0 TO 3 DO
+	IF SIM_JOG_P[i] AND (EDGE_P[i] OR SIM_JOG_HOLD) THEN
+		AX := i;
+		DELTA := SIM_JOG_STEP;
+		IF SIM_JOG_HOLD THEN
+			// Mode tahan: kecepatan x dt. DUA daftar, karena satuannya memang beda -
+			// SIM_VEL derajat/s pada SUMBU, SIM_VEL_W mm/s pada KOORDINAT world.
+			// Satu daftar buat dua-duanya bikin jog world kecepatannya ikut sumbu yang
+			// kebetulan senomor, dan itu angka yang tidak ada artinya.
+			IF SIM_JOG_MODE = 0 THEN DELTA := SIM_VEL[i] * SIM_DT;
+			ELSE DELTA := SIM_VEL_W[i] * SIM_DT; END_IF;
+		END_IF;
+	ELSIF SIM_JOG_N[i] AND (EDGE_N[i] OR SIM_JOG_HOLD) THEN
+		AX := i;
+		DELTA := -SIM_JOG_STEP;
+		IF SIM_JOG_HOLD THEN
+			IF SIM_JOG_MODE = 0 THEN DELTA := -SIM_VEL[i] * SIM_DT;
+			ELSE DELTA := -SIM_VEL_W[i] * SIM_DT; END_IF;
+		END_IF;
+	END_IF;
+END_FOR;
+
+// ------------------------------------------------------------ pose yang diminta
+// POSE_REQ diisi kalau ada permintaan berbasis WORLD (jog world/tool atau move
+// point). NEED_IK menandai bahwa IK perlu dijalankan scan ini.
+NEED_IK := FALSE;
+
+IF (AX &gt;= 0) AND (SIM_JOG_MODE = 0) THEN
+	// Jog JOINT: tidak lewat IK sama sekali.
+	SIM_JOINT_CMD[AX] := SIM_JOINT_CMD[AX] + DELTA;
+
+ELSIF AX &gt;= 0 THEN
+	FOR i := 0 TO 3 DO
+		POSE_REQ[i] := REAL_TO_LREAL(SIM_WORLD_POS[i]);
+	END_FOR;
+	IF SIM_JOG_MODE = 1 THEN
+		// Jog WORLD: satu sumbu world digeser apa adanya (X, Y, Z, theta_EE).
+		POSE_REQ[AX] := POSE_REQ[AX] + DELTA;
+	ELSE
+		// Jog TOOL: sumbu 1 maju searah tool, sumbu 2 tegak lurus terhadapnya.
+		// Penyiap pose kandidat di project asli TIDAK ada di ladder mana pun
+		// (kemungkinan ditulis HMI Pro-face), jadi arti tiap tombol tool di sini
+		// DITETAPKAN oleh sim - dan ini catatannya, bukan hasil ekstrak.
+		TH := POSE_REQ[3] * DEGREE_TO_RAD;
+		CASE AX OF
+			0: POSE_REQ[0] := POSE_REQ[0] + DELTA;
+			1: POSE_REQ[1] := POSE_REQ[1] + DELTA * COS(TH);
+			   POSE_REQ[2] := POSE_REQ[2] + DELTA * SIN(TH);
+			2: POSE_REQ[1] := POSE_REQ[1] - DELTA * SIN(TH);
+			   POSE_REQ[2] := POSE_REQ[2] + DELTA * COS(TH);
+			3: POSE_REQ[3] := POSE_REQ[3] + DELTA;
+		END_CASE;
+	END_IF;
+	NEED_IK := TRUE;
+
+ELSIF EDGE_MOVE THEN
+	FOR i := 0 TO 3 DO
+		POSE_REQ[i] := SIM_WORLD_CMD[i];
+	END_FOR;
+	NEED_IK := TRUE;
+
+ELSIF EDGE_HOME THEN
+	FOR i := 0 TO 3 DO
+		SIM_JOINT_CMD[i] := SIM_HOME[i];
+	END_FOR;
+END_IF;
+
+// ------------------------------------------------------ inverse kinematic
+// Penjaga jangkauan ADA DI DALAM INVERSE_KINEMATIC_V2, bukan di sini lagi. Dulu
+// program ini menghitung sendiri Y3/Z3/R buat memutuskan boleh atau tidak - dua
+// penjaga untuk satu hal, dan yang di luar tidak pernah tahu rumus di dalam. Yang
+// dipakai sekarang jawaban FB-nya sendiri: DONE, ERROR_ID.
+IF NEED_IK THEN
+	IK2(EXECUTE := TRUE, ROBOT_POS_INPUT := POSE_REQ, ELBOW_UP := SIM_ELBOW_UP);
+	IF IK2.DONE THEN
+		FOR i := 0 TO 3 DO
+			SIM_JOINT_CMD[i] := IK2.ROBOT_POS_OUTPUT[i];
+		END_FOR;
+		SIM_ERROR := FALSE;
+		SIM_ERROR_ID := 0;
+	ELSE
+		// Perintahnya DIBUANG, posisi sekarang dipertahankan. Memakai keluaran FB
+		// yang DONE-nya FALSE berarti lengan melompat ke pose yang robotnya tidak
+		// pernah bisa capai - dan di layar itu tampak seperti gerakan biasa.
+		SIM_ERROR := TRUE;
+		SIM_ERROR_ID := IK2.ERROR_ID;
+	END_IF;
+END_IF;
+
+// ------------------------------------------------------------------ gripper
+// Dua jari, bukaan = jarak antar jari. Modelnya sama dengan sumbu: didorong ke
+// target dengan batas kecepatan. Panjang gripper TIDAK diurus di sini - dia sudah
+// ikut di ROBOT_TOOL_Y_LREAL, jadi TCP kinematiknya memang di ujung jari.
+IF SIM_GRIP_CMD THEN GRIP_TARGET := 0.0; ELSE GRIP_TARGET := SIM_GRIP_STROKE; END_IF;
+D := GRIP_TARGET - SIM_GRIP_POS;
+STEP_M := SIM_GRIP_VEL * SIM_DT;
+IF ABS(D) &lt;= STEP_M THEN
+	SIM_GRIP_POS := GRIP_TARGET;
+ELSIF D &gt; 0.0 THEN
+	SIM_GRIP_POS := SIM_GRIP_POS + STEP_M;
+ELSE
+	SIM_GRIP_POS := SIM_GRIP_POS - STEP_M;
+END_IF;
+SIM_GRIP_CLOSED := SIM_GRIP_POS &lt;= 0.0;
+SIM_GRIP_OPEN := SIM_GRIP_POS &gt;= SIM_GRIP_STROKE;
+
+// ------------------------------------------------------------ motion model
+// Pengganti MC_*: tiap sumbu didorong ke target dengan batas kecepatan sendiri.
+// Tanpa profil trapesium - yang dinilai viz ini kinematiknya, bukan dinamikanya.
+SIM_BUSY := FALSE;
+FOR i := 0 TO 3 DO
+	STEP_M := SIM_VEL[i] * SIM_DT;
+	D := SIM_JOINT_CMD[i] - SIM_JOINT_POS[i];
+	IF ABS(D) &lt;= STEP_M THEN
+		SIM_JOINT_POS[i] := SIM_JOINT_CMD[i];
+	ELSIF D &gt; 0.0 THEN
+		SIM_JOINT_POS[i] := SIM_JOINT_POS[i] + STEP_M;
+		SIM_BUSY := TRUE;
+	ELSE
+		SIM_JOINT_POS[i] := SIM_JOINT_POS[i] - STEP_M;
+		SIM_BUSY := TRUE;
+	END_IF;
+END_FOR;
+SIM_MOVE_DONE := NOT SIM_BUSY;
+
+// ------------------------------------------------------ forward kinematic + batas
+// FK dipanggil TIAP SCAN dengan EXECUTE TRUE. Di V2 pin itu benar-benar dibaca
+// (di V1 tidak), jadi menaruh FALSE di sini berarti pose world berhenti diperbarui -
+// lengan tetap bergerak, angkanya membeku.
+FK2(EXECUTE := TRUE, ROBOT_POS_INPUT := SIM_JOINT_POS);
+FOR i := 0 TO 3 DO
+	SIM_WORLD_POS[i] := FK2.ROBOT_POS_WORLD_OUTPUT[i];
+	SIM_JOINT_OUT[i] := FK2.ROBOT_POS_JOINT_OUTPUT[i];
+END_FOR;
+
+// Batas dinilai atas posisi SEKARANG, bukan atas pose yang diminta - yang diminta
+// sudah dinilai IK V2 sendiri lewat LIMIT_HIT. Dua-duanya perlu: yang satu menolak
+// perintah, yang satu memberi tahu di mana lengannya berdiri sekarang.
+// Perbandingannya sama persis dengan ST asli (min+1 dan max-1).
+SIM_LIMIT[0] := SIM_JOINT_POS[0] &lt; (REAL_TO_LREAL(PD1300_000) + 1.0);
+SIM_LIMIT[1] := SIM_JOINT_POS[0] &gt; (REAL_TO_LREAL(PD1300_001) - 1.0);
+SIM_LIMIT[2] := SIM_JOINT_POS[1] &lt; (REAL_TO_LREAL(PD1300_002) + 1.0);
+SIM_LIMIT[3] := SIM_JOINT_POS[1] &gt; (REAL_TO_LREAL(PD1300_003) - 1.0);
+SIM_LIMIT[4] := SIM_JOINT_POS[2] &lt; (REAL_TO_LREAL(PD1300_004) + 1.0);
+SIM_LIMIT[5] := SIM_JOINT_POS[2] &gt; (REAL_TO_LREAL(PD1300_005) - 1.0);
+SIM_LIMIT[6] := SIM_JOINT_POS[3] &lt; (REAL_TO_LREAL(PD1300_006) + 1.0);
+SIM_LIMIT[7] := SIM_JOINT_POS[3] &gt; (REAL_TO_LREAL(PD1300_007) - 1.0);
+
+SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
+          </BodyContent>
+        </MainBody>
+      </Program>
+    </GlobalNamespace>
+  </Types>
+  <Instances>
+    <Configuration name="BlurobotSim">
+      <Resource name="MainResource" resourceTypeName="">
+        <GlobalVars>
+          <Variable name="SIM_INIT_DONE">
+            <Documentation xsi:type="SimpleText">sudah diinisialisasi dari config</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_RESET">
+            <Documentation xsi:type="SimpleText">tulis TRUE: paksa init ulang dari nilai config</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_DT">
+            <Documentation xsi:type="SimpleText">periode task primer detik - HARUS sama dengan setelan task di Studio</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_HEARTBEAT">
+            <Documentation xsi:type="SimpleText">naik tiap scan - bukti program sim benar-benar jalan</Documentation>
+            <Type><TypeName>UDINT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_JOINT_POS">
+            <Documentation xsi:type="SimpleText">posisi sumbu sekarang: X mm, theta1-3 derajat</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_JOINT_CMD">
+            <Documentation xsi:type="SimpleText">target sumbu yang dikejar motion model</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_JOINT_OUT">
+            <Documentation xsi:type="SimpleText">keluaran joint FORWARD_KINEMATIC</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>REAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_WORLD_POS">
+            <Documentation xsi:type="SimpleText">pose world hasil FK: X Y Z theta_EE - sudah termasuk tool</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>REAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_WORLD_CMD">
+            <Documentation xsi:type="SimpleText">target move point: X Y Z theta_EE</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_JOG_MODE">
+            <Documentation xsi:type="SimpleText">0 joint / 1 world / 2 tool</Documentation>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_JOG_HOLD">
+            <Documentation xsi:type="SimpleText">TRUE: tahan-jalan (tambahan viz). FALSE: satu langkah per tekan, seperti mesin</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_JOG_STEP">
+            <Documentation xsi:type="SimpleText">besar satu langkah jog - mm atau derajat</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_JOG_P">
+            <Documentation xsi:type="SimpleText">tombol jog arah plus per sumbu</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_JOG_N">
+            <Documentation xsi:type="SimpleText">tombol jog arah minus per sumbu</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_MOVE_EXEC">
+            <Documentation xsi:type="SimpleText">tepi naik: jalankan move ke SIM_WORLD_CMD</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_MOVE_DONE">
+            <Documentation xsi:type="SimpleText">semua sumbu sudah sampai target</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_HOME_EXEC">
+            <Documentation xsi:type="SimpleText">tepi naik: kembali ke pose home</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_HOME">
+            <Documentation xsi:type="SimpleText">pose home per sumbu</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_VEL">
+            <Documentation xsi:type="SimpleText">kecepatan maksimum per sumbu - mm/s atau derajat/s</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_VEL_W">
+            <Documentation xsi:type="SimpleText">kecepatan jog world/tool - mm/s untuk X Y Z, derajat/s untuk theta_EE</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="3" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_BUSY">
+            <Documentation xsi:type="SimpleText">masih ada sumbu yang bergerak</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_LIMIT">
+            <Documentation xsi:type="SimpleText">soft limit yang KENA - pasangan min/max per sumbu</Documentation>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="7" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="SIM_ERROR">
+            <Documentation xsi:type="SimpleText">perintah terakhir ditolak</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ERROR_ID">
+            <Documentation xsi:type="SimpleText">0 tidak ada, 1 di luar jangkauan, 2 terlalu dekat, 3 singular, 4 soft limit</Documentation>
+            <Type><TypeName>INT</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ELBOW_UP">
+            <Documentation xsi:type="SimpleText">FALSE = cabang elbow yang sama dengan mesin. TRUE = cermin, cuma ada di FB V2</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_CMD">
+            <Documentation xsi:type="SimpleText">TRUE tutup, FALSE buka</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_POS">
+            <Documentation xsi:type="SimpleText">bukaan sekarang - jarak antar jari, mm</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_STROKE">
+            <Documentation xsi:type="SimpleText">bukaan penuh, mm</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_VEL">
+            <Documentation xsi:type="SimpleText">kecepatan jari, mm/s</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_OPEN">
+            <Documentation xsi:type="SimpleText">jari sudah terbuka penuh</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_CLOSED">
+            <Documentation xsi:type="SimpleText">jari sudah menutup rapat</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_GRIP_LEN">
+            <Documentation xsi:type="SimpleText">panjang gripper - sudah ikut di ROBOT_TOOL_Y_LREAL, ini buat viz</Documentation>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L1_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L2_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L3_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_L4_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_ROBOT_ORG_OFFSET_LREAL">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>LREAL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="4" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
+          <Variable name="ROBOT_TOOL_Y_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="ROBOT_TOOL_Z_LREAL">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+        </GlobalVars>
+        <GlobalVars constant="true">
+          <Variable name="DEGREE_TO_RAD">
+            <Type><TypeName>LREAL</TypeName></Type>
+            <InitialValue><SimpleValue value="0.017453292" /></InitialValue>
+          </Variable>
+          <Variable name="PI">
+            <Type><TypeName>LREAL</TypeName></Type>
+            <InitialValue><SimpleValue value="3.141592654" /></InitialValue>
+          </Variable>
+          <Variable name="RAD_TO_DEGREE">
+            <Type><TypeName>LREAL</TypeName></Type>
+            <InitialValue><SimpleValue value="57.29577951" /></InitialValue>
+          </Variable>
+        </GlobalVars>
+        <GlobalVars retain="true">
+          <Variable name="PD1300_000">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_001">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_002">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_003">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_004">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_005">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_006">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+          <Variable name="PD1300_007">
+            <Type><TypeName>REAL</TypeName></Type>
+          </Variable>
+        </GlobalVars>
+      </Resource>
+    </Configuration>
+  </Instances>
+</Project>

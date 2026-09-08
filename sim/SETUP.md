@@ -8,8 +8,20 @@ Sebelum mulai, pastikan berkasnya segar:
 ```bash
 node blurobot/tools/extract.js     # extract/*.st + variables.tsv dari project mesin
 node blurobot/tools/gen_sim.js     # blok init ST + tabel variabel + tags.json dari config
-node blurobot/tests/run.js         # 4 suite - jangan ke Studio kalau ini merah
+node blurobot/tools/gen_xml.js     # semuanya jadi SATU berkas import: sim/BlurobotSim.xml
+node blurobot/tests/run.js         # 5 suite - jangan ke Studio kalau ini merah
 ```
+
+Ada DUA jalur memasukkan ini ke Studio. Pilih satu:
+
+| | |
+|---|---|
+| **A. Import XML** (langkah 2A) | satu berkas, satu klik. Bentuknya sudah lolos XSD resmi Studio, tapi apakah Studio mau meng-import POU ber-badan ST lewat XML **belum pernah dibuktikan di mesin ini** |
+| **B. Tempel manual** (langkah 2B–4) | lebih panjang dan lebih rawan salah kolom, tapi tiap langkahnya jalur yang memang dipakai sehari-hari |
+
+Coba A dulu. Kalau Studio bilang `(Import failed)` atau `(DefinitionError)`, jangan
+menebak-nebak: catat pesannya, lalu kerjakan B — dan pesan itu yang jadi bahan
+memperbaiki `gen_xml.js`.
 
 ## 1. Project baru
 
@@ -24,7 +36,34 @@ Controller-nya beda dari project mesin (NJ501). Yang diangkat cuma ST murni, jad
 tidak ada yang bergantung ke model controller — dan NX102 dipilih karena OPC UA
 server untuk simulator memang ada di situ.
 
-## 2. Dua function block
+## 2A. Import XML (satu berkas)
+
+```bash
+node blurobot/tools/gen_xml.js
+pwsh scripts/validate_xml.ps1 blurobot/sim/BlurobotSim.xml
+```
+
+Validator harus bilang `Semua lolos XSD` sebelum berkasnya dibawa ke Studio. Studio
+sendiri cuma bilang `(Import failed)` tanpa nomor baris; validator menyebut elemen dan
+barisnya.
+
+Di Studio: project NX102 baru (langkah 1) → **Multiview Explorer → klik kanan
+Programming → Import** (atau menu **File → Import**) → pilih `sim/BlurobotSim.xml`.
+
+Yang ikut di berkas itu: dua FB V2 lengkap dengan pin dan variabelnya, program
+`P_SIM_ROBOT` berikut variabel lokal dan `ExternalVars`-nya, dan seluruh tabel
+variabel global (termasuk `Constant` dan nilai awal `PI`/`DEGREE_TO_RAD`/
+`RAD_TO_DEGREE`).
+
+Yang **TIDAK** ikut, dan tetap harus dikerjakan tangan:
+
+* **Penugasan task** — XSD IEC 61131-10 tidak punya elemen untuk itu sama sekali.
+  Lanjut ke langkah 4 butir 4 dan 5.
+* Setelan controller, periode task, dan setelan OPC UA server.
+
+Sesudah import berhasil, **lompat ke langkah 4 butir 4** (penugasan task).
+
+## 2B. Dua function block (jalur tempel)
 
 Yang ditempel ke Studio adalah **versi V2** — yang sudah dibetulkan:
 [`FORWARD_KINEMATIC_V2.st`](FORWARD_KINEMATIC_V2.st) dan
@@ -49,7 +88,7 @@ Untuk masing-masing:
 V1 mendeklarasi empat `BLUE_ROBOT_AXIS` yang badan ST-nya tidak pernah sentuh, dan
 di project tanpa axis itu bikin Build gagal.
 
-## 3. Variabel global
+## 3. Variabel global (jalur tempel)
 
 **Programming → Data → Global Variables**, klik sel pertama, lalu tempel isi
 [`GlobalVariables.tsv`](GlobalVariables.tsv) apa adanya.
@@ -68,7 +107,9 @@ project mesin, dan memang tidak boleh ditulis program mana pun.
 **Network Publish tidak perlu disetel.** Variabel global ter-publish otomatis ke OPC UA
 server simulator; path-nya `GlobalVars.<nama>`.
 
-## 4. Program
+## 4. Program + penugasan task
+
+Kalau lewat jalur A, butir 1–3 sudah selesai; langsung ke butir 4.
 
 1. **Programming → POUs → Programs → Add → ST**, namanya `P_SIM_ROBOT`.
 2. Tabel variabel programnya: tempel [`ProgramVariables.tsv`](ProgramVariables.tsv).
@@ -131,6 +172,8 @@ Sesudah itu baru jalankan bridge + halaman viz — lihat [`../README.md`](../REA
 |---|---|
 | tag ada, semua diam, `SIM_HEARTBEAT` tetap 0 | program belum ditugaskan ke task |
 | Build gagal menyebut `BLUE_ROBOT_AXIS1` | yang ditempel FB V1 dari `extract/`, bukan V2 dari `sim/` |
+| `(Import failed)` tanpa nomor baris | jalankan `pwsh scripts/validate_xml.ps1` dulu — dia menyebut elemen dan barisnya |
+| `(DefinitionError)` sesudah import XML | susunan pin FB tidak cocok; catat nama POU-nya, itu bahan buat memperbaiki `gen_xml.js` |
 | gripper tidak bergerak | `SIM_GRIP_VEL` 0, atau `SIM_GRIP_STROKE` 0 — dua-duanya diisi blok init |
 | TCP meleset sepanjang gripper | panjang gripper dijumlahkan dua kali; di ST harus muncul TEPAT SEKALI, di `ROBOT_TOOL_Y_LREAL` |
 | Build gagal "cannot assign to constant" | `PI`/`DEGREE_TO_RAD`/`RAD_TO_DEGREE` ikut ditempel tanpa kolom Constant |

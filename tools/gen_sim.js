@@ -293,6 +293,9 @@ function main() {
   console.log('OK  ' + GLOBAL_SIM.length + ' global sim + ' + ext.length + ' external FB, '
     + LOKAL.length + ' variabel program -> sim/, ' + tags.baca.length + ' tag baca / '
     + tags.tulis.length + ' tag tulis -> bridge/tags.json');
+  // Berkas import ikut basi begitu tabel variabel berubah, dan basinya DIAM: XML
+  // lama tetap sah, tetap lolos XSD, cuma isinya project yang sudah tidak ada.
+  console.log('    lanjut:  node blurobot/tools/gen_xml.js   (BlurobotSim.xml ikut basi)');
 }
 
 main();
