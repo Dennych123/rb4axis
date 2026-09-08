@@ -308,9 +308,34 @@ function gripperPoints(pos, cfg, bukaan) {
   };
 }
 
+/**
+ * Nilai dari PLC -> array JS biasa. TIGA bentuk masuk ke sini, dan itu bukan
+ * kerapian yang bisa ditawar:
+ *
+ *   [1,2,3]              BOOL array - node-opcua memberi Array biasa
+ *   Float64Array         LREAL/REAL array - typed array
+ *   {"0":1,"1":2}        typed array yang sudah lewat JSON (SSE) - OBJEK, tanpa
+ *                        length, jadi Array.from() mengembalikan [] KOSONG
+ *
+ * Bentuk ketiga itu yang menghapus seluruh lengan dari layar: sudut sendi jadi
+ * undefined, chainPoints menghasilkan NaN, dan yang tersisa cuma rel dan kereta -
+ * tanpa satu pun galat di konsol, karena NaN bukan error.
+ */
+function keArray(v, panjang) {
+  const n = panjang || 0;
+  if (v == null) return new Array(n).fill(0);
+  if (Array.isArray(v)) return v.slice();
+  if (ArrayBuffer.isView(v)) return Array.prototype.slice.call(v);
+  if (typeof v === 'object') {
+    const kunci = Object.keys(v).filter(k => /^\d+$/.test(k)).map(Number).sort((a, b) => a - b);
+    if (kunci.length) return kunci.map(k => v[k]);
+  }
+  return new Array(n).fill(0);
+}
+
 if (typeof module !== 'undefined') {
   module.exports = { forwardKinematic, inverseKinematic, reachable, atan2Fix, toolPolar, toREAL,
                      forwardKinematicV2, inverseKinematicV2, toolPolarV2, atanKuadran,
-                     chainPoints, gripperPoints,
+                     chainPoints, gripperPoints, keArray,
                      KIN_PI, KIN_DEGREE_TO_RAD, KIN_RAD_TO_DEGREE };
 }

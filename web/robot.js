@@ -84,9 +84,12 @@ function stream() {
     statusTampil(j.plc.pesan);
     var v = j.nilai || {};
     if (st.plc) {
-      if (v[TAG.joint]) { st.joint = Array.from(v[TAG.joint]); st.cmd = st.joint.slice(); }
-      if (v[TAG.world]) st.world = Array.from(v[TAG.world]);
-      if (v[TAG.limit]) st.limit = Array.from(v[TAG.limit]);
+      // keArray, BUKAN Array.from: array LREAL/REAL datang sebagai typed array dan
+      // lewat JSON berubah jadi objek {"0":..} tanpa length - Array.from() atas objek
+      // begitu mengembalikan [] kosong, dan lengannya lenyap dari layar tanpa galat.
+      if (v[TAG.joint]) { st.joint = keArray(v[TAG.joint], 4); st.cmd = st.joint.slice(); }
+      if (v[TAG.world]) st.world = keArray(v[TAG.world], 4);
+      if (v[TAG.limit]) st.limit = keArray(v[TAG.limit], 8);
       if (v[TAG.beat] !== undefined) st.beat = v[TAG.beat];
       st.err = !!v[TAG.err]; st.errId = v[TAG.errId] || 0;
       if (v.SIM_ELBOW_UP !== undefined) st.elbowUp = !!v.SIM_ELBOW_UP;
@@ -99,8 +102,8 @@ function stream() {
         st.dim.L3 = v.ROBOT_L3_LREAL; st.dim.L4 = v.ROBOT_L4_LREAL;
         st.dim.toolY = v.ROBOT_TOOL_Y_LREAL; st.dim.toolZ = v.ROBOT_TOOL_Z_LREAL;
       }
-      if (v.SIM_VEL) st.vel = Array.from(v.SIM_VEL);
-      if (v.SIM_VEL_W) st.velW = Array.from(v.SIM_VEL_W);
+      if (v.SIM_VEL) st.vel = keArray(v.SIM_VEL, 4);
+      if (v.SIM_VEL_W) st.velW = keArray(v.SIM_VEL_W, 4);
       for (var i = 0; i < 8; i++) {
         var k = 'PD1300_00' + i;
         if (v[k] !== undefined) st.dim.limitv[i] = v[k];

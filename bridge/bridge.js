@@ -92,6 +92,14 @@ const jalur = n => TAGS.prefix + n;
 const bolehTulis = new Set(TAGS.tulis.map(t => t.nama));
 const dibaca = TAGS.baca.map(t => t.nama);
 
+// Typed array (Float64Array untuk LREAL, Float32Array untuk REAL) dijadikan array
+// biasa DI SINI, sebelum apa pun. Lewat JSON, typed array berubah jadi objek
+// {"0":..,"1":..} tanpa length - dan penerimanya diam-diam membacanya sebagai kosong.
+// Dibetulkan di sumber, bukan di tiap pemakai: pemakai berikutnya pasti lupa.
+function polos(v) {
+  return ArrayBuffer.isView(v) ? Array.prototype.slice.call(v) : v;
+}
+
 function siar() {
   const data = 'data: ' + JSON.stringify({ plc: ringkas(), nilai }) + '\n\n';
   for (const res of klienSSE) { try { res.write(data); } catch (e) { klienSSE.delete(res); } }
@@ -233,7 +241,7 @@ async function sambung() {
       const d = await sesi.read({ nodeId, attributeId: AttributeIds.Value });
       if (!d.statusCode.isGood()) { hilang.push(n); continue; }
       meta[n] = { nodeId, dataType: d.value.dataType, arrayType: d.value.arrayType };
-      nilai[n] = d.value.value;
+      nilai[n] = polos(d.value.value);
     } catch (e) { hilang.push(n); }
   }
   if (hilang.length) {
@@ -279,7 +287,7 @@ async function sambung() {
     if (!meta[n]) continue;
     const item = await sub.monitor({ nodeId: meta[n].nodeId, attributeId: AttributeIds.Value },
       { samplingInterval: 50, queueSize: 4, discardOldest: true }, TimestampsToReturn.Neither);
-    item.on('changed', d => { nilai[n] = d.value.value; siarNanti(); });
+    item.on('changed', d => { nilai[n] = polos(d.value.value); siarNanti(); });
   }
 
   plc = { sambung: true, sejak: new Date().toISOString(), pesan: Object.keys(meta).length + ' tag', percobaan: 0 };

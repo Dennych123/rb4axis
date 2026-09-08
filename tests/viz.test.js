@@ -114,6 +114,34 @@ chk('robot.js tidak menghitung rantai sendiri',
 // bikin Z PLC jadi ketinggian. Ketukar: lengan rebah, rel berdiri.
 chk('pemetaan sumbu PLC->three ada di satu fungsi', /function ke3\(p\)[\s\S]*?p\.x, p\.z, p\.y/.test(robot));
 
+// ------------------------------------------------ nilai PLC -> array yang bisa dipakai
+// SUDAH KEJADIAN: lengan hilang dari layar begitu PLC tersambung, base dan rel tetap
+// ada. Sebabnya bentuk nilainya, bukan kinematiknya - array LREAL/REAL datang sebagai
+// Float64Array, dan lewat JSON (SSE) berubah jadi objek {"0":..,"1":..} TANPA length.
+// `Array.from` atas objek begitu mengembalikan [] kosong, sudut sendi jadi undefined,
+// chainPoints menghasilkan NaN, dan tidak ada satu pun galat di konsol karena NaN
+// bukan error.
+const lewatJson = v => JSON.parse(JSON.stringify(v));
+chk('keArray: typed array (LREAL dari node-opcua)',
+    K.keArray(new Float64Array([0, 90, -90, 0])).join() === '0,90,-90,0');
+chk('keArray: typed array yang sudah lewat JSON - bentuk yang bikin lengan hilang',
+    K.keArray(lewatJson(new Float64Array([0, 90, -90, 0]))).join() === '0,90,-90,0',
+    'Array.from atas bentuk ini memberi [] kosong');
+chk('keArray: array biasa (BOOL) lewat apa adanya',
+    K.keArray([false, true, false, false]).length === 4);
+chk('keArray: nilai hilang jadi array nol sepanjang yang diminta',
+    K.keArray(undefined, 4).join() === '0,0,0,0',
+    'lebih baik lengan di pose nol daripada NaN yang menghapusnya dari layar');
+chk('rantai tetap tergambar dari bentuk objek', (() => {
+  const j = K.keArray(lewatJson(new Float64Array([100, 45, -60, 10])), 4);
+  return K.chainPoints(j, cfg).every(p => isFinite(p.x) && isFinite(p.y) && isFinite(p.z));
+})());
+
+// Halaman TIDAK boleh memakai Array.from atas nilai dari stream - itu yang dulu salah.
+const robotSrc = fs.readFileSync(path.join(__dirname, '..', 'web', 'robot.js'), 'utf8');
+chk('robot.js memakai keArray, bukan Array.from, buat nilai dari PLC',
+    !/Array\.from\(v[.[]/.test(robotSrc), 'Array.from(v.SIM_...) mengembalikan [] untuk objek');
+
 // --------------------------------------------- panjang ruas = jarak, bukan kelipatan
 // SUDAH KEJADIAN: `kotak(58, 1, 46)` menaruh tebal 1 di y dan kedalaman 46 di z,
 // sementara ruasKe menyetel scale.z = panjang. Hasilnya tiap ruas tergambar 46 KALI
