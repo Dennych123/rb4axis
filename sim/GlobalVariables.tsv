@@ -16,6 +16,18 @@ SIM_JOG_N	ARRAY[0..3] OF BOOL			False	False	Publish Only	tombol jog arah minus p
 SIM_JOG_SET	ARRAY[0..3] OF LREAL			False	False	Publish Only	target sumbu dari slider jog - dipakai waktu SIM_JOG_SET_EXEC
 SIM_JOG_SET_EXEC	BOOL			False	False	Publish Only	tepi naik: pakai SIM_JOG_SET sebagai target sumbu (slider dilepas)
 SIM_MOVE_EXEC	BOOL			False	False	Publish Only	tepi naik: jalankan move ke SIM_WORLD_CMD
+SIM_MOVE_MODE	INT			False	False	Publish Only	0 gerak sumbu (tiap sumbu jalan sendiri), 1 gerak LURUS (IK tiap scan)
+SIM_LINE_VEL	LREAL			False	False	Publish Only	kecepatan ujung tool di gerak lurus, mm/detik
+SIM_LINE_ACC	LREAL			False	False	Publish Only	akselerasi ujung tool di gerak lurus, mm/detik2
+SIM_LINE_ACTIVE	BOOL			False	False	Publish Only	gerak lurus sedang jalan
+SIM_LINE_S	LREAL			False	False	Publish Only	sudah berapa mm menyusuri garis
+SIM_LINE_LEN	LREAL			False	False	Publish Only	panjang garis yang sedang ditempuh, mm
+SIM_LINE_ABORT	INT			False	False	Publish Only	kenapa gerak lurus berhenti: 0 selesai, 1 IK menolak, 2 dibatalkan operator
+SIM_DEV_NOW	LREAL			False	False	Publish Only	simpangan ujung tool dari garis lurus SEKARANG, mm
+SIM_DEV_MAX	LREAL			False	False	Publish Only	simpangan terbesar selama perpindahan terakhir, mm
+SIM_DEV_MODE	INT			False	False	Publish Only	mode yang menghasilkan SIM_DEV_MAX - biar dua angka tidak tertukar
+SIM_MOVE_T	LREAL			False	False	Publish Only	lama perpindahan terakhir, detik
+SIM_DEV_TRACE	ARRAY[0..49] OF LREAL			False	False	Publish Only	kurva simpangan sepanjang perpindahan - 50 titik, direkam PLC sendiri
 SIM_MOVE_DONE	BOOL			False	False	Publish Only	semua sumbu sudah sampai target
 SIM_HOME_EXEC	BOOL			False	False	Publish Only	tepi naik: kembali ke pose home
 SIM_HOME	ARRAY[0..3] OF LREAL			False	False	Publish Only	pose home per sumbu - SEKALIGUS pose jalan waktu menyusuri rel

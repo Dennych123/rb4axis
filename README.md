@@ -167,13 +167,34 @@ berarti siku lurus, dan di situ ujung tool tidak bisa lagi bergerak ke segala ar
 Mesin tidak membutuhkannya - IK tertutup selesai satu langkah - tapi gerak lurus, kontrol
 gaya, dan peringatan singular semuanya butuh.
 
-**"Lurus atau tidak" dijawab angka, bukan perasaan.** Tombol Run menjalankan perpindahan
-yang sama dengan dua cara, lalu mengukur simpangannya dari garis lurus:
+**"Lurus atau tidak" dijawab angka, bukan perasaan - dan angkanya dari PLC.**
+
+Ada DUA mode perpindahan, dua-duanya jalan di controller:
+
+| `SIM_MOVE_MODE` | caranya | akibatnya |
+|---|---|---|
+| 0 gerak sumbu | IK dihitung SEKALI, hasilnya jadi target, tiap sumbu berangkat sendiri | cepat, ujung tool **melengkung** |
+| 1 gerak lurus | titik di garis dimajukan sedikit demi sedikit, IK dihitung ulang **tiap scan** | lurus, harganya satu IK per scan |
+
+Tombol **Predict** menghitungnya di browser. Tombol **Run on PLC** benar-benar
+menggerakkan robotnya - sekali per mode, dari titik awal yang sama (kalau lengannya sudah
+pindah, dia pulang dulu ke titik itu; perjalanan pulangnya tidak ikut terukur).
+
+**PLC yang mengukur, bukan gambar di layar.** `SIM_DEV_NOW` = jarak ujung tool ke garis
+lurus antara titik awal dan tujuan, dihitung tiap scan dari pose yang SEBENARNYA. Diukur
+dari pose yang diperintah, angkanya selalu nol - yang terukur perintahnya sendiri.
+
+**Kurvanya juga direkam PLC**, 50 titik, diindeks menurut KEMAJUAN di sepanjang garis -
+bukan menurut waktu, supaya dua mode yang lamanya beda bisa ditumpuk di sumbu yang sama.
+Diambil sampel dari luar, bridge cuma sempat mengambil ~10 titik dalam setengah detik dan
+bentuk kurvanya - yang justru jadi jawabannya - hilang di antara sampel.
+
+Hasil ukurannya:
 
 | | |
 |---|---|
-| gerak sumbu (yang dipakai PLC hari ini) | **melengkung ~15 mm** pada perpindahan 150 mm |
-| gerak lurus (IK di tiap langkah) | ~2e-5 mm |
+| gerak sumbu (yang dipakai siklus) | **melengkung ~15 mm** pada perpindahan 150 mm |
+| gerak lurus | ~0 mm, tapi lebih lambat dan bisa berhenti di tengah |
 
 Lengkungnya karena tiap sumbu mengambil jalan terpendek **di sudutnya sendiri**, bukan di
 ruang, dan mereka tidak selesai bersamaan. Untuk pick and place itu tidak masalah dan lebih
@@ -181,8 +202,23 @@ cepat - itu sebabnya siklusnya naik ke ketinggian approach dulu, bukan mempercay
 lintasannya. Untuk lem, potong, atau las itu masalah.
 
 Lintasannya digambar di 3D (kuning = gerak sumbu, cyan = gerak lurus) DAN sebagai grafik
-simpangan. Dari sudut kamera tertentu, lengkungan 15 mm kelihatan lurus - grafiknya yang
-tidak bisa dibohongi.
+simpangan: **putus-putus = ramalan browser, garis penuh = ukuran PLC.** Ditumpuk supaya
+ramalan yang meleset dari mesin kelihatan sebagai kabar, bukan sebagai gangguan. Dari sudut
+kamera tertentu, lengkungan 15 mm kelihatan lurus - grafiknya yang tidak bisa dibohongi.
+
+Tiga aturan yang menempel di gerak lurus, dan ketiganya gagal tanpa keluhan kalau dilanggar:
+
+* **IK menolak satu titik = gerak lurus BERHENTI**, dan sebabnya dicatat
+  (`SIM_LINE_ABORT` = 1). Garis yang kedua ujungnya sah masih bisa keluar dari ruang kerja
+  di tengah jalan. Titik di garis yang terus maju sementara lengannya tertinggal berarti
+  "gerak lurus" sudah tidak lurus, dan tidak ada yang tahu.
+* **Perintah lain membatalkannya** (jog, home, emergency, siklus) - `SIM_LINE_ABORT` = 2.
+  Dua sumber perintah untuk satu lengan berebut tiap scan.
+* **Siklus otomatis TIDAK ikut berubah mode.** Kalau ikut, angka cycle time yang sudah
+  dikumpulkan berubah artinya tanpa ada yang mengubah sekuensnya.
+
+Penjaga tabrakan tetap jalan di tiap titik garis - jadi gerak lurus yang lewat badan mesin
+ditolak di titik itu juga, bukan sesudah menembusnya.
 
 Yang dipakai simulasi lintasan itu **motion model yang sama** dengan PLC (`langkahSumbu`
 di `kin.js`, satu salinan untuk mode offline dan untuk pembanding). Interpolasi sudut yang

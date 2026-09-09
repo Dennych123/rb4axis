@@ -66,6 +66,18 @@ const GLOBAL_SIM = [
   ['SIM_JOG_SET_EXEC', 'BOOL', 'W', 'tepi naik: pakai SIM_JOG_SET sebagai target sumbu (slider dilepas)'],
 
   ['SIM_MOVE_EXEC', 'BOOL', 'W', 'tepi naik: jalankan move ke SIM_WORLD_CMD'],
+  ['SIM_MOVE_MODE', 'INT', 'RW', '0 gerak sumbu (tiap sumbu jalan sendiri), 1 gerak LURUS (IK tiap scan)'],
+  ['SIM_LINE_VEL', 'LREAL', 'RW', 'kecepatan ujung tool di gerak lurus, mm/detik'],
+  ['SIM_LINE_ACC', 'LREAL', 'RW', 'akselerasi ujung tool di gerak lurus, mm/detik2'],
+  ['SIM_LINE_ACTIVE', 'BOOL', 'R', 'gerak lurus sedang jalan'],
+  ['SIM_LINE_S', 'LREAL', 'R', 'sudah berapa mm menyusuri garis'],
+  ['SIM_LINE_LEN', 'LREAL', 'R', 'panjang garis yang sedang ditempuh, mm'],
+  ['SIM_LINE_ABORT', 'INT', 'R', 'kenapa gerak lurus berhenti: 0 selesai, 1 IK menolak, 2 dibatalkan operator'],
+  ['SIM_DEV_NOW', 'LREAL', 'R', 'simpangan ujung tool dari garis lurus SEKARANG, mm'],
+  ['SIM_DEV_MAX', 'LREAL', 'R', 'simpangan terbesar selama perpindahan terakhir, mm'],
+  ['SIM_DEV_MODE', 'INT', 'R', 'mode yang menghasilkan SIM_DEV_MAX - biar dua angka tidak tertukar'],
+  ['SIM_MOVE_T', 'LREAL', 'R', 'lama perpindahan terakhir, detik'],
+  ['SIM_DEV_TRACE', 'ARRAY[0..49] OF LREAL', 'R', 'kurva simpangan sepanjang perpindahan - 50 titik, direkam PLC sendiri'],
   ['SIM_MOVE_DONE', 'BOOL', 'R', 'semua sumbu sudah sampai target'],
   ['SIM_HOME_EXEC', 'BOOL', 'W', 'tepi naik: kembali ke pose home'],
   ['SIM_HOME', 'ARRAY[0..3] OF LREAL', 'RW', 'pose home per sumbu - SEKALIGUS pose jalan waktu menyusuri rel'],
@@ -207,6 +219,19 @@ const LOKAL = [
   ['VB', 'LREAL', 'kecepatan tertinggi yang masih bisa direm sebelum target'],
   ['DV', 'LREAL', 'perubahan kecepatan maksimum satu scan = akselerasi x dt'],
   ['COVER_TARGET', 'LREAL', 'sudut penutup yang dituju stasiun yang sedang dihitung'],
+  ['LN_A', 'ARRAY[0..3] OF LREAL', 'pose world tempat perpindahan dimulai'],
+  ['LN_B', 'ARRAY[0..3] OF LREAL', 'pose world tujuan perpindahan'],
+  ['LN_UX', 'LREAL', 'arah garis, satuan - komponen X'],
+  ['LN_UY', 'LREAL', 'arah garis, satuan - komponen Y'],
+  ['LN_UZ', 'LREAL', 'arah garis, satuan - komponen Z'],
+  ['LN_V', 'LREAL', 'kecepatan menyusuri garis sekarang, mm/detik'],
+  ['LN_SISA', 'LREAL', 'sisa jarak sampai ujung garis'],
+  ['UKUR', 'BOOL', 'sedang mengukur simpangan perpindahan ini'],
+  ['DX', 'LREAL', 'selisih X terhadap titik awal garis'],
+  ['DY', 'LREAL', 'selisih Y terhadap titik awal garis'],
+  ['DZ', 'LREAL', 'selisih Z terhadap titik awal garis'],
+  ['PROY', 'LREAL', 'panjang proyeksi titik sekarang ke arah garis'],
+  ['TR_IDX', 'INT', 'slot kurva simpangan yang sedang diisi'],
   ['ZONA_HIT', 'BOOL', 'titik yang sedang diperiksa ada di ruang sapuan penutup'],
   ['CT_BUF', 'ARRAY[0..9] OF LREAL', 'sepuluh cycle time terakhir - buffer melingkar'],
   ['CT_IDX', 'INT', 'slot berikutnya di CT_BUF'],
@@ -299,6 +324,13 @@ function blokInit(cfg) {
   L.push('');
   cfg.jog.akselerasi.forEach((v, i) => L.push(t('SIM_ACC[' + i + '] := ' + lreal(v) + ';')));
   L.push(t('SIM_SPEED_OVR := ' + lreal(cfg.jog.override_persen) + ';'));
+  L.push(t('SIM_LINE_VEL := ' + lreal(cfg.jog.garis.kecepatan) + ';'));
+  L.push(t('SIM_LINE_ACC := ' + lreal(cfg.jog.garis.akselerasi) + ';'));
+  L.push(t('SIM_MOVE_MODE := 0;'));
+  L.push(t('SIM_LINE_ACTIVE := FALSE;'));
+  L.push(t('SIM_LINE_ABORT := 0;'));
+  L.push(t('SIM_DEV_NOW := 0.0;   SIM_DEV_MAX := 0.0;   SIM_DEV_MODE := 0;'));
+  L.push(t('SIM_MOVE_T := 0.0;'));
   L.push('');
   cfg.jog.world.forEach((v, i) => L.push(t('SIM_VEL_W[' + i + '] := ' + lreal(v) + ';')));
   L.push('');

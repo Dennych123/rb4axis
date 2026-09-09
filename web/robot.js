@@ -50,7 +50,10 @@ var st = {
   stCover: [0, 0, 0, 0, 0, 0], coverSudut: 80,
   frames: true, tri: true, ikSrc: 0, metode: 2, showPath: true,
   dt: 0.004,                      // periode task - dipakai simulasi lintasan
-  uji: null,                      // hasil uji lintasan terakhir
+  uji: null,                      // hasil uji lintasan terakhir (ramalan browser)
+  plcUji: [null, null],           // hasil UKURAN PLC: [0] gerak sumbu, [1] gerak lurus
+  lineVel: 250, moveMode: 0, devMax: 0, devMode: 0, moveT: 0, lineAbort: 0,
+  lineAktif: false, devTrace: null, tungguPlc: -1,
   pcb: { panjang: 120, lebar: 80, tebal: 8 },
   dim: { L1: 400, L2: 300, L3: 250, L4: 100, toolY: 140, toolZ: 0,
          offset: [0, 0, 0, 0, 0], limitv: [-500, 500, -90, 180, -150, 0, -120, 120] },
@@ -154,6 +157,24 @@ function stream() {
       if (v.SIM_CT_LAST !== undefined) st.ctLast = v.SIM_CT_LAST;
       if (v.SIM_CT_AVG10 !== undefined) st.ctAvg = v.SIM_CT_AVG10;
       if (v.SIM_CT_N !== undefined) st.ctN = v.SIM_CT_N;
+      if (v.SIM_MOVE_MODE !== undefined) st.moveMode = v.SIM_MOVE_MODE;
+      if (v.SIM_LINE_VEL) st.lineVel = v.SIM_LINE_VEL;
+      if (v.SIM_LINE_ACTIVE !== undefined) st.lineAktif = !!v.SIM_LINE_ACTIVE;
+      if (v.SIM_LINE_ABORT !== undefined) st.lineAbort = v.SIM_LINE_ABORT;
+      if (v.SIM_DEV_MAX !== undefined) st.devMax = v.SIM_DEV_MAX;
+      if (v.SIM_DEV_MODE !== undefined) st.devMode = v.SIM_DEV_MODE;
+      if (v.SIM_MOVE_T !== undefined) st.moveT = v.SIM_MOVE_T;
+      if (v.SIM_DEV_TRACE) st.devTrace = keArray(v.SIM_DEV_TRACE, 50);
+      // Hasil PLC dipanen waktu perpindahannya SELESAI. Dipanen tiap kabar, yang
+      // tersimpan kurva setengah jalan - dan kurva setengah jalan terbaca seperti
+      // gerakan yang berhenti di tengah.
+      if (st.tungguPlc >= 0 && v.SIM_MOVE_DONE && !st.lineAktif && st.devTrace) {
+        st.plcUji[st.tungguPlc] = { trace: st.devTrace.slice(), maks: st.devMax,
+                                    waktu: st.moveT, abort: st.lineAbort };
+        st.tungguPlc = -1;
+        gambarGrafik();
+        ujiHasilTampil();
+      }
       if (v.SIM_TARGET_ST !== undefined) st.tujuan = v.SIM_TARGET_ST;
       if (v.SIM_PART_STATE !== undefined) st.part = v.SIM_PART_STATE;
       // Jatuhnya produk datang sebagai PENCACAH, bukan pulsa: bridge mengambil sampel
@@ -1142,16 +1163,81 @@ function ujiLintasan() {
   var dl = deviasiLurus(pl.titik, titikA, titikB);
   st.uji = { pj: pj, pl: pl, dj: dj, dl: dl, A: titikA, B: titikB };
 
-  el('ujiHasil').innerHTML =
-    '<table><tr><td class="k">joint move</td><td class="v"><b>' + dj.maks.toFixed(1)
-      + ' mm</b> off the line</td><td class="v">' + pj.waktu.toFixed(2) + ' s</td></tr>'
-    + '<tr><td class="k">line move</td><td class="v">' + dl.maks.toFixed(3)
-      + ' mm off the line</td><td class="v">' + (pl.gagal ? pl.gagal + ' points had no solution'
-        : pl.titik.length + ' IK solves') + '</td></tr>'
-    + '<tr><td class="k">distance</td><td class="v">' + dj.panjangGaris.toFixed(0)
-      + ' mm</td><td class="v"></td></tr></table>';
+  ujiHasilTampil();
   gambarGrafik();
   gambarLintasan();
+}
+
+var NAMA_ABORT_LINE = { 0: '', 1: 'stopped: IK refused a point on the line',
+                        2: 'cancelled by another command' };
+
+// Satu tabel untuk dua sumber: yang diramal browser dan yang DIUKUR PLC. Ditulis
+// berdampingan supaya bedanya kelihatan - ramalan yang meleset dari mesin itu kabar,
+// bukan gangguan.
+function ujiHasilTampil() {
+  var baris = function (nama, ramal, plc, satuan) {
+    return '<tr><td class="k">' + nama + '</td><td class="v">' + ramal
+      + '</td><td class="v"><b>' + plc + '</b></td></tr>';
+  };
+  var f = function (u, kunci) {
+    if (!u) return '-';
+    return kunci === 'maks' ? u.maks.toFixed(2) + ' mm' : u.waktu.toFixed(2) + ' s';
+  };
+  var pj = st.uji ? { maks: st.uji.dj.maks, waktu: st.uji.pj.waktu } : null;
+  var pl = st.uji ? { maks: st.uji.dl.maks, waktu: 0 } : null;
+  var h = '<table><tr><td class="k"></td><td class="v" style="color:var(--label)">predicted</td>'
+        + '<td class="v" style="color:var(--label)">PLC</td></tr>'
+        + baris('joint: off line', f(pj, 'maks'), f(st.plcUji[0], 'maks'))
+        + baris('line: off line', f(pl, 'maks'), f(st.plcUji[1], 'maks'))
+        + baris('joint: time', pj ? pj.waktu.toFixed(2) + ' s' : '-', f(st.plcUji[0], 't'))
+        + baris('line: time', '-', f(st.plcUji[1], 't'))
+        + '</table>';
+  var ab = st.plcUji[1] && st.plcUji[1].abort ? NAMA_ABORT_LINE[st.plcUji[1].abort] : '';
+  if (ab) h += '<div class="kotakBad" style="margin-top:6px">' + ab + '</div>';
+  el('ujiHasil').innerHTML = h;
+}
+
+// Menjalankan perpindahan yang SAMA di PLC, sekali per mode. Titik tujuannya dihitung
+// dari pose sekarang, jadi dua kali menekan berturut-turut TIDAK membandingkan hal yang
+// sama - tombol kedua berangkat dari tempat tombol pertama berhenti. Karena itu titik
+// awalnya disimpan, dan tombol kedua pulang dulu ke situ.
+var awalUji = null;
+function jalankanPlc(mode) {
+  if (!st.plc) { el('ujiHasil').innerHTML = '<span class="kotakBad">needs the PLC</span>'; return; }
+  var cfg = cfgKin();
+  var A = awalUji || fkSteps(st.joint, cfg).worldL.slice();
+  var jarak = +el('ujiJarak').value || 150;
+  var arah = +el('ujiArah').value;
+  var B = A.slice();
+  if (arah === 1) B[1] += jarak;
+  else if (arah === 2) B[2] += jarak;
+  else { B[1] += jarak * 0.707; B[2] += jarak * 0.707; }
+  awalUji = A;
+
+  var sekarang = fkSteps(st.joint, cfg).worldL;
+  var jauhDariAwal = Math.hypot(sekarang[1] - A[1], sekarang[2] - A[2]);
+  st.tungguPlc = mode;
+  st.plcUji[mode] = null;
+  ujiHasilTampil();
+
+  var kirimMove = function (target, m) {
+    return kirim('SIM_MOVE_MODE', m)
+      .then(function () { return kirim('SIM_WORLD_CMD', target); })
+      .then(function () { return kirim('SIM_MOVE_EXEC', false); })
+      .then(function () { return kirim('SIM_MOVE_EXEC', true); })
+      .then(function () { return kirim('SIM_MOVE_EXEC', false); });
+  };
+
+  if (jauhDariAwal > 1) {
+    // Pulang dulu ke titik awal, LURUS, supaya perjalanan pulang itu sendiri tidak
+    // ikut terukur sebagai hasil. Baru sesudah itu perpindahan yang diukur dijalankan.
+    st.tungguPlc = -1;
+    kirimMove(A, 1).then(function () {
+      setTimeout(function () { st.tungguPlc = mode; kirimMove(B, mode); }, 1600);
+    });
+  } else {
+    kirimMove(B, mode);
+  }
 }
 
 // Grafik simpangan. Kanvas 2D biasa - satu pustaka chart untuk dua kurva itu satu
@@ -1165,7 +1251,7 @@ function gambarGrafik() {
   var warnaTeks = gaya.getPropertyValue('--label') || '#888';
   var warnaGaris = gaya.getPropertyValue('--garis') || '#ccc';
   g.clearRect(0, 0, W, H);
-  if (!st.uji) {
+  if (!st.uji && !st.plcUji[0] && !st.plcUji[1]) {
     g.fillStyle = warnaTeks;
     g.font = '22px system-ui, sans-serif';
     g.textAlign = 'center';
@@ -1173,7 +1259,13 @@ function gambarGrafik() {
     return;
   }
   var pad = 34;
-  var maks = Math.max(st.uji.dj.maks, 1);
+  // Skalanya ikut kurva TERTINGGI dari semuanya. Diskalakan per kurva, dua kurva yang
+  // bedanya seribu kali lipat tergambar sama tingginya - dan itu kebalikan dari yang
+  // mau ditunjukkan.
+  var maks = 1;
+  if (st.uji) maks = Math.max(maks, st.uji.dj.maks, st.uji.dl.maks);
+  if (st.plcUji[0]) maks = Math.max(maks, st.plcUji[0].maks);
+  if (st.plcUji[1]) maks = Math.max(maks, st.plcUji[1].maks);
   // Sumbu
   g.strokeStyle = warnaGaris;
   g.lineWidth = 2;
@@ -1189,10 +1281,11 @@ function gambarGrafik() {
   g.fillText('start', pad + 18, H - 10);
   g.fillText('end', W - 24, H - 10);
 
-  var kurva = function (nilai, warna) {
-    if (!nilai.length) return;
+  var kurva = function (nilai, warna, putus) {
+    if (!nilai || !nilai.length) return;
     g.strokeStyle = warna;
-    g.lineWidth = 3;
+    g.lineWidth = putus ? 2 : 3.5;
+    g.setLineDash(putus ? [7, 5] : []);
     g.beginPath();
     for (var i = 0; i < nilai.length; i++) {
       var x = pad + (W - pad - 8) * (i / Math.max(1, nilai.length - 1));
@@ -1200,9 +1293,14 @@ function gambarGrafik() {
       if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
     }
     g.stroke();
+    g.setLineDash([]);
   };
-  kurva(st.uji.dj.nilai, '#f59e0b');
-  kurva(st.uji.dl.nilai, '#22d3ee');
+  if (st.uji) {
+    kurva(st.uji.dj.nilai, '#f59e0b', true);
+    kurva(st.uji.dl.nilai, '#22d3ee', true);
+  }
+  if (st.plcUji[0]) kurva(st.plcUji[0].trace, '#f59e0b', false);
+  if (st.plcUji[1]) kurva(st.plcUji[1].trace, '#22d3ee', false);
 }
 
 // Lintasan digambar di 3D juga: grafik menjawab BERAPA, gambar menjawab DI MANA.
@@ -1369,6 +1467,11 @@ function panelTampil() {
   // total, Autorun mati dan panel bilang "PERLU HOME" - tombolnya harus ikut menunjuk
   // dirinya sendiri, bukan menunggu orang mencarinya.
   el('home').disabled = st.plc && (st.estop || st.auto);
+  if (el('plcJoint')) {
+    var bisaUji = st.plc && !st.auto && !st.estop && !st.selAuto;
+    el('plcJoint').disabled = !bisaUji;
+    el('plcLine').disabled = !bisaUji;
+  }
   el('home').className = (!st.homed && !st.estop) ? 'act' : '';
   el('selAuto').checked = st.selAuto;
   el('selAuto').disabled = !st.plc;
@@ -1525,7 +1628,14 @@ function pasangKontrol() {
   el('showTri').onchange = function () { st.tri = this.checked; };
   el('ikSrc').onchange = function () { st.ikSrc = +this.value; panelKiriTampil(); };
   el('metode').onchange = function () { st.metode = +this.value; bandingTampil(); };
-  el('ujiRun').onclick = ujiLintasan;
+  el('ujiRun').onclick = function () { awalUji = null; ujiLintasan(); };
+  el('plcJoint').onclick = function () { jalankanPlc(0); };
+  el('plcLine').onclick = function () { jalankanPlc(1); };
+  el('lineVelSet').onclick = function () {
+    st.lineVel = +el('lineVel').value || 250;
+    kirim('SIM_LINE_VEL', st.lineVel);
+  };
+  el('ujiArah').onchange = function () { awalUji = null; };
   el('showPath').onchange = function () { st.showPath = this.checked; gambarLintasan(); };
   el('gripBtn').onclick = function () {
     st.grip.cmd = !st.grip.cmd;

@@ -40,7 +40,7 @@ const KATA = new Set([
   'IF', 'THEN', 'ELSE', 'ELSIF', 'END_IF', 'FOR', 'TO', 'DO', 'END_FOR',
   'CASE', 'OF', 'END_CASE', 'AND', 'OR', 'NOT', 'TRUE', 'FALSE',
   'ABS', 'SQRT', 'SIN', 'COS', 'ATAN', 'ACOS', 'MOD',
-  'REAL_TO_LREAL', 'LREAL_TO_REAL', 'UDINT_TO_INT', 'INT_TO_LREAL'
+  'REAL_TO_LREAL', 'LREAL_TO_REAL', 'UDINT_TO_INT', 'INT_TO_LREAL', 'LREAL_TO_INT'
 ]);
 
 // Nama pin FB (dipakai sebagai IK2.DONE, FK2.ROBOT_POS_WORLD_OUTPUT, ...) diambil
@@ -332,6 +332,62 @@ chk('halaman memakai LREAL kalau ada, REAL kalau tidak', (() => {
   const r = fs.readFileSync(path.join(__dirname, '..', 'web', 'robot.js'), 'utf8');
   return /if \(v\.SIM_WORLD_POS_L\)[\s\S]{0,120}?else if \(v\[TAG\.world\]\)/.test(r);
 })(), 'jatuh balik ke REAL bikin halaman tetap hidup di project lama yang belum punya tag itu');
+
+// ------------------------------------------------- gerak lurus (Cartesian) di PLC
+// Dua cara sampai ke titik yang sama, dua-duanya JALAN di PLC. Yang diuji di sini
+// bukan bahwa kodenya ada, tapi aturan yang bikin perbandingannya berarti.
+chk('dua mode perpindahan', glob.includes('SIM_MOVE_MODE') && glob.includes('SIM_LINE_ACTIVE'));
+chk('gerak lurus menghitung IK TIAP SCAN, bukan sekali',
+    /ELSIF SIM_LINE_ACTIVE THEN[\s\S]{0,1800}?POSE_REQ\[0\] := LN_A\[0\] \+ LN_UX \* SIM_LINE_S;[\s\S]{0,400}?NEED_IK := TRUE;/.test(kode),
+    'itu bedanya dengan gerak sumbu: satu IK vs satu IK per scan');
+chk('sudut end effector ikut diinterpolasi, bukan dilompati di akhir',
+    /POSE_REQ\[3\] := LN_A\[3\] \+ \(LN_B\[3\] - LN_A\[3\]\)/.test(kode),
+    'tool yang berputar mendadak di titik terakhir itu justru gerakan yang paling gampang menabrak');
+
+// IK menolak di tengah garis = BERHENTI. Titik di garis yang terus maju sementara
+// lengannya tertinggal berarti "gerak lurus" tidak lurus lagi, dan tidak ada yang tahu.
+chk('gerak lurus berhenti kalau IK menolak satu titik',
+    /IF SIM_LINE_ACTIVE THEN[\s\S]{0,160}?SIM_LINE_ACTIVE := FALSE;[\s\S]{0,60}?SIM_LINE_ABORT := 1;/.test(kode));
+chk('gerak lurus dibatalkan perintah lain (jog, home, emergency, auto)',
+    /IF SIM_LINE_ACTIVE AND \(\(AX >= 0\) OR EDGE_HOME OR SIM_ESTOP OR SIM_AUTO\) THEN[\s\S]{0,120}?SIM_LINE_ABORT := 2;/.test(kode));
+chk('kecepatan garis ikut override kecepatan', /VT := SIM_LINE_VEL \* OVR;/.test(kode));
+
+// Siklus otomatis TETAP gerak sumbu. Kalau mode ikut mengubah siklus, angka cycle time
+// yang sudah dikumpulkan berubah artinya tanpa ada yang mengubah sekuensnya.
+chk('mode perpindahan TIDAK menyentuh siklus otomatis', (() => {
+  // Yang dipotong SEKUENSERNYA (CASE), bukan "dari IF SIM_AUTO pertama": kata itu
+  // muncul juga di pembatal gerak lurus dan di penghitung cycle time, dan potongan yang
+  // salah bikin tes ini menjawab pertanyaan yang lain.
+  const auto = kode.slice(kode.indexOf('CASE SIM_CYCLE_STEP OF'),
+                          kode.indexOf('ELSIF (AX >= 0)'));
+  return !/SIM_MOVE_MODE|SIM_LINE_ACTIVE/.test(auto);
+})(), 'siklus ikut berubah mode = angka cycle time yang sudah dikumpulkan berubah artinya');
+
+// ---- pengukurannya, dan ini bagian yang bikin angkanya bisa dipercaya
+chk('simpangan diukur dari pose SEKARANG terhadap garis awal-tujuan',
+    /DX := SIM_WORLD_POS_L\[0\] - LN_A\[0\];/.test(kode)
+    && /PROY := DX \* LN_UX \+ DY \* LN_UY \+ DZ \* LN_UZ;/.test(kode),
+    'diukur dari pose yang DIPERINTAH, angkanya selalu nol - yang diukur perintahnya sendiri');
+chk('pengukuran berlaku untuk KEDUA mode', (() => {
+  // UKUR dinyalakan di blok EDGE_MOVE, sebelum percabangan mode - jadi gerak sumbu dan
+  // gerak lurus diukur alat yang sama. Diukur alat yang beda, angkanya tidak bisa diadu.
+  const i = kode.indexOf('UKUR := TRUE;');
+  const j = kode.indexOf('IF (SIM_MOVE_MODE = 1)');
+  return i > 0 && j > i;
+})());
+chk('pengukuran berhenti sesudah sumbu benar-benar diam',
+    /IF SIM_MOVE_DONE AND NOT SIM_LINE_ACTIVE THEN[\s\S]{0,60}?UKUR := FALSE;/.test(kode),
+    'berhenti waktu garisnya padam saja = ekor gerakan tidak ikut terukur');
+chk('kurva simpangan direkam PLC, 50 titik',
+    glob.includes('SIM_DEV_TRACE')
+    && /SIM_DEV_TRACE\[TR_IDX\] := SIM_DEV_NOW;/.test(kode));
+chk('kurva diindeks menurut KEMAJUAN, bukan waktu',
+    /TR_IDX := LREAL_TO_INT\(PROY \/ SIM_LINE_LEN \* 49\.0\)/.test(kode),
+    'diindeks waktu, dua mode yang lamanya beda tidak bisa ditumpuk di sumbu yang sama');
+chk('kurva dikosongkan waktu perpindahan MULAI',
+    /UKUR := TRUE;[\s\S]{0,400}?FOR i := 0 TO 49 DO[\s\S]{0,80}?SIM_DEV_TRACE\[i\] := 0\.0;/.test(kode),
+    'dikosongkan waktu selesai, kurva lama tertinggal di layar selama gerakan berikutnya');
+chk('indeks kurva dijepit 0..49', /IF TR_IDX < 0 THEN[\s\S]{0,120}?IF TR_IDX > 49 THEN/.test(kode));
 
 // ---------------------------------------------------------- cycle time
 // Diukur KELUAR ke KELUAR: itu yang menentukan berapa produk per jam. Diukur di tempat

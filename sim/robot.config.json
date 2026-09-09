@@ -74,6 +74,17 @@
       "alasan orang menurunkannya. Gripper tidak ikut diskalakan (pneumatik di mesin asli)."
     ],
     "override_persen": 100.0,
+    "garis": {
+      "_catatan": [
+        "Gerak LURUS: ujung tool disuruh menyusuri garis, dan IK dihitung ulang tiap scan.",
+        "Kecepatan di sini kecepatan UJUNG TOOL (mm/detik), bukan kecepatan sumbu.",
+        "Harus cukup pelan supaya sumbu sanggup mengikuti: kalau titik di garis bergerak",
+        "lebih cepat dari sumbu yang mengejarnya, yang tergambar bukan garis lurus lagi -",
+        "melainkan sumbu yang tertinggal, dan itu terlihat seperti gerak lurusnya gagal."
+      ],
+      "kecepatan": 250.0,
+      "akselerasi": 800.0
+    },
     "sumbu": [900.0, 90.0, 90.0, 120.0],
     "akselerasi": [1800.0, 240.0, 240.0, 320.0],
     "world": [100.0, 100.0, 100.0, 30.0],

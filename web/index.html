@@ -308,12 +308,15 @@
   <div class="kartu">
     <p class="judul">Straight or not?</p>
     <div class="cerita">
-      Move the tool and compare two ways.<br>
-      <b>Joint move</b>: each axis runs on its own, at its own speed. That is what the PLC
-      does today.<br>
-      <b>Line move</b>: the tool is forced along a straight line, and IK is solved at every
-      step.<br>
-      The graph is the distance from the straight line, in mm.
+      Move the tool the same distance two ways, and measure how far it strays from the
+      straight line.<br>
+      <b>Joint move</b>: each axis runs on its own, at its own speed. That is what the
+      cycle uses.<br>
+      <b>Line move</b>: the tool is pushed along the line and IK is solved <b>every scan</b>,
+      in the PLC.<br>
+      <b>Predict</b> computes it in the browser. <b>Run on PLC</b> actually moves the robot,
+      and the PLC records the curve itself &mdash; 50 points along the path, not sampled
+      over the network.
     </div>
     <div class="jogrow">
       <span class="lbl">direction</span>
@@ -325,14 +328,27 @@
     </div>
     <div class="jogrow">
       <span class="lbl">distance</span>
-      <input class="num" id="ujiJarak" type="number" value="300" step="10">
+      <input class="num" id="ujiJarak" type="number" value="150" step="10">
       <span style="font-size:12px;color:var(--label)">mm</span>
-      <button id="ujiRun" class="act">Run</button>
+      <button id="ujiRun">Predict</button>
+    </div>
+    <div class="jogrow">
+      <span class="lbl">run on PLC</span>
+      <button id="plcJoint" class="act">joint move</button>
+      <button id="plcLine" class="act">line move</button>
+    </div>
+    <div class="jogrow">
+      <span class="lbl">line speed</span>
+      <input class="num" id="lineVel" type="number" value="250" step="10">
+      <span style="font-size:12px;color:var(--label)">mm/s</span>
+      <button id="lineVelSet">set</button>
     </div>
     <canvas id="grafik" width="660" height="224"></canvas>
     <div class="legenda">
-      <span><i style="background:#f59e0b"></i>joint move</span>
-      <span><i style="background:#22d3ee"></i>line move</span>
+      <span><i style="background:#f59e0b"></i>joint</span>
+      <span><i style="background:#22d3ee"></i>line</span>
+      <span><i style="background:#94a3b8"></i>dashed = predicted</span>
+      <span>solid = measured by the PLC</span>
     </div>
     <div id="ujiHasil" style="margin-top:6px"></div>
     <div class="jogrow">

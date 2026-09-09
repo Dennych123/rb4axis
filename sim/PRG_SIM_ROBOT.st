@@ -93,6 +93,13 @@ IF NOT SIM_INIT_DONE THEN
 	SIM_ACC[2] := 240.0;
 	SIM_ACC[3] := 320.0;
 	SIM_SPEED_OVR := 100.0;
+	SIM_LINE_VEL := 250.0;
+	SIM_LINE_ACC := 800.0;
+	SIM_MOVE_MODE := 0;
+	SIM_LINE_ACTIVE := FALSE;
+	SIM_LINE_ABORT := 0;
+	SIM_DEV_NOW := 0.0;   SIM_DEV_MAX := 0.0;   SIM_DEV_MODE := 0;
+	SIM_MOVE_T := 0.0;
 
 	SIM_VEL_W[0] := 100.0;
 	SIM_VEL_W[1] := 100.0;
@@ -434,6 +441,14 @@ IF NOT SIM_AUTO AND NOT SIM_SEL_AUTO AND NOT SIM_ESTOP THEN
 	END_FOR;
 END_IF;
 
+// Gerak lurus dibatalkan begitu ada perintah lain: jog, home, emergency, atau siklus
+// otomatis. Dua sumber perintah untuk satu lengan berebut tiap scan, dan yang menang
+// berganti-ganti - gerakannya jadi tersendat tanpa ada yang salah di kedua sisinya.
+IF SIM_LINE_ACTIVE AND ((AX >= 0) OR EDGE_HOME OR SIM_ESTOP OR SIM_AUTO) THEN
+	SIM_LINE_ACTIVE := FALSE;
+	SIM_LINE_ABORT := 2;
+END_IF;
+
 // Sekuenser dan jog TIDAK PERNAH jalan berbarengan.
 IF SIM_AUTO THEN
 
@@ -723,9 +738,85 @@ ELSIF EDGE_JSET AND NOT SIM_ESTOP AND NOT SIM_SEL_AUTO THEN
 	END_FOR;
 
 ELSIF EDGE_MOVE AND NOT SIM_ESTOP AND NOT SIM_SEL_AUTO THEN
+	// ----------------------------------------------- dua cara sampai ke titik yang sama
+	// MODE 0 - gerak sumbu. IK dihitung SEKALI, hasilnya jadi target, lalu tiap sumbu
+	//          berangkat sendiri-sendiri dengan kecepatan dan akselerasinya masing-masing.
+	//          Cepat, dan ujung tool menempuh jalan MELENGKUNG - tiap sumbu mengambil
+	//          jalan terpendek di sudutnya sendiri, bukan di ruang.
+	//
+	// MODE 1 - gerak lurus. Titik di sepanjang garis dimajukan sedikit demi sedikit, dan
+	//          IK dihitung ULANG tiap scan. Ujung tool benar-benar lurus; harganya satu
+	//          IK per scan, dan garis yang kedua ujungnya sah masih bisa keluar dari
+	//          ruang kerja di tengah jalan.
+	//
+	// Yang membuat perbandingannya berarti: titik awal dan tujuannya SAMA, dan yang
+	// mengukur simpangannya PLC sendiri - bukan gambar di layar.
+	LN_A[0] := SIM_WORLD_POS_L[0];   LN_A[1] := SIM_WORLD_POS_L[1];
+	LN_A[2] := SIM_WORLD_POS_L[2];   LN_A[3] := SIM_WORLD_POS_L[3];
 	FOR i := 0 TO 3 DO
-		POSE_REQ[i] := SIM_WORLD_CMD[i];
+		LN_B[i] := SIM_WORLD_CMD[i];
 	END_FOR;
+	LN_UX := LN_B[0] - LN_A[0];
+	LN_UY := LN_B[1] - LN_A[1];
+	LN_UZ := LN_B[2] - LN_A[2];
+	SIM_LINE_LEN := SQRT(LN_UX * LN_UX + LN_UY * LN_UY + LN_UZ * LN_UZ);
+	IF SIM_LINE_LEN > 0.001 THEN
+		LN_UX := LN_UX / SIM_LINE_LEN;
+		LN_UY := LN_UY / SIM_LINE_LEN;
+		LN_UZ := LN_UZ / SIM_LINE_LEN;
+	END_IF;
+	SIM_LINE_S := 0.0;
+	LN_V := 0.0;
+	SIM_LINE_ABORT := 0;
+	SIM_DEV_MAX := 0.0;
+	SIM_DEV_MODE := SIM_MOVE_MODE;
+	SIM_MOVE_T := 0.0;
+	UKUR := TRUE;
+	// Kurva simpangan dikosongkan di sini, bukan waktu selesai: kurva lama yang
+	// tertinggal di layar selama perpindahan berikutnya berjalan itu kurva mesin yang
+	// SUDAH TIDAK ADA, dan tidak ada satu pun tanda yang membedakannya dari yang baru.
+	FOR i := 0 TO 49 DO
+		SIM_DEV_TRACE[i] := 0.0;
+	END_FOR;
+
+	IF (SIM_MOVE_MODE = 1) AND (SIM_LINE_LEN > 0.001) THEN
+		SIM_LINE_ACTIVE := TRUE;
+	ELSE
+		FOR i := 0 TO 3 DO
+			POSE_REQ[i] := SIM_WORLD_CMD[i];
+		END_FOR;
+		NEED_IK := TRUE;
+	END_IF;
+
+ELSIF SIM_LINE_ACTIVE THEN
+	// Titik di garis dimajukan dengan profil trapesium - tapi ini kecepatan UJUNG TOOL,
+	// bukan kecepatan sumbu. Itu bedanya dengan motion model di bawah, dan itu juga yang
+	// bikin gerak lurus bisa terasa lambat: yang dibatasi ujungnya, dan sendi yang
+	// kebetulan harus berputar cepat tidak bisa menawar.
+	LN_SISA := SIM_LINE_LEN - SIM_LINE_S;
+	VB := SQRT(2.0 * SIM_LINE_ACC * LN_SISA);
+	VT := SIM_LINE_VEL * OVR;
+	IF VB < VT THEN VT := VB; END_IF;
+	DV := SIM_LINE_ACC * SIM_DT;
+	IF ABS(VT - LN_V) <= DV THEN
+		LN_V := VT;
+	ELSIF VT > LN_V THEN
+		LN_V := LN_V + DV;
+	ELSE
+		LN_V := LN_V - DV;
+	END_IF;
+	SIM_LINE_S := SIM_LINE_S + LN_V * SIM_DT;
+	IF SIM_LINE_S >= SIM_LINE_LEN THEN
+		SIM_LINE_S := SIM_LINE_LEN;
+		SIM_LINE_ACTIVE := FALSE;
+	END_IF;
+
+	POSE_REQ[0] := LN_A[0] + LN_UX * SIM_LINE_S;
+	POSE_REQ[1] := LN_A[1] + LN_UY * SIM_LINE_S;
+	POSE_REQ[2] := LN_A[2] + LN_UZ * SIM_LINE_S;
+	// Sudut end effector ikut diinterpolasi lurus juga - kalau tidak, tool berputar
+	// mendadak di titik terakhir, dan itu justru gerakan yang paling gampang menabrak.
+	POSE_REQ[3] := LN_A[3] + (LN_B[3] - LN_A[3]) * (SIM_LINE_S / SIM_LINE_LEN);
 	NEED_IK := TRUE;
 END_IF;
 
@@ -855,6 +946,15 @@ IF NEED_IK THEN
 		// pernah bisa capai - dan di layar itu tampak seperti gerakan biasa.
 		SIM_ERROR := TRUE;
 		SIM_ERROR_ID := IK2.ERROR_ID;
+		// Gerak lurus BERHENTI di titik yang ditolak, tidak diteruskan. Garis yang kedua
+		// ujungnya sah masih bisa keluar dari ruang kerja di tengah jalan - itu bukan
+		// cacat, itu sifat lengan. Yang tidak boleh: titik di garis terus maju sementara
+		// lengannya tertinggal, karena sesudah itu "gerak lurus" tidak lurus lagi dan
+		// tidak ada yang memberitahu.
+		IF SIM_LINE_ACTIVE THEN
+			SIM_LINE_ACTIVE := FALSE;
+			SIM_LINE_ABORT := 1;
+		END_IF;
 	END_IF;
 END_IF;
 
@@ -980,6 +1080,54 @@ SIM_LIMIT[4] := SIM_JOINT_POS[2] < (REAL_TO_LREAL(PD1300_004) + 1.0);
 SIM_LIMIT[5] := SIM_JOINT_POS[2] > (REAL_TO_LREAL(PD1300_005) - 1.0);
 SIM_LIMIT[6] := SIM_JOINT_POS[3] < (REAL_TO_LREAL(PD1300_006) + 1.0);
 SIM_LIMIT[7] := SIM_JOINT_POS[3] > (REAL_TO_LREAL(PD1300_007) - 1.0);
+
+// ------------------------------------------------- ukur simpangan dari garis lurus
+// PLC yang mengukur, bukan gambar di layar. Yang diukur pose SEKARANG terhadap garis
+// lurus antara titik awal dan tujuan perpindahan yang sedang berjalan - jadi angkanya
+// berlaku untuk kedua mode, dan dua mode itu bisa diadu dengan alat ukur yang sama.
+//
+// Ini yang mengubah "gerak sumbu itu melengkung" dari klaim jadi angka: jalankan mode
+// 0, catat SIM_DEV_MAX; jalankan mode 1 ke titik yang sama, catat lagi.
+IF UKUR THEN
+	SIM_MOVE_T := SIM_MOVE_T + SIM_DT;
+	DX := SIM_WORLD_POS_L[0] - LN_A[0];
+	DY := SIM_WORLD_POS_L[1] - LN_A[1];
+	DZ := SIM_WORLD_POS_L[2] - LN_A[2];
+	// PROY dipakai DUA kali: buat membuang komponen sepanjang garis (sisanya =
+	// simpangan), dan buat tahu sudah sampai di mana. Jadi dia tidak boleh ditimpa.
+	PROY := DX * LN_UX + DY * LN_UY + DZ * LN_UZ;
+	DX := DX - PROY * LN_UX;
+	DY := DY - PROY * LN_UY;
+	DZ := DZ - PROY * LN_UZ;
+	SIM_DEV_NOW := SQRT(DX * DX + DY * DY + DZ * DZ);
+	IF SIM_DEV_NOW > SIM_DEV_MAX THEN
+		SIM_DEV_MAX := SIM_DEV_NOW;
+	END_IF;
+
+	// Kurvanya direkam DI SINI, di PLC, bukan diambil sampel dari luar. Bridge
+	// mengambil sampel tiap 50 ms sementara perpindahan cuma berlangsung setengah
+	// detik: yang sampai ke layar tinggal sepuluh titik, dan bentuk kurvanya - yang
+	// justru jadi jawabannya - hilang di antara sampel.
+	//
+	// Slotnya menurut KEMAJUAN di sepanjang garis, bukan menurut waktu. Dua mode yang
+	// waktunya beda jadi bisa ditumpuk di sumbu yang sama, dan yang dibandingkan
+	// bentuk lintasannya - bukan siapa yang lebih cepat.
+	IF SIM_LINE_LEN > 0.001 THEN
+		TR_IDX := LREAL_TO_INT(PROY / SIM_LINE_LEN * 49.0);
+		IF TR_IDX < 0 THEN TR_IDX := 0; END_IF;
+		IF TR_IDX > 49 THEN TR_IDX := 49; END_IF;
+		IF SIM_DEV_NOW > SIM_DEV_TRACE[TR_IDX] THEN
+			SIM_DEV_TRACE[TR_IDX] := SIM_DEV_NOW;
+		END_IF;
+	END_IF;
+	// Selesai kalau sumbu sudah berhenti DAN garisnya tidak sedang jalan. Menghentikan
+	// pengukuran waktu SIM_LINE_ACTIVE padam saja bikin ekor gerakan - sumbu yang masih
+	// mengejar titik terakhir - tidak ikut terukur, dan justru di ekor itu simpangan
+	// terbesar gerak lurus muncul.
+	IF SIM_MOVE_DONE AND NOT SIM_LINE_ACTIVE THEN
+		UKUR := FALSE;
+	END_IF;
+END_IF;
 
 // Penghitung cycle time berjalan HANYA selama siklus jalan. Ikut menghitung waktu
 // berhenti berarti satu jeda makan siang menelan rata-rata sepuluh produk, dan angkanya

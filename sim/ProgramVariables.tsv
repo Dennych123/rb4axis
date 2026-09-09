@@ -49,6 +49,19 @@ VT	LREAL		False	False	kecepatan yang dituju profil trapesium scan ini
 VB	LREAL		False	False	kecepatan tertinggi yang masih bisa direm sebelum target
 DV	LREAL		False	False	perubahan kecepatan maksimum satu scan = akselerasi x dt
 COVER_TARGET	LREAL		False	False	sudut penutup yang dituju stasiun yang sedang dihitung
+LN_A	ARRAY[0..3] OF LREAL		False	False	pose world tempat perpindahan dimulai
+LN_B	ARRAY[0..3] OF LREAL		False	False	pose world tujuan perpindahan
+LN_UX	LREAL		False	False	arah garis, satuan - komponen X
+LN_UY	LREAL		False	False	arah garis, satuan - komponen Y
+LN_UZ	LREAL		False	False	arah garis, satuan - komponen Z
+LN_V	LREAL		False	False	kecepatan menyusuri garis sekarang, mm/detik
+LN_SISA	LREAL		False	False	sisa jarak sampai ujung garis
+UKUR	BOOL		False	False	sedang mengukur simpangan perpindahan ini
+DX	LREAL		False	False	selisih X terhadap titik awal garis
+DY	LREAL		False	False	selisih Y terhadap titik awal garis
+DZ	LREAL		False	False	selisih Z terhadap titik awal garis
+PROY	LREAL		False	False	panjang proyeksi titik sekarang ke arah garis
+TR_IDX	INT		False	False	slot kurva simpangan yang sedang diisi
 ZONA_HIT	BOOL		False	False	titik yang sedang diperiksa ada di ruang sapuan penutup
 CT_BUF	ARRAY[0..9] OF LREAL		False	False	sepuluh cycle time terakhir - buffer melingkar
 CT_IDX	INT		False	False	slot berikutnya di CT_BUF

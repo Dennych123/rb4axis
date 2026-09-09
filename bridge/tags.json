@@ -69,6 +69,66 @@
       "komen": "target sumbu dari slider jog - dipakai waktu SIM_JOG_SET_EXEC"
     },
     {
+      "nama": "SIM_MOVE_MODE",
+      "tipe": "INT",
+      "komen": "0 gerak sumbu (tiap sumbu jalan sendiri), 1 gerak LURUS (IK tiap scan)"
+    },
+    {
+      "nama": "SIM_LINE_VEL",
+      "tipe": "LREAL",
+      "komen": "kecepatan ujung tool di gerak lurus, mm/detik"
+    },
+    {
+      "nama": "SIM_LINE_ACC",
+      "tipe": "LREAL",
+      "komen": "akselerasi ujung tool di gerak lurus, mm/detik2"
+    },
+    {
+      "nama": "SIM_LINE_ACTIVE",
+      "tipe": "BOOL",
+      "komen": "gerak lurus sedang jalan"
+    },
+    {
+      "nama": "SIM_LINE_S",
+      "tipe": "LREAL",
+      "komen": "sudah berapa mm menyusuri garis"
+    },
+    {
+      "nama": "SIM_LINE_LEN",
+      "tipe": "LREAL",
+      "komen": "panjang garis yang sedang ditempuh, mm"
+    },
+    {
+      "nama": "SIM_LINE_ABORT",
+      "tipe": "INT",
+      "komen": "kenapa gerak lurus berhenti: 0 selesai, 1 IK menolak, 2 dibatalkan operator"
+    },
+    {
+      "nama": "SIM_DEV_NOW",
+      "tipe": "LREAL",
+      "komen": "simpangan ujung tool dari garis lurus SEKARANG, mm"
+    },
+    {
+      "nama": "SIM_DEV_MAX",
+      "tipe": "LREAL",
+      "komen": "simpangan terbesar selama perpindahan terakhir, mm"
+    },
+    {
+      "nama": "SIM_DEV_MODE",
+      "tipe": "INT",
+      "komen": "mode yang menghasilkan SIM_DEV_MAX - biar dua angka tidak tertukar"
+    },
+    {
+      "nama": "SIM_MOVE_T",
+      "tipe": "LREAL",
+      "komen": "lama perpindahan terakhir, detik"
+    },
+    {
+      "nama": "SIM_DEV_TRACE",
+      "tipe": "ARRAY[0..49] OF LREAL",
+      "komen": "kurva simpangan sepanjang perpindahan - 50 titik, direkam PLC sendiri"
+    },
+    {
       "nama": "SIM_MOVE_DONE",
       "tipe": "BOOL",
       "komen": "semua sumbu sudah sampai target"
@@ -489,6 +549,21 @@
       "nama": "SIM_MOVE_EXEC",
       "tipe": "BOOL",
       "komen": "tepi naik: jalankan move ke SIM_WORLD_CMD"
+    },
+    {
+      "nama": "SIM_MOVE_MODE",
+      "tipe": "INT",
+      "komen": "0 gerak sumbu (tiap sumbu jalan sendiri), 1 gerak LURUS (IK tiap scan)"
+    },
+    {
+      "nama": "SIM_LINE_VEL",
+      "tipe": "LREAL",
+      "komen": "kecepatan ujung tool di gerak lurus, mm/detik"
+    },
+    {
+      "nama": "SIM_LINE_ACC",
+      "tipe": "LREAL",
+      "komen": "akselerasi ujung tool di gerak lurus, mm/detik2"
     },
     {
       "nama": "SIM_HOME_EXEC",

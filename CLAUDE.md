@@ -206,6 +206,23 @@ terbaca sebagai "laggy". Ramalannya wajib dibatasi (120 ms): tanpa batas, kabar 
 berhenti datang bikin lengan terbang menjauh, dan itu terlihat seperti robot yang kabur
 alih-alih sambungan yang putus.
 
+**Gerak lurus (`SIM_MOVE_MODE` = 1) menghitung IK TIAP SCAN**, dan tiga aturannya wajib
+ikut: IK yang menolak satu titik menghentikan garisnya (`SIM_LINE_ABORT` 1) — titik di
+garis yang terus maju sementara lengan tertinggal berarti lintasannya sudah tidak lurus
+dan tidak ada yang tahu; perintah lain membatalkannya (2); dan **siklus otomatis tidak
+boleh ikut berubah mode**, kalau ikut, angka cycle time yang sudah dikumpulkan berubah
+artinya tanpa ada yang mengubah sekuensnya.
+
+**Simpangan diukur dari pose SEBENARNYA (`SIM_WORLD_POS_L`), bukan dari perintah.** Diukur
+dari perintah, angkanya selalu nol — yang terukur perintahnya sendiri. Pengukurannya
+berhenti waktu `SIM_MOVE_DONE AND NOT SIM_LINE_ACTIVE`: berhenti waktu garisnya padam saja
+membuang ekor gerakan, dan di ekor itulah simpangan terbesar gerak lurus muncul.
+
+**Kurva simpangan direkam DI PLC** (`SIM_DEV_TRACE`, 50 titik) dan diindeks menurut
+KEMAJUAN, bukan waktu — dua mode yang lamanya beda harus bisa ditumpuk di sumbu yang sama.
+Diambil sampel lewat bridge, setengah detik gerakan cuma memberi ~10 titik dan bentuk
+kurvanya hilang. Dikosongkan waktu gerakan MULAI, bukan waktu selesai.
+
 **DH dan Jacobian ada sebagai PEMBANDING, bukan sebagai jalur produksi.** Yang dipakai
 PLC tetap rumus tertutup; `fkDH`/`jacobian`/`ikJacobian` di `kin.js` ada supaya klaim
 "hasilnya sama" bisa diadu, dan tesnya yang mengadu. Tiga hal yang gampang salah di situ:
