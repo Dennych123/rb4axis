@@ -180,21 +180,45 @@ function toolPolarV2(cfg) {
  */
 function forwardKinematicV2(pos, cfg, execute) {
   if (execute === false) return { joint: [0, 0, 0, 0], world: [0, 0, 0, 0], worldL: [0, 0, 0, 0], done: false };
+  const s = fkSteps(pos, cfg);
+  return { joint: pos.map(toREAL), world: s.worldL.map(toREAL), worldL: s.worldL, done: true };
+}
+
+/**
+ * FK, dengan SEMUA nilai antaranya ikut keluar - buat panel yang menjelaskan cara
+ * kerjanya sambil menunjukkan angkanya bergerak.
+ *
+ * Ini BUKAN salinan kedua rumusnya: forwardKinematicV2 memanggil fungsi ini, jadi yang
+ * ditampilkan panel benar-benar angka yang dipakai menggambar. Panel yang menghitung
+ * sendiri pasti melenceng suatu hari, dan melencengnya diam - penjelasan yang salah
+ * lebih berbahaya daripada tidak ada penjelasan.
+ */
+function fkSteps(pos, cfg) {
   const tool = toolPolarV2(cfg);
   const a1 = pos[1] * KIN_DEGREE_TO_RAD;
   const a2 = a1 + pos[2] * KIN_DEGREE_TO_RAD;
   const a3 = a2 + pos[3] * KIN_DEGREE_TO_RAD;
 
-  const wy = cfg.L2 * Math.cos(a1) + cfg.L3 * Math.cos(a2) + cfg.L4 * Math.cos(a3);
-  const wz = cfg.L1 + cfg.L2 * Math.sin(a1) + cfg.L3 * Math.sin(a2) + cfg.L4 * Math.sin(a3);
+  // Sumbangan tiap ruas dipisah supaya panel bisa menunjukkan "L2 menyumbang sekian,
+  // L3 sekian" - itu yang bikin rumusnya berhenti terlihat seperti mantra.
+  const c = [cfg.L2 * Math.cos(a1), cfg.L3 * Math.cos(a2), cfg.L4 * Math.cos(a3)];
+  const sn = [cfg.L2 * Math.sin(a1), cfg.L3 * Math.sin(a2), cfg.L4 * Math.sin(a3)];
+  const wy = c[0] + c[1] + c[2];
+  const wz = cfg.L1 + sn[0] + sn[1] + sn[2];
+  const thTool = tool.theta + a3;
 
   const worldL = [
     pos[0],
-    wy + tool.r * Math.cos(tool.theta + a3),
-    wz + tool.r * Math.sin(tool.theta + a3),
+    wy + tool.r * Math.cos(thTool),
+    wz + tool.r * Math.sin(thTool),
     pos[1] + pos[2] + pos[3]
   ];
-  return { joint: pos.map(toREAL), world: worldL.map(toREAL), worldL, done: true };
+  return {
+    a1: a1, a2: a2, a3: a3, cos: c, sin: sn, wy: wy, wz: wz,
+    toolR: tool.r, toolTheta: tool.theta, thTool: thTool,
+    dy: tool.r * Math.cos(thTool), dz: tool.r * Math.sin(thTool),
+    worldL: worldL
+  };
 }
 
 /**
@@ -205,20 +229,42 @@ function forwardKinematicV2(pos, cfg, execute) {
  *          errorId: 1 di luar jangkauan, 2 terlalu dekat, 3 singular, 4 soft limit
  */
 function inverseKinematicV2(pos, cfg, elbowUp) {
-  const gagal = id => ({ joint: [NaN, NaN, NaN, NaN], done: false, error: true, errorId: id,
-                         limits: [false, false, false, false, false, false, false, false],
-                         limitAny: false });
+  const s = ikSteps(pos, cfg, elbowUp);
+  if (!s.done) {
+    return { joint: [NaN, NaN, NaN, NaN], done: false, error: true, errorId: s.errorId,
+             limits: [false, false, false, false, false, false, false, false], limitAny: false };
+  }
+  return { joint: s.joint, done: !s.limitAny, error: s.limitAny, errorId: s.limitAny ? 4 : 0,
+           limits: s.limits, limitAny: s.limitAny };
+}
+
+/**
+ * IK dengan seluruh nilai antaranya - pasangan fkSteps, dan sumber tunggal yang sama:
+ * inverseKinematicV2 memanggil fungsi ini.
+ *
+ * Nama yang dikeluarkan sengaja PERSIS nama di INVERSE_KINEMATIC_V2.st (Y3, Z3, R,
+ * BETA, GAMMA, ALFA), supaya panel penjelas dan berkas ST bisa dibaca berdampingan
+ * tanpa menerjemahkan apa pun.
+ *
+ * done=false berarti pose ditolak SEBELUM ACOS; nilai yang sudah sempat dihitung tetap
+ * dikembalikan supaya panel bisa menunjukkan DI MANA gagalnya, bukan cuma bahwa gagal.
+ */
+function ikSteps(pos, cfg, elbowUp) {
   const tool = toolPolarV2(cfg);
   const thEe = pos[3] * KIN_DEGREE_TO_RAD;
 
+  // Mundur dari TCP: buang tool, lalu buang L4 - sisanya titik pergelangan, dan dari
+  // situ soalnya tinggal segitiga dua sisi (L2, L3) dengan alas R.
   const y3 = (pos[1] - tool.r * Math.cos(tool.theta + thEe)) - cfg.L4 * Math.cos(thEe);
   const z3 = ((pos[2] - tool.r * Math.sin(tool.theta + thEe)) - cfg.L1) - cfg.L4 * Math.sin(thEe);
   const r = Math.sqrt(y3 * y3 + z3 * z3);
+  const dasar = { thEe: thEe, y3: y3, z3: z3, r: r, toolR: tool.r, toolTheta: tool.theta,
+                  jangkauMaks: cfg.L2 + cfg.L3, jangkauMin: Math.abs(cfg.L2 - cfg.L3) };
 
   // Jangkauan diperiksa DULU. Sesudah ACOS tidak menolong: yang meledak ACOS-nya.
-  if (r > cfg.L2 + cfg.L3) return gagal(1);
-  if (r < Math.abs(cfg.L2 - cfg.L3)) return gagal(2);
-  if (r === 0) return gagal(3);
+  if (r > cfg.L2 + cfg.L3) return Object.assign({ done: false, errorId: 1 }, dasar);
+  if (r < Math.abs(cfg.L2 - cfg.L3)) return Object.assign({ done: false, errorId: 2 }, dasar);
+  if (r === 0) return Object.assign({ done: false, errorId: 3 }, dasar);
 
   const beta = Math.acos((cfg.L2 * cfg.L2 + cfg.L3 * cfg.L3 - r * r) / (2 * cfg.L2 * cfg.L3));
   const gamma = Math.acos((r * r + cfg.L2 * cfg.L2 - cfg.L3 * cfg.L3) / (2 * cfg.L2 * r));
@@ -239,11 +285,12 @@ function inverseKinematicV2(pos, cfg, elbowUp) {
     d2 < (L[4] + 1), d2 > (L[5] - 1),
     d3 < (L[6] + 1), d3 > (L[7] - 1)
   ];
-  const limitAny = limits.some(Boolean);
 
   // Sudutnya tetap dikeluarkan walau batas ditembus - yang ditahan cuma DONE, jadi
   // pemanggil bisa menunjukkan "seharusnya ke sini, ditolak batas".
-  return { joint, done: !limitAny, error: limitAny, errorId: limitAny ? 4 : 0, limits, limitAny };
+  return Object.assign({ done: true, errorId: 0, beta: beta, gamma: gamma, alfa: alfa,
+                         elbowUp: !!elbowUp, rad1: rad1, rad2: rad2, rad3: rad3,
+                         joint: joint, limits: limits, limitAny: limits.some(Boolean) }, dasar);
 }
 
 /**
@@ -379,6 +426,6 @@ function keArray(v, panjang) {
 if (typeof module !== 'undefined') {
   module.exports = { forwardKinematic, inverseKinematic, reachable, atan2Fix, toolPolar, toREAL,
                      forwardKinematicV2, inverseKinematicV2, toolPolarV2, atanKuadran,
-                     chainPoints, gripperPoints, collideCheck, keArray,
+                     fkSteps, ikSteps, chainPoints, gripperPoints, collideCheck, keArray,
                      KIN_PI, KIN_DEGREE_TO_RAD, KIN_RAD_TO_DEGREE };
 }

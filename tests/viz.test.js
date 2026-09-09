@@ -135,7 +135,77 @@ chk('panel tidak menyusun ulang innerHTML tiap kabar dari PLC', (() => {
   return !/innerHTML/.test(badan);
 })(), 'panelTampil() harus mengganti teks di elemen yang sudah ada');
 chk('panel digambar ter-throttle dari putar(), bukan dari tiap pesan SSE',
-    /perluPanel && t - panelTerakhir >/.test(robot) && /perluPanel = true;/.test(robot));
+    /t - panelTerakhir > \d+/.test(robot) && /perluPanel = true;/.test(robot)
+    && !/es\.onmessage[\s\S]{0,2000}?panelTampil\(\);/.test(robot),
+    'kabar SSE cuma menandai; yang menggambar putar()');
+
+// ------------------------------------- panel penjelas memakai rumus yang SAMA
+// Panel yang menjelaskan kinematik sambil menghitung sendiri adalah cara paling halus
+// untuk berbohong: gambarnya benar, angkanya benar, penjelasannya salah - dan yang
+// membacanya justru orang yang belum tahu mana yang benar.
+//
+// Karena itu fkSteps/ikSteps yang dipakai panel adalah fungsi yang DIPANGGIL
+// forwardKinematicV2/inverseKinematicV2, bukan sepupunya.
+let bedaFK = 0, bedaIK = 0;
+for (const j of [[0, 45, -74, -61], [-300, 90, -90, -90], [200, 20, -30, 10]]) {
+  const a = K.forwardKinematicV2(j, cfg).worldL;
+  const b = K.fkSteps(j, cfg).worldL;
+  for (let i = 0; i < 4; i++) bedaFK = Math.max(bedaFK, Math.abs(a[i] - b[i]));
+
+  const pose = a.slice();
+  const ik1 = K.inverseKinematicV2(pose, cfg, false);
+  const ik2 = K.ikSteps(pose, cfg, false);
+  if (ik1.done !== ik2.done) bedaIK = Infinity;
+  if (ik1.done) for (let i = 0; i < 4; i++) bedaIK = Math.max(bedaIK, Math.abs(ik1.joint[i] - ik2.joint[i]));
+}
+chk('fkSteps = forwardKinematicV2 (bit per bit)', bedaFK === 0, String(bedaFK));
+chk('ikSteps = inverseKinematicV2 (bit per bit)', bedaIK === 0, String(bedaIK));
+
+// Nilai antara yang ditampilkan harus KONSISTEN dengan hasilnya, bukan sekadar ada:
+// R itu jarak ke pergelangan, dan pergelangan itu titik ke-3 rantai.
+{
+  const j = [0, 45, -74, -61];
+  const w = K.fkSteps(j, cfg).worldL;
+  const ik = K.ikSteps(w, cfg, false);
+  const rantai = K.chainPoints(ik.joint, cfg);
+  const rDariRantai = Math.hypot(rantai[3].y - rantai[1].y, rantai[3].z - rantai[1].z);
+  // Toleransinya 1e-4, bukan 1e-9, dan itu BUKAN kelonggaran: jalannya lewat
+  // derajat (IK memberi derajat, chainPoints mengubahnya balik ke radian), dan
+  // DEGREE_TO_RAD project dipotong 9 angka - perkaliannya 1 - 2.98e-8. Di R ~440 mm
+  // itu ~6e-6 mm. Menuntut lebih rapat berarti menuntut konstanta yang lain.
+  chk('R yang ditampilkan = jarak bahu ke pergelangan', Math.abs(ik.r - rDariRantai) < 1e-4,
+      ik.r.toFixed(6) + ' vs ' + rDariRantai.toFixed(6) + ' (lantai konstanta ~6e-6)');
+  // Yang dibuktikan: ketiga sudut yang ditampilkan panel memang sudut segitiga yang
+  // SAMA. RAD_TO_DEGREE yang dipotong 9 angka menggeser 180 derajat sebesar ~5e-6,
+  // jadi toleransinya di situ - lantai yang sama dengan round-trip.
+  chk('segitiga IK tertutup: beta + gamma + sudut ketiga = 180',
+      Math.abs((ik.beta + ik.gamma + Math.acos((rDariRantai * rDariRantai + cfg.L3 * cfg.L3
+        - cfg.L2 * cfg.L2) / (2 * cfg.L3 * rDariRantai))) * K.KIN_RAD_TO_DEGREE - 180) < 1e-4);
+  chk('pose yang di luar jangkauan ditolak SEBELUM ACOS, dengan R tetap dilaporkan', (() => {
+    const jauh = K.ikSteps([0, 2000, 400, -90], cfg, false);
+    return !jauh.done && jauh.errorId === 1 && isFinite(jauh.r) && jauh.beta === undefined;
+  })(), 'panel harus bisa menunjukkan DI MANA gagalnya, bukan cuma bahwa gagal');
+}
+
+// Halaman TIDAK boleh punya trigonometri kinematik sendiri. Cover berengsel boleh
+// memakai konversi derajat->radian; yang dilarang acos/atan/asin, karena itu isi
+// rumus IK-nya.
+chk('robot.js tidak memakai acos/atan/asin sama sekali',
+    !/Math\.(acos|atan|atan2|asin)\s*\(/.test(robot),
+    'rumus kinematik tempatnya di kin.js - satu sumber untuk PLC, tes, dan panel');
+chk('panel penjelas dibangun dari fkSteps/ikSteps',
+    /fkSteps\(/.test(robot) && /ikSteps\(/.test(robot));
+
+// Slider mengirim waktu DILEPAS (onchange), bukan tiap piksel (oninput): satu tulis
+// per gerakan mouse membanjiri sesi OPC UA yang sama yang membaca puluhan tag.
+chk('slider jog mengirim waktu dilepas, bukan tiap piksel', (() => {
+  const blok = robot.slice(robot.indexOf('function bikinSlider'), robot.indexOf('function sliderTampil'));
+  // Badan oninput dipotong tepat di onchange berikutnya. Tanpa itu, pemeriksaan
+  // "oninput tidak mengirim" ikut membaca isi onchange yang memang mengirim - dan tes
+  // ini gagal justru waktu kodenya benar.
+  const oninput = blok.slice(blok.indexOf('oninput ='), blok.indexOf('onchange ='));
+  return /onchange = function[\s\S]{0,160}?sliderKirim/.test(blok) && !/sliderKirim/.test(oninput);
+})());
 
 // ------------------------------------------------ nilai PLC -> array yang bisa dipakai
 // SUDAH KEJADIAN: lengan hilang dari layar begitu PLC tersambung, base dan rel tetap
@@ -268,6 +338,22 @@ chk('pose jalan bebas di sepanjang rel', sapuan === 0, sapuan + ' titik menabrak
 // yang salah harus kelihatan sebagai gripper turun di sebelah mesin - bukan tersembunyi
 // karena gambar dan sekuens membaca angka yang berbeda.
 chk('robot.js membaca pose stasiun dari tag PLC', /v\.SIM_ST_X/.test(robot));
+
+// ------------------------------------------------------------ penutup mesin
+// Penutup itu badan yang bergerak di ruang yang sama dengan gripper. Yang menjaga
+// keduanya tidak bertabrakan bukan penjaga tabrakan (penutup tidak ada di sana),
+// tapi URUTAN: robot cuma turun sesudah penutupnya terbuka penuh.
+chk('config punya penutup dengan sudut dan kecepatan',
+    siklus.mesin.cover && siklus.mesin.cover.sudut > 0 && siklus.mesin.cover.kecepatan > 0);
+chk('penutup terbuka lebih tinggi dari PCB yang dijepit',
+    siklus.mesin.cover.sudut >= 45,
+    'sudut kecil = penutup masih menutupi jalan masuk gripper walau "terbuka"');
+chk('halaman menggambar penutup dari tag PLC, bukan dari config',
+    /v\.SIM_ST_COVER/.test(robot) && /st\.stCover\[cv\]/.test(robot));
+chk('penutup diputar pada ENGSEL, bukan di tengahnya',
+    /pivot\.rotation\.x/.test(robot) && /cb\.tutup\.position\.set\(0, teb \/ 2, -dalam \/ 2\)/.test(robot),
+    'kotak yang diputar di tengahnya menembus meja tiap kali membuka');
+
 
 // --------------------------------------------- panjang ruas = jarak, bukan kelipatan
 // SUDAH KEJADIAN: `kotak(58, 1, 46)` menaruh tebal 1 di y dan kedalaman 46 di z,

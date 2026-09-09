@@ -121,7 +121,22 @@
       ],
       "lebar": 300.0,
       "dalam": 320.0,
-      "margin": 12.0
+      "margin": 12.0,
+      "cover": {
+        "_catatan": [
+          "Penutup berengsel yang MENEKAN PCB ke probe base - itu yang bikin kontak",
+          "probe rapat, dan itu sebabnya mesin tes tidak boleh menghitung waktu proses",
+          "sebelum penutupnya benar-benar rapat.",
+          "sudut = bukaan penuh dalam derajat (0 = menutup rapat, menekan).",
+          "kecepatan derajat/detik. tebal cuma buat digambar.",
+          "Robot TIDAK turun ke stasiun yang penutupnya belum terbuka penuh - kalau",
+          "tidak, gripper masuk ke ruang yang sedang ditutupi dan yang kelihatan cuma",
+          "dua benda saling menembus."
+        ],
+        "sudut": 80.0,
+        "kecepatan": 110.0,
+        "tebal": 18.0
+      }
     },
     "pcb": { "_catatan": "ukuran PCB, mm. panjang = sisi yang dijepit gripper (searah rel)", "panjang": 120.0, "lebar": 80.0, "tebal": 8.0 }
   },

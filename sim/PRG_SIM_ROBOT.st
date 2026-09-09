@@ -112,36 +112,44 @@ IF NOT SIM_INIT_DONE THEN
 	SIM_ST_W := 300.0;
 	SIM_ST_D := 320.0;
 	SIM_ST_MARGIN := 12.0;
+	SIM_COVER_SUDUT := 80.0;
+	SIM_COVER_VEL := 110.0;
 	// WIP IN
 	SIM_ST_X[0] := -1400.0;   SIM_ST_Y[0] := 430.0;
 	SIM_ST_Z[0] := 250.0;   SIM_ST_T[0] := -90.0;
 	SIM_ST_TIPE[0] := 0;   SIM_ST_PROSES[0] := 0.0;
 	SIM_ST_STATE[0] := 0;   SIM_ST_TIMER[0] := 0.0;
+	SIM_ST_COVER[0] := 80.0;
 	// ICC 1
 	SIM_ST_X[1] := -700.0;   SIM_ST_Y[1] := 430.0;
 	SIM_ST_Z[1] := 285.0;   SIM_ST_T[1] := -90.0;
 	SIM_ST_TIPE[1] := 1;   SIM_ST_PROSES[1] := 17.0;
 	SIM_ST_STATE[1] := 0;   SIM_ST_TIMER[1] := 0.0;
+	SIM_ST_COVER[1] := 80.0;
 	// ICC 2
 	SIM_ST_X[2] := -300.0;   SIM_ST_Y[2] := 430.0;
 	SIM_ST_Z[2] := 285.0;   SIM_ST_T[2] := -90.0;
 	SIM_ST_TIPE[2] := 1;   SIM_ST_PROSES[2] := 17.0;
 	SIM_ST_STATE[2] := 0;   SIM_ST_TIMER[2] := 0.0;
+	SIM_ST_COVER[2] := 80.0;
 	// DW 1
 	SIM_ST_X[3] := 300.0;   SIM_ST_Y[3] := 430.0;
 	SIM_ST_Z[3] := 250.0;   SIM_ST_T[3] := -90.0;
 	SIM_ST_TIPE[3] := 2;   SIM_ST_PROSES[3] := 15.0;
 	SIM_ST_STATE[3] := 0;   SIM_ST_TIMER[3] := 0.0;
+	SIM_ST_COVER[3] := 80.0;
 	// DW 2
 	SIM_ST_X[4] := 700.0;   SIM_ST_Y[4] := 430.0;
 	SIM_ST_Z[4] := 250.0;   SIM_ST_T[4] := -90.0;
 	SIM_ST_TIPE[4] := 2;   SIM_ST_PROSES[4] := 15.0;
 	SIM_ST_STATE[4] := 0;   SIM_ST_TIMER[4] := 0.0;
+	SIM_ST_COVER[4] := 80.0;
 	// WIP OUT
 	SIM_ST_X[5] := 1400.0;   SIM_ST_Y[5] := 430.0;
 	SIM_ST_Z[5] := 250.0;   SIM_ST_T[5] := -90.0;
 	SIM_ST_TIPE[5] := 3;   SIM_ST_PROSES[5] := 0.0;
 	SIM_ST_STATE[5] := 0;   SIM_ST_TIMER[5] := 0.0;
+	SIM_ST_COVER[5] := 80.0;
 
 	SIM_SEL_AUTO := FALSE;
 	SIM_ESTOP := FALSE;
@@ -187,6 +195,8 @@ EDGE_MOVE := SIM_MOVE_EXEC AND NOT LAST_MOVE;
 LAST_MOVE := SIM_MOVE_EXEC;
 EDGE_HOME := SIM_HOME_EXEC AND NOT LAST_HOME;
 LAST_HOME := SIM_HOME_EXEC;
+EDGE_JSET := SIM_JOG_SET_EXEC AND NOT LAST_JSET;
+LAST_JSET := SIM_JOG_SET_EXEC;
 EDGE_RUN := SIM_AUTORUN AND NOT LAST_RUN;
 LAST_RUN := SIM_AUTORUN;
 EDGE_CSTOP := SIM_CYCLE_STOP AND NOT LAST_CSTOP;
@@ -335,11 +345,34 @@ FOR i := 0 TO SIM_ST_N - 1 DO
 		WIP_OUT := i;
 		SIM_ST_STATE[i] := 0;
 	ELSIF SIM_ST_STATE[i] = 1 THEN
-		SIM_ST_TIMER[i] := SIM_ST_TIMER[i] - SIM_DT;
-		IF SIM_ST_TIMER[i] <= 0.0 THEN
-			SIM_ST_TIMER[i] := 0.0;
-			SIM_ST_STATE[i] := 2;
+		// Waktu proses cuma jalan waktu penutupnya SUDAH RAPAT. Penutup itu yang
+		// menekan PCB ke probe base; menghitung sebelum rapat berarti mesin mengaku
+		// menguji papan yang belum tersentuh probe - dan hasilnya tetap keluar
+		// "selesai", karena tidak ada yang memeriksa kontaknya.
+		IF SIM_ST_COVER[i] <= 0.5 THEN
+			SIM_ST_TIMER[i] := SIM_ST_TIMER[i] - SIM_DT;
+			IF SIM_ST_TIMER[i] <= 0.0 THEN
+				SIM_ST_TIMER[i] := 0.0;
+				SIM_ST_STATE[i] := 2;
+			END_IF;
 		END_IF;
+	END_IF;
+
+	// Penutup berengsel: menutup HANYA selama memproses, selain itu terbuka supaya
+	// gripper punya jalan masuk. WIP IN/OUT tidak punya penutup - rak terbuka.
+	IF (SIM_ST_STATE[i] = 1) AND (SIM_ST_TIPE[i] <> 0) AND (SIM_ST_TIPE[i] <> 3) THEN
+		COVER_TARGET := 0.0;
+	ELSE
+		COVER_TARGET := SIM_COVER_SUDUT;
+	END_IF;
+	D := COVER_TARGET - SIM_ST_COVER[i];
+	STEP_M := SIM_COVER_VEL * SIM_DT;
+	IF ABS(D) <= STEP_M THEN
+		SIM_ST_COVER[i] := COVER_TARGET;
+	ELSIF D > 0.0 THEN
+		SIM_ST_COVER[i] := SIM_ST_COVER[i] + STEP_M;
+	ELSE
+		SIM_ST_COVER[i] := SIM_ST_COVER[i] - STEP_M;
 	END_IF;
 END_FOR;
 
@@ -461,7 +494,13 @@ IF SIM_AUTO THEN
 			NEED_IK := TRUE;
 			SIM_CYCLE_STEP := 11;
 
-		11:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 12; END_IF;
+		11:	// Menunggu DUA hal: lengan sampai di atas stasiun, DAN penutupnya terbuka
+			// penuh. Turun ke penutup yang masih bergerak berarti gripper dan penutup
+			// berbagi ruang yang sama - di layar itu cuma dua benda yang saling
+			// menembus, tanpa satu pun yang mengeluh.
+			IF SIM_MOVE_DONE AND (SIM_ST_COVER[ST_IDX] >= SIM_COVER_SUDUT - 0.5) THEN
+				SIM_CYCLE_STEP := 12;
+			END_IF;
 
 		12:	// turun tegak ke permukaan stasiun - gripper menyumpit dari ATAS
 			POSE_REQ[0] := SIM_ST_X[ST_IDX];
@@ -517,7 +556,9 @@ IF SIM_AUTO THEN
 			NEED_IK := TRUE;
 			SIM_CYCLE_STEP := 23;
 
-		23:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 24; END_IF;
+		23:	IF SIM_MOVE_DONE AND (SIM_ST_COVER[ST_IDX] >= SIM_COVER_SUDUT - 0.5) THEN
+				SIM_CYCLE_STEP := 24;
+			END_IF;
 
 		24:	POSE_REQ[0] := SIM_ST_X[ST_IDX];
 			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
@@ -598,6 +639,15 @@ ELSIF AX >= 0 THEN
 		END_CASE;
 	END_IF;
 	NEED_IK := TRUE;
+
+ELSIF EDGE_JSET AND NOT SIM_ESTOP AND NOT SIM_SEL_AUTO THEN
+	// Slider jog: satu target sumbu sekaligus, dikirim waktu slidernya DILEPAS.
+	// Lewat sumbu langsung, bukan IK - slider sumbu memang menyetel sudut sumbu, dan
+	// memaksanya lewat IK berarti pose yang tidak punya solusi jadi tidak bisa dituju
+	// padahal sumbunya sendiri sanggup ke situ.
+	FOR i := 0 TO 3 DO
+		SIM_JOINT_CMD[i] := SIM_JOG_SET[i];
+	END_FOR;
 
 ELSIF EDGE_MOVE AND NOT SIM_ESTOP AND NOT SIM_SEL_AUTO THEN
 	FOR i := 0 TO 3 DO

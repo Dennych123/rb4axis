@@ -45,7 +45,9 @@ var st = {
   approach: 140,
   stasiun: [],                    // {nama,tipe,x,y,z,theta,proses}
   stState: [0, 0, 0, 0, 0, 0], stTimer: [0, 0, 0, 0, 0, 0],
-  mesin: { lebar: 300, dalam: 320, margin: 12 },
+  mesin: { lebar: 300, dalam: 320, margin: 12, cover: { sudut: 80, kecepatan: 110, tebal: 18 } },
+  stCover: [0, 0, 0, 0, 0, 0], coverSudut: 80,
+  frames: true, tri: true, ikSrc: 0,
   pcb: { panjang: 120, lebar: 80, tebal: 8 },
   dim: { L1: 400, L2: 300, L3: 250, L4: 100, toolY: 140, toolZ: 0,
          offset: [0, 0, 0, 0, 0], limitv: [-500, 500, -90, 180, -150, 0, -120, 120] },
@@ -166,6 +168,8 @@ function stream() {
       if (v.SIM_ST_W) st.mesin.lebar = v.SIM_ST_W;
       if (v.SIM_ST_D) st.mesin.dalam = v.SIM_ST_D;
       if (v.SIM_ST_MARGIN !== undefined) st.mesin.margin = v.SIM_ST_MARGIN;
+      if (v.SIM_ST_COVER) st.stCover = keArray(v.SIM_ST_COVER, 6);
+      if (v.SIM_COVER_SUDUT) st.coverSudut = v.SIM_COVER_SUDUT;
       if (v.SIM_APPROACH) st.approach = v.SIM_APPROACH;
       // Pose stasiun dibaca dari PLC, bukan dari config: yang digambar harus yang
       // benar-benar dikejar sekuenser. Kalau keduanya beda, yang salah ketahuan
@@ -463,6 +467,42 @@ function bikinScene() {
     bagian.stasiun[t].label = lab;
   }
 
+  // Penutup berengsel tiap mesin. Dibuat sebagai PIVOT di garis engsel dengan kotak
+  // penutup sebagai anaknya, bukan kotak yang diputar sendiri: memutar kotak berarti
+  // memutarnya di tengah, dan penutup yang berputar di tengahnya menembus meja tiap
+  // kali membuka.
+  MAT.cover = new THREE.MeshStandardMaterial({ color: 0x93c5fd, metalness: 0.3, roughness: 0.35,
+                                               transparent: true, opacity: 0.55 });
+  bagian.cover = [];
+  for (var cvi = 0; cvi < 6; cvi++) {
+    var pivot = new THREE.Object3D();
+    var tutup = kotak(1, 1, 1, MAT.cover);
+    pivot.add(tutup);
+    scene.add(pivot);
+    bagian.cover.push({ pivot: pivot, tutup: tutup });
+  }
+
+  // Sumbu koordinat: satu triad per kerangka (world zero, kereta, bahu, siku,
+  // pergelangan, TCP). Merah/hijau/biru = X/Y/Z, dan itu yang bikin "koordinat nol"
+  // berhenti jadi angka di tabel.
+  bagian.axes = [];
+  for (var ax = 0; ax < 6; ax++) {
+    var h = new THREE.AxesHelper(ax === 0 ? 220 : 110);
+    h.material.depthTest = false;
+    scene.add(h);
+    bagian.axes.push(h);
+  }
+
+  // Segitiga IK: bahu -> siku -> pergelangan -> balik ke bahu. Sisi terakhir itu R,
+  // dan justru sisi itu yang tidak ada bendanya - dia jarak, bukan batang.
+  var gTri = new THREE.BufferGeometry();
+  gTri.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
+  bagian.tri = new THREE.Line(gTri, new THREE.LineBasicMaterial({ color: 0xfacc15, linewidth: 2 }));
+  bagian.tri.frustumCulled = false;
+  scene.add(bagian.tri);
+  bagian.triLabel = [labelSprite('L2'), labelSprite('L3'), labelSprite('R')];
+  bagian.triLabel.forEach(function (l) { l.scale.set(150, 38, 1); scene.add(l); });
+
   // PCB: SATU per stasiun plus satu yang dipegang gripper. Dulu cuma satu kotak,
   // dan itu cukup selama cuma ada satu produk di seluruh sel. Sekarang ICC 1 dan
   // ICC 2 memang harus bisa berisi bersamaan - itu inti buffer-nya - jadi satu kotak
@@ -672,6 +712,50 @@ function gambar() {
     kp.position.set(sd.x, sd.z + pcb.tebal / 2 + 8, sd.y);
   }
 
+  // ---------------------------------------------------------- penutup berengsel
+  for (var cv = 0; cv < bagian.cover.length; cv++) {
+    var cb = bagian.cover[cv], cd = st.stasiun[cv];
+    var punya = cd && (cd.tipe === 1 || cd.tipe === 2);
+    cb.pivot.visible = !!punya;
+    if (!punya) continue;
+    var dalam = st.mesin.dalam * 0.82, teb = st.mesin.cover.tebal;
+    cb.tutup.scale.set(st.mesin.lebar, teb, dalam);
+    // Anak digeser ke DEPAN engsel, jadi yang terangkat tepi depannya - engsel di
+    // belakang, seperti tutup kotak.
+    cb.tutup.position.set(0, teb / 2, -dalam / 2);
+    cb.pivot.position.set(cd.x, cd.z + 10, cd.y + st.mesin.dalam / 2);
+    cb.pivot.rotation.x = (st.stCover[cv] || 0) * Math.PI / 180;
+  }
+
+  // ------------------------------------------------------------ kerangka + segitiga
+  var titikFrame = [
+    { x: 0, y: 0, z: 0 },                       // world zero: tengah rel, di lantai
+    titik[0], titik[1], titik[2], titik[3], g.tcp
+  ];
+  for (var fr = 0; fr < bagian.axes.length; fr++) {
+    bagian.axes[fr].visible = st.frames;
+    if (st.frames) bagian.axes[fr].position.copy(ke3(titikFrame[fr]));
+  }
+  bagian.tri.visible = st.tri;
+  bagian.triLabel.forEach(function (l) { l.visible = st.tri; });
+  if (st.tri) {
+    var pos = bagian.tri.geometry.attributes.position;
+    var tigaTitik = [titik[1], titik[2], titik[3], titik[1]];
+    for (var tp = 0; tp < 4; tp++) {
+      var v3 = ke3(tigaTitik[tp]);
+      pos.setXYZ(tp, v3.x, v3.y, v3.z);
+    }
+    pos.needsUpdate = true;
+    bagian.tri.geometry.computeBoundingSphere();
+    var tengah = function (a, b) {
+      var va = ke3(a), vb = ke3(b);
+      return va.add(vb).multiplyScalar(0.5);
+    };
+    bagian.triLabel[0].position.copy(tengah(titik[1], titik[2]));
+    bagian.triLabel[1].position.copy(tengah(titik[2], titik[3]));
+    bagian.triLabel[2].position.copy(tengah(titik[3], titik[1]));
+  }
+
   bagian.pcbHold.scale.set(pcb.panjang, pcb.tebal, pcb.lebar);
   bagian.pcbHold.visible = st.part === 1;
   // Dipegang: duduk tepat di TCP, dijepit kedua jari di sisi kiri-kanannya.
@@ -752,6 +836,259 @@ function bikinPanelStatis() {
     t.appendChild(baris);
     return { nama: nama, badge: badge, timer: timer };
   });
+}
+
+// ---------------------------------------------------- panel kinematik (kiri)
+// Tiap baris: nama, rumusnya, hasilnya. Dibangun SEKALI seperti panel kanan, dan yang
+// diganti tiap gambar cuma dua teks.
+//
+// SEMUA angkanya datang dari fkSteps()/ikSteps() di kin.js - fungsi yang SAMA yang
+// dipanggil forwardKinematicV2/inverseKinematicV2, jadi yang dijelaskan panel ini
+// benar-benar yang dihitung. Panel yang menghitung sendiri pasti melenceng suatu hari,
+// dan penjelasan yang melenceng lebih berbahaya daripada tidak ada penjelasan.
+var refFK = {}, refIK = {}, refRT = {}, refFrame = [];
+
+function barisRumus(induk, kunci, ref, nama, rumus) {
+  var d = document.createElement('div');
+  d.className = 'rumus';
+  var n = document.createElement('span');
+  n.className = 'nm';
+  n.textContent = nama;
+  var e = document.createElement('span');
+  e.className = 'ex';
+  e.textContent = rumus || '';
+  var h = document.createElement('span');
+  h.className = 'hs';
+  h.textContent = '-';
+  d.appendChild(n);
+  d.appendChild(e);
+  d.appendChild(h);
+  induk.appendChild(d);
+  ref[kunci] = { baris: d, ex: e, hs: h };
+}
+
+var FRAME_NAMA = [
+  ['world zero', 'floor, middle of the rail'],
+  ['axis 0 zero', 'carriage on the rail'],
+  ['joint 1 zero', 'shoulder, top of the column'],
+  ['joint 2 zero', 'elbow'],
+  ['joint 3 zero', 'wrist'],
+  ['tool zero (TCP)', 'between the fingertips']
+];
+
+function bikinPanelKiri() {
+  var ft = el('frameTabel');
+  ft.innerHTML = '';
+  refFrame = FRAME_NAMA.map(function (n) {
+    var d = document.createElement('div');
+    d.className = 'rumus';
+    var a = document.createElement('span');
+    a.className = 'nm';
+    a.style.width = '104px';
+    a.textContent = n[0];
+    var b = document.createElement('span');
+    b.className = 'ex';
+    b.textContent = n[1];
+    var c = document.createElement('span');
+    c.className = 'hs';
+    c.textContent = '-';
+    d.appendChild(a);
+    d.appendChild(b);
+    d.appendChild(c);
+    ft.appendChild(d);
+    return c;
+  });
+
+  var f = el('fkFlow');
+  f.innerHTML = '';
+  refFK = {};
+  barisRumus(f, 'a1', refFK, 'a1', 'theta1');
+  barisRumus(f, 'a2', refFK, 'a2', 'theta1 + theta2');
+  barisRumus(f, 'a3', refFK, 'a3', 'theta1 + theta2 + theta3 = theta_EE');
+  barisRumus(f, 'wy', refFK, 'Y', 'L2 cos a1 + L3 cos a2 + L4 cos a3');
+  barisRumus(f, 'wz', refFK, 'Z', 'L1 + L2 sin a1 + L3 sin a2 + L4 sin a3');
+  barisRumus(f, 'tool', refFK, 'tool', 'r (cos, sin)(theta_tool + a3)');
+  barisRumus(f, 'tcp', refFK, 'TCP', 'wrist + tool offset');
+
+  var k = el('ikFlow');
+  k.innerHTML = '';
+  refIK = {};
+  barisRumus(k, 'in', refIK, 'in', 'target X Y Z theta_EE');
+  barisRumus(k, 'y3', refIK, 'Y3', 'Y - tool_r cos(theta_tool + theta_EE) - L4 cos theta_EE');
+  barisRumus(k, 'z3', refIK, 'Z3', 'Z - tool_r sin(...) - L1 - L4 sin theta_EE');
+  barisRumus(k, 'r', refIK, 'R', 'sqrt(Y3^2 + Z3^2)   distance to the wrist');
+  barisRumus(k, 'beta', refIK, 'beta', 'acos((L2^2 + L3^2 - R^2) / (2 L2 L3))');
+  barisRumus(k, 'gamma', refIK, 'gam', 'acos((R^2 + L2^2 - L3^2) / (2 L2 R))');
+  barisRumus(k, 'alfa', refIK, 'alfa', 'atan(Z3/Y3) + quadrant fix');
+  barisRumus(k, 't1', refIK, 'th1', 'alfa + gam');
+  barisRumus(k, 't2', refIK, 'th2', 'beta - 180');
+  barisRumus(k, 't3', refIK, 'th3', 'theta_EE - th1 - th2');
+
+  var r = el('rtFlow');
+  r.innerHTML = '';
+  refRT = {};
+  barisRumus(r, 'y', refRT, 'dY', 'FK(IK(target)).Y - target.Y');
+  barisRumus(r, 'z', refRT, 'dZ', 'FK(IK(target)).Z - target.Z');
+  barisRumus(r, 'th', refRT, 'dEE', 'FK(IK(target)).theta_EE - target.theta_EE');
+}
+
+var f3 = function (x) { return (typeof x === 'number' && isFinite(x)) ? x.toFixed(3) : '-'; };
+var deg = function (rad) { return f3(rad * KIN_RAD_TO_DEGREE) + '\u00b0'; };
+
+function panelKiriTampil() {
+  if (!refFK.a1) return;
+  var cfg = cfgKin();
+  var titik = chainPoints(st.joint, cfg);
+  var g = gripperPoints(st.joint, cfg, st.grip.pos);
+  var koor = function (p) { return f3(p.x) + ', ' + f3(p.y) + ', ' + f3(p.z); };
+  var tp = [{ x: 0, y: 0, z: 0 }, titik[0], titik[1], titik[2], titik[3], g.tcp];
+  for (var i = 0; i < refFrame.length; i++) refFrame[i].textContent = koor(tp[i]);
+
+  // --- forward: dari sudut sumbu yang SEKARANG
+  var fk = fkSteps(st.joint, cfg);
+  refFK.a1.hs.textContent = deg(fk.a1);
+  refFK.a2.hs.textContent = deg(fk.a2);
+  refFK.a3.hs.textContent = deg(fk.a3);
+  refFK.wy.ex.textContent = f3(fk.cos[0]) + ' + ' + f3(fk.cos[1]) + ' + ' + f3(fk.cos[2]);
+  refFK.wy.hs.textContent = f3(fk.wy);
+  refFK.wz.ex.textContent = f3(st.dim.L1) + ' + ' + f3(fk.sin[0]) + ' + ' + f3(fk.sin[1])
+    + ' + ' + f3(fk.sin[2]);
+  refFK.wz.hs.textContent = f3(fk.wz);
+  refFK.tool.ex.textContent = 'r=' + f3(fk.toolR) + ' at ' + deg(fk.thTool);
+  refFK.tool.hs.textContent = f3(fk.dy) + ', ' + f3(fk.dz);
+  refFK.tcp.ex.textContent = 'X from the rail, Y and Z from above';
+  refFK.tcp.hs.textContent = f3(fk.worldL[0]) + ', ' + f3(fk.worldL[1]) + ', ' + f3(fk.worldL[2]);
+
+  // --- inverse: dari pose sekarang, atau dari target move point
+  var target = st.ikSrc === 1
+    ? [+el('tx').value, +el('ty').value, +el('tz').value, +el('tt').value]
+    : fk.worldL.slice();
+  if (target.some(function (x) { return !isFinite(x); })) target = fk.worldL.slice();
+  var ik = ikSteps(target, cfg, st.elbowUp);
+
+  refIK['in'].hs.textContent = f3(target[0]) + ', ' + f3(target[1]) + ', ' + f3(target[2])
+    + ', ' + f3(target[3]) + '\u00b0';
+  refIK.y3.hs.textContent = f3(ik.y3);
+  refIK.z3.hs.textContent = f3(ik.z3);
+  refIK.r.ex.textContent = 'reach ' + f3(ik.jangkauMin) + ' .. ' + f3(ik.jangkauMaks);
+  refIK.r.hs.textContent = f3(ik.r);
+  var pakai = ['beta', 'gamma', 'alfa', 't1', 't2', 't3'];
+  var nilai = ik.done
+    ? [deg(ik.beta), deg(ik.gamma), deg(ik.alfa), f3(ik.joint[1]) + '\u00b0',
+       f3(ik.joint[2]) + '\u00b0', f3(ik.joint[3]) + '\u00b0']
+    : ['-', '-', '-', '-', '-', '-'];
+  for (var q = 0; q < pakai.length; q++) {
+    refIK[pakai[q]].hs.textContent = nilai[q];
+    refIK[pakai[q]].baris.className = 'rumus' + (ik.done ? '' : ' gagal');
+  }
+  refIK.r.baris.className = 'rumus' + (ik.done ? '' : ' gagal');
+  // Cabang elbow mengubah DUA baris rumusnya, bukan cuma hasilnya - kalau tulisannya
+  // tidak ikut berubah, panel menjelaskan rumus yang tidak sedang dipakai.
+  refIK.t1.ex.textContent = st.elbowUp ? 'alfa - gam' : 'alfa + gam';
+  refIK.t2.ex.textContent = st.elbowUp ? '180 - beta' : 'beta - 180';
+
+  var v = el('ikVerdict');
+  if (!ik.done) {
+    v.className = 'kotakBad';
+    v.textContent = (ERR_TEKS[ik.errorId] || 'rejected') + ' - no solution for this pose';
+  } else if (ik.limitAny) {
+    v.className = 'kotakBad';
+    v.textContent = 'solved, but outside a soft limit - the PLC refuses this one';
+  } else {
+    v.className = 'kotakOk';
+    v.textContent = 'solved: ' + (st.elbowUp ? 'elbow up' : 'elbow down') + ' branch, within limits';
+  }
+
+  // --- round trip
+  if (ik.done) {
+    var balik = fkSteps(ik.joint, cfg).worldL;
+    refRT.y.hs.textContent = (balik[1] - target[1]).toExponential(2);
+    refRT.z.hs.textContent = (balik[2] - target[2]).toExponential(2);
+    refRT.th.hs.textContent = (balik[3] - target[3]).toExponential(2);
+  } else {
+    refRT.y.hs.textContent = refRT.z.hs.textContent = refRT.th.hs.textContent = '-';
+  }
+}
+
+// -------------------------------------------------------------- slider jog
+// Slider menyetel TARGET, dan targetnya dikirim waktu slider DILEPAS. Satu tulis per
+// piksel gerakan mouse membanjiri sesi OPC UA yang sama yang sedang membaca 80 tag,
+// dan yang kelihatan justru robot yang tersendat - lawan dari yang sedang disetel.
+var refSlider = [];
+var seretSlider = -1;
+
+function batasSlider(i) {
+  var L = st.dim.limitv;
+  if (st.mode === 0) return [L[i * 2], L[i * 2 + 1]];
+  if (i === 0) return [L[0], L[1]];
+  var jangkau = st.dim.L2 + st.dim.L3 + st.dim.L4 + st.dim.toolY;
+  if (i === 3) return [-180, 180];
+  return [i === 2 ? 0 : -jangkau, jangkau];
+}
+
+function bikinSlider() {
+  var w = el('jogSlider');
+  w.innerHTML = '';
+  refSlider = [];
+  for (var i = 0; i < 4; i++) {
+    (function (i) {
+      var row = document.createElement('div');
+      row.className = 'slider';
+      var lbl = document.createElement('span');
+      lbl.className = 'lbl';
+      var inp = document.createElement('input');
+      inp.type = 'range';
+      inp.step = '0.5';
+      var val = document.createElement('span');
+      val.className = 'val';
+      row.appendChild(lbl);
+      row.appendChild(inp);
+      row.appendChild(val);
+      w.appendChild(row);
+      inp.oninput = function () {
+        seretSlider = i;
+        val.textContent = (+this.value).toFixed(1);
+      };
+      inp.onchange = function () {
+        seretSlider = -1;
+        sliderKirim(i, +this.value);
+      };
+      refSlider.push({ lbl: lbl, inp: inp, val: val });
+    })(i);
+  }
+}
+
+function sliderTampil() {
+  for (var i = 0; i < refSlider.length; i++) {
+    var r = refSlider[i], b = batasSlider(i);
+    r.lbl.textContent = (st.mode === 0 ? NAMA_JOINT[i] : NAMA_WORLD[i]);
+    r.inp.min = b[0];
+    r.inp.max = b[1];
+    if (seretSlider === i) continue;             // jangan lawan tangan yang sedang menyeret
+    var nilai = st.mode === 0 ? st.jointPlc[i] : st.world[i];
+    r.inp.value = nilai;
+    r.val.textContent = f2(nilai);
+  }
+}
+
+function sliderKirim(i, nilai) {
+  if (st.mode === 0) {
+    var j = st.jointPlc.slice();
+    j[i] = nilai;
+    if (!st.plc) { st.cmd = j; return; }
+    kirim('SIM_JOG_SET', j)
+      .then(function () { return kirim('SIM_JOG_SET_EXEC', false); })
+      .then(function () { return kirim('SIM_JOG_SET_EXEC', true); })
+      .then(function () { return kirim('SIM_JOG_SET_EXEC', false); });
+    return;
+  }
+  var pose = st.world.slice();
+  pose[i] = nilai;
+  if (!st.plc) { offlineMinta(pose); return; }
+  kirim('SIM_WORLD_CMD', pose)
+    .then(function () { return kirim('SIM_MOVE_EXEC', false); })
+    .then(function () { return kirim('SIM_MOVE_EXEC', true); })
+    .then(function () { return kirim('SIM_MOVE_EXEC', false); });
 }
 
 function bikinJog() {
@@ -893,6 +1230,9 @@ function panelTampil() {
   var d = st.dim;
   var nilai = [d.L1, d.L2, d.L3, d.L4, d.toolY, d.toolZ, st.grip.len, st.grip.stroke];
   for (var q = 0; q < refDim.length; q++) refDim[q].textContent = f2(nilai[q]);
+
+  sliderTampil();
+  panelKiriTampil();
 }
 
 var NAMA_STATE = ['MANUAL', 'HOMING', 'AUTO READY', 'RUNNING', 'STOPPING AT END OF CYCLE',
@@ -925,6 +1265,7 @@ function pasangKontrol() {
   el('mode').onchange = function () {
     st.mode = +this.value;
     kirim('SIM_JOG_MODE', st.mode);
+    sliderTampil();
     panelTampil();
   };
   el('hold').onchange = function () { st.hold = this.checked; kirim('SIM_JOG_HOLD', st.hold); };
@@ -946,6 +1287,23 @@ function pasangKontrol() {
     el('ovrNilai').textContent = this.value + '%';
   };
   el('ovr').onchange = lepasOvr;
+  // Dua panel, dua-duanya bisa disembunyikan: yang dilihat waktu menjelaskan bukan yang
+  // dilihat waktu menjalankan, dan 3D-nya butuh ruang di dua-duanya.
+  el('hideKiri').onclick = function () {
+    var k = el('panelKiri');
+    k.classList.toggle('sembunyi');
+    this.textContent = k.classList.contains('sembunyi') ? '\u25b6 kinematics' : '\u25c0 kinematics';
+    ukur();
+  };
+  el('hideKanan').onclick = function () {
+    var k = el('panelKanan');
+    k.classList.toggle('sembunyi');
+    this.textContent = k.classList.contains('sembunyi') ? 'controls \u25c0' : 'controls \u25b6';
+    ukur();
+  };
+  el('showFrames').onchange = function () { st.frames = this.checked; };
+  el('showTri').onchange = function () { st.tri = this.checked; };
+  el('ikSrc').onchange = function () { st.ikSrc = +this.value; panelKiriTampil(); };
   el('gripBtn').onclick = function () {
     st.grip.cmd = !st.grip.cmd;
     kirim('SIM_GRIP_CMD', st.grip.cmd);
@@ -995,6 +1353,11 @@ function muatConfig() {
                                                 z: x.z, theta: x.theta, proses: x.proses }));
       st.approach = c.siklus.approach;
       st.mesin = c.siklus.mesin;
+      st.coverSudut = c.siklus.mesin.cover.sudut;
+      // Offline: penutup digambar TERBUKA. Halaman tidak menjalankan sekuensnya, jadi
+      // penutup yang digambar tertutup akan tertutup selamanya - dan itu terbaca
+      // seperti mesin yang menggantung, bukan seperti simulator yang mati.
+      st.stCover = c.siklus.stasiun.map(function () { return c.siklus.mesin.cover.sudut; });
       st.pcb = c.siklus.pcb;
       // Waktu offline, WIP IN tetap berisi dan sisanya kosong - sama dengan yang
       // dipaksakan PLC tiap scan. Halaman tidak menjalankan sekuensnya, jadi isi
@@ -1022,7 +1385,7 @@ function putar(t) {
   gambar();
   // Panel paling sering 8x per detik. Mata tidak bisa membaca angka yang berganti 20x
   // per detik, dan tiap gambaran panel menyentuh puluhan elemen di tengah frame.
-  if (perluPanel && t - panelTerakhir > 120) {
+  if ((perluPanel || !st.plc) && t - panelTerakhir > 120) {
     perluPanel = false;
     panelTerakhir = t;
     panelTampil();
@@ -1034,6 +1397,8 @@ bikinJog();
 pasangKontrol();
 muatConfig().then(function () {
   bikinPanelStatis();
+  bikinPanelKiri();
+  bikinSlider();
   panelTampil();
   if (bikinScene()) { ukur(); requestAnimationFrame(putar); }
   window.addEventListener('resize', ukur);

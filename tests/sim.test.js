@@ -313,6 +313,29 @@ chk('halaman menghaluskan GAMBAR, bukan angkanya', (() => {
   return /function haluskan\(dt\)/.test(r) && /el\('j' \+ i\)\.textContent = f2\(st\.jointPlc\[i\]\)/.test(r);
 })(), 'panel yang ikut dihaluskan menghapus satu-satunya tempat membandingkan layar dengan simulator');
 
+// ------------------------------------------------------------ penutup mesin
+// Penutup berengsel yang menekan PCB ke probe base. Tiga aturannya, dan ketiganya
+// gagal tanpa keluhan kalau dilanggar.
+chk('penutup menutup HANYA selama memproses',
+    /IF \(SIM_ST_STATE\[i\] = 1\) AND \(SIM_ST_TIPE\[i\] <> 0\) AND \(SIM_ST_TIPE\[i\] <> 3\) THEN[\s\S]{0,80}?COVER_TARGET := 0\.0;/.test(kode),
+    'penutup yang menutup di luar proses menutup jalan masuk gripper');
+chk('waktu proses cuma jalan waktu penutupnya RAPAT',
+    /IF SIM_ST_COVER\[i\] <= 0\.5 THEN[\s\S]{0,200}?SIM_ST_TIMER\[i\] := SIM_ST_TIMER\[i\] - SIM_DT;/.test(kode),
+    'menghitung sebelum rapat = mesin mengaku menguji papan yang belum tersentuh probe');
+chk('robot turun HANYA sesudah penutup terbuka penuh',
+    (kode.match(/SIM_MOVE_DONE AND \(SIM_ST_COVER\[ST_IDX\] >= SIM_COVER_SUDUT - 0\.5\)/g) || []).length === 2,
+    'dua tempat: waktu mengambil dan waktu meletakkan');
+chk('WIP tidak punya penutup', /SIM_ST_TIPE\[i\] <> 0\) AND \(SIM_ST_TIPE\[i\] <> 3/.test(kode));
+chk('penutup ada di tabel global + dipublikasikan',
+    glob.includes('SIM_ST_COVER') && glob.includes('SIM_COVER_SUDUT'));
+
+// ------------------------------------------------------------ slider jog
+// Slider menyetel sudut SUMBU langsung, tidak lewat IK: memaksanya lewat IK berarti
+// pose yang tidak punya solusi jadi tidak bisa dituju padahal sumbunya sanggup.
+chk('slider jog menyetel target sumbu lewat tepi SIM_JOG_SET_EXEC',
+    /EDGE_JSET AND NOT SIM_ESTOP AND NOT SIM_SEL_AUTO THEN[\s\S]{0,300}?SIM_JOINT_CMD\[i\] := SIM_JOG_SET\[i\];/.test(kode));
+chk('slider jog mati waktu AUTO dan waktu emergency', /EDGE_JSET AND NOT SIM_ESTOP AND NOT SIM_SEL_AUTO/.test(kode));
+
 // --------------------------------------------------------- override kecepatan
 // Dijepit DI PLC. Nilainya boleh ditulis dari mana saja lewat OPC UA, dan 500 % atau
 // angka negatif yang lolos bikin sumbu melompati targetnya tiap scan - di layar itu

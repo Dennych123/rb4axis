@@ -137,13 +137,131 @@
   .jogrow { display:flex; align-items:center; gap:6px; margin:4px 0; }
   .jogrow span.lbl { width:74px; color:var(--label); font-size:12px; }
   .jogrow button { min-width:38px; }
+
+  /* Dua panel, dua-duanya bisa disembunyikan: yang dilihat waktu menjelaskan bukan
+     yang dilihat waktu menjalankan, dan 3D-nya butuh ruang di dua-duanya. */
+  .panel.kiri { border-left:0; border-right:1px solid var(--garis); flex-basis:370px; }
+  .panel.sembunyi { display:none; }
+  #tombolPanel { position:absolute; top:10px; left:10px; display:flex; gap:6px; z-index:5; }
+  #tombolPanel button { background:var(--kartu); opacity:.92; box-shadow:0 1px 4px rgba(0,0,0,.25); }
+
+  /* Baris rumus: nama di kiri, rumus di tengah (mono, redup), hasil di kanan (tegas).
+     Bentuk itu yang bikin panel ini kebaca sebagai perhitungan, bukan sebagai daftar
+     angka - dan angkanya yang berubah, bukan letaknya. */
+  .rumus { display:flex; align-items:baseline; gap:6px; padding:3px 0;
+           border-top:1px solid var(--garis); font:12px ui-monospace, Consolas, monospace; }
+  .rumus:first-child { border-top:0; }
+  .rumus .nm { width:34px; color:var(--biru); font-weight:700; flex:0 0 auto; }
+  .rumus .ex { flex:1; color:var(--teks2); overflow:hidden; text-overflow:ellipsis;
+               white-space:nowrap; }
+  .rumus .hs { flex:0 0 auto; font-weight:700; font-variant-numeric:tabular-nums; }
+  .rumus.gagal .hs { color:var(--merah); }
+  .rumus.gagal .ex { color:var(--merah); }
+  .langkah { font-size:11px; color:var(--label); margin:10px 0 4px; font-weight:700;
+             letter-spacing:.05em; text-transform:uppercase; }
+  .cerita { font-size:12px; color:var(--teks2); margin:4px 0 8px; }
+  .cerita b { color:var(--teks); }
+  .kotakOk { background:var(--hijauBg); color:var(--hijau); border-radius:6px;
+             padding:4px 8px; font-size:12px; font-weight:600; }
+  .kotakBad { background:var(--merahBg); color:var(--merah); border-radius:6px;
+              padding:4px 8px; font-size:12px; font-weight:600; }
+  .sumbuX { color:#ef4444; } .sumbuY { color:#22c55e; } .sumbuZ { color:#3b82f6; }
+  .slider { display:flex; align-items:center; gap:7px; margin:5px 0; }
+  .slider .lbl { width:58px; color:var(--label); font-size:12px; }
+  .slider .val { width:74px; text-align:right; font:600 12.5px ui-monospace, monospace;
+                 font-variant-numeric:tabular-nums; }
 </style>
 </head>
 <body>
 
-<div id="view"><canvas id="cv"></canvas></div>
+<div class="panel kiri" id="panelKiri">
+  <h1>How the kinematics works</h1>
+  <div class="cerita">
+    The arm is <b>1 linear axis + 3 rotating joints</b>. Axis 0 slides along the rail and
+    becomes X directly. Joints 1-3 all rotate about the X axis, so the whole arm stays in
+    one flat Y-Z plane &mdash; which is why the maths below is two-dimensional.
+    Every number on this panel is read from the same functions the PLC program mirrors;
+    the page never does the trigonometry itself.
+  </div>
 
-<div class="panel">
+  <div class="kartu">
+    <p class="judul">Frames &amp; their zero points</p>
+    <div id="frameTabel"></div>
+    <div class="jogrow" style="margin-top:8px">
+      <label><input type="checkbox" id="showFrames" checked> show axes in 3D</label>
+      <label><input type="checkbox" id="showTri" checked> show IK triangle</label>
+    </div>
+    <details>
+      <summary class="k2">what a "zero" means here</summary>
+      <div class="ket">
+        <b>World zero</b> sits on the floor at the middle of the rail: X along the rail,
+        Y away from the column, Z up. <b>Joint zero</b> is a pose, not a place &mdash; all
+        angles at 0 means the arm points straight out along +Y. <b>Tool zero</b> (the TCP)
+        is at the fingertips, because the gripper length was added to the tool offset once,
+        in the generator. Red/green/blue in 3D = X/Y/Z.
+      </div>
+    </details>
+  </div>
+
+  <div class="kartu">
+    <p class="judul">Forward: angles &rarr; position</p>
+    <div class="cerita">Each link contributes its own length turned by its own accumulated
+      angle. Add the contributions up and you have where the wrist is; add the tool offset
+      and you have the fingertips.</div>
+    <div id="fkFlow"></div>
+  </div>
+
+  <div class="kartu">
+    <p class="judul">Inverse: position &rarr; angles</p>
+    <div class="cerita">Work backwards. Strip the tool and the last link off the target,
+      and what is left is the <b>wrist point</b>. The upper arm (L2), the forearm (L3) and
+      the distance R to that wrist point form a triangle &mdash; and a triangle with three
+      known sides has known angles. That is the whole trick.</div>
+    <div class="jogrow">
+      <span class="lbl">source</span>
+      <select id="ikSrc">
+        <option value="0">current pose</option>
+        <option value="1">move point target</option>
+      </select>
+    </div>
+    <div id="ikFlow"></div>
+    <div id="ikVerdict" style="margin-top:8px"></div>
+    <details>
+      <summary class="k2">why two answers exist</summary>
+      <div class="ket">
+        A triangle can be folded two ways: elbow down or elbow up. Both put the fingertips
+        in exactly the same place. The machine always takes elbow down, so this simulation
+        does too by default; the checkbox in the control panel picks the mirror image.
+      </div>
+    </details>
+  </div>
+
+  <div class="kartu">
+    <p class="judul">Round trip</p>
+    <div class="cerita">Feed the answer back through the forward equations. If the two
+      agree, both directions are consistent.</div>
+    <div id="rtFlow"></div>
+    <details>
+      <summary class="k2">why it never reaches zero</summary>
+      <div class="ket">
+        The project's own constants are truncated to nine digits
+        (<code>DEGREE_TO_RAD = 0.017453292</code>), so degrees &rarr; radians &rarr; degrees
+        multiplies by <code>1 - 2.98e-8</code>. About <b>5e-6&deg;</b> is the floor, no
+        matter how right the formulas are &mdash; and those are the constants the PLC uses.
+      </div>
+    </details>
+  </div>
+</div>
+
+<div id="view">
+  <canvas id="cv"></canvas>
+  <div id="tombolPanel">
+    <button id="hideKiri">&#9668; kinematics</button>
+    <button id="hideKanan">controls &#9658;</button>
+  </div>
+</div>
+
+<div class="panel" id="panelKanan">
   <h1>Blurobot &mdash; ICC / DW cell</h1>
   <div id="status" class="off">checking the bridge...</div>
 
@@ -245,6 +363,12 @@
       <button id="stepSet">set</button>
     </div>
     <div id="jog"></div>
+    <p class="judul" style="margin-top:10px">Sliders</p>
+    <div id="jogSlider"></div>
+    <div class="ket">Joint mode drives the axes directly; world mode runs the target
+      through inverse kinematics, so a pose with no solution is refused. Sent when the
+      slider is released &mdash; one write per pixel would flood the same OPC UA session
+      that reads the values back.</div>
 
     <div class="jogrow" style="margin-top:10px">
       <span class="lbl">gripper</span>

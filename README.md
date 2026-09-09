@@ -106,6 +106,31 @@ Menutupnya berhenti di **lebar produk**, bukan di nol: jari yang bertemu di nol 
 barang yang sedang dipegangnya. Panjang gripper masuk TCP - `gen_sim.js` menulis
 `ROBOT_TOOL_Y_LREAL = tool.Y + gripper.panjang`, satu kali, satu tempat.
 
+**Tiap mesin punya penutup berengsel yang MENEKAN PCB ke probe base.** Penutup menutup
+hanya selama memproses, dan **waktu prosesnya baru jalan setelah penutupnya rapat** -
+menghitung sebelum rapat berarti mesin mengaku menguji papan yang belum tersentuh probe,
+dan hasilnya tetap keluar "selesai". Robot **tidak turun** ke stasiun yang penutupnya
+belum terbuka penuh: penutup itu badan yang bergerak di ruang yang sama dengan gripper,
+dan penjaga tabrakan tidak mengenalnya - yang menjaga di sini URUTAN, bukan geometri.
+
+**Dua panel, dua-duanya bisa disembunyikan.** Kanan menjalankan sel; kiri menjelaskan
+kinematiknya sambil menunjukkan angkanya bergerak: koordinat nol tiap kerangka (world,
+sumbu 0, sendi 1-3, tool/TCP), aliran FK per suku, aliran IK langkah demi langkah
+(Y3, Z3, R, beta, gamma, alfa, theta1..3) berikut vonis jangkauan/soft limit, dan
+round-trip FK(IK(target)) yang memperlihatkan lantai ~5e-6 derajat itu.
+
+Panel penjelas **tidak menghitung apa pun sendiri**. Angkanya datang dari `fkSteps()` dan
+`ikSteps()` di `kin.js` - fungsi yang DIPANGGIL `forwardKinematicV2`/`inverseKinematicV2`,
+jadi yang dijelaskan memang yang dihitung. Panel yang menghitung sendiri adalah cara
+paling halus untuk berbohong: gambarnya benar, angkanya benar, penjelasannya salah - dan
+yang membacanya justru orang yang belum tahu mana yang benar. `tests/viz.test.js` mengadu
+keduanya bit per bit, dan menolak `Math.acos/atan/asin` muncul di halaman sama sekali.
+
+**Jog punya slider** per sumbu (mode joint) atau per koordinat world, dengan nilainya di
+sebelahnya. Dikirim waktu slider DILEPAS: satu tulis per piksel gerakan mouse membanjiri
+sesi OPC UA yang sama yang sedang membaca 80 tag, dan yang kelihatan justru robot yang
+tersendat - lawan dari yang sedang disetel.
+
 **Override kecepatan (`SIM_SPEED_OVR`, 1..100 %)** menskalakan semua gerakan sumbu -
 siklus otomatis maupun jog. Dua hal yang TIDAK ikut, dan keduanya sengaja: **akselerasi**
 (override yang ikut mengubahnya bikin jarak pengereman berubah, jadi pelan-pelan
@@ -217,9 +242,11 @@ sim/*.st + *.tsv    --gen_xml.js-->  sim/BlurobotSim.xml   (satu berkas, di-impo
 * **Motion model bukan dinamika.** Profil trapesium per sumbu (kecepatan +
   akselerasi), tanpa massa, tanpa inersia, tanpa jerk. Yang dinilai kinematiknya.
 * **Tabrakan cuma TCP + pangkal gripper vs kotak mesin dan lantai.** Siku dan ruas
-  lengan TIDAK diperiksa, dan begitu juga PCB yang sedang dipegang. Pose yang
-  menabrak dengan sikunya sendiri lolos - jadi ini penjaga terhadap perintah yang
-  salah, bukan mesin fisika.
+  lengan TIDAK diperiksa, begitu juga PCB yang sedang dipegang, dan **penutup
+  berengsel juga tidak** - yang menjaga gripper tidak menabrak penutup itu urutan
+  langkah (turun hanya setelah penutup terbuka penuh), bukan geometri. Pose yang
+  menabrak dengan sikunya sendiri lolos: ini penjaga terhadap perintah yang salah,
+  bukan mesin fisika.
 * **PCB-nya penanda, bukan benda fisik.** Tidak ada gaya jepit: dia ikut gripper
   karena sekuenser bilang begitu, bukan karena dijepit. Jatuh, selip, atau terjepit
   miring tidak ada di model ini.

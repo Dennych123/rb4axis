@@ -206,6 +206,25 @@ terbaca sebagai "laggy". Ramalannya wajib dibatasi (120 ms): tanpa batas, kabar 
 berhenti datang bikin lengan terbang menjauh, dan itu terlihat seperti robot yang kabur
 alih-alih sambungan yang putus.
 
+**Panel penjelas WAJIB membaca `fkSteps()`/`ikSteps()`, bukan menghitung sendiri.**
+Kedua fungsi itu yang dipanggil `forwardKinematicV2`/`inverseKinematicV2`, jadi satu
+sumber untuk PLC, tes, gambar, dan penjelasan. Panel yang menghitung sendiri adalah cara
+paling halus untuk berbohong - gambar benar, angka benar, penjelasan salah - dan yang
+membacanya justru orang yang belum bisa menilai. `viz.test.js` mengadu keduanya bit per
+bit DAN menolak `Math.acos/atan/asin` muncul di `robot.js` sama sekali.
+
+**Penutup mesin: tiga aturan yang gagal tanpa keluhan.** (1) menutup HANYA selama
+memproses — di luar itu dia menutup jalan masuk gripper; (2) waktu proses baru jalan
+setelah penutup RAPAT — kalau tidak, mesin mengaku menguji papan yang belum tersentuh
+probe dan tetap melaporkan selesai; (3) robot turun HANYA setelah penutup terbuka penuh —
+penutup tidak ada di penjaga tabrakan, jadi yang menjaga di sini urutan langkah.
+Di 3D penutup diputar pada ENGSEL (pivot di garis engsel, kotak jadi anaknya): kotak yang
+diputar di tengahnya menembus meja tiap kali membuka.
+
+**Slider mengirim waktu DILEPAS (`onchange`), bukan tiap piksel (`oninput`).** Satu tulis
+OPC UA per gerakan mouse membanjiri sesi yang sama yang membaca puluhan tag, dan yang
+terlihat justru robot tersendat — lawan dari yang sedang disetel.
+
 **Panel jangan digambar dari tiap pesan SSE.** ~20 pesan per detik × puluhan elemen
 `innerHTML` yang disusun ulang = layout ulang di tengah frame, dan yang tersendat justru
 animasi 3D-nya. Bentuk panel dibangun SEKALI (`bikinPanelStatis`), `panelTampil()` cuma

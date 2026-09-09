@@ -12,6 +12,8 @@ SIM_JOG_HOLD	BOOL			False	False	Publish Only	TRUE: tahan-jalan (tambahan viz). F
 SIM_JOG_STEP	LREAL			False	False	Publish Only	besar satu langkah jog - mm atau derajat
 SIM_JOG_P	ARRAY[0..3] OF BOOL			False	False	Publish Only	tombol jog arah plus per sumbu
 SIM_JOG_N	ARRAY[0..3] OF BOOL			False	False	Publish Only	tombol jog arah minus per sumbu
+SIM_JOG_SET	ARRAY[0..3] OF LREAL			False	False	Publish Only	target sumbu dari slider jog - dipakai waktu SIM_JOG_SET_EXEC
+SIM_JOG_SET_EXEC	BOOL			False	False	Publish Only	tepi naik: pakai SIM_JOG_SET sebagai target sumbu (slider dilepas)
 SIM_MOVE_EXEC	BOOL			False	False	Publish Only	tepi naik: jalankan move ke SIM_WORLD_CMD
 SIM_MOVE_DONE	BOOL			False	False	Publish Only	semua sumbu sudah sampai target
 SIM_HOME_EXEC	BOOL			False	False	Publish Only	tepi naik: kembali ke pose home
@@ -64,6 +66,9 @@ SIM_ST_TIMER	ARRAY[0..5] OF LREAL			False	False	Publish Only	sisa waktu proses t
 SIM_ST_W	LREAL			False	False	Publish Only	lebar badan mesin (arah rel), mm - dipakai gambar DAN penjaga tabrakan
 SIM_ST_D	LREAL			False	False	Publish Only	kedalaman badan mesin, mm
 SIM_ST_MARGIN	LREAL			False	False	Publish Only	jarak aman di sekeliling badan mesin, mm
+SIM_ST_COVER	ARRAY[0..5] OF LREAL			False	False	Publish Only	sudut penutup tiap mesin: 0 menekan PCB, penuh = terbuka
+SIM_COVER_SUDUT	LREAL			False	False	Publish Only	bukaan penuh penutup, derajat
+SIM_COVER_VEL	LREAL			False	False	Publish Only	kecepatan penutup, derajat/detik
 SIM_COLLIDE	BOOL			False	False	Publish Only	lengan sedang menyentuh badan mesin atau lantai
 SIM_COLLIDE_ST	INT			False	False	Publish Only	yang disentuh: indeks stasiun, -1 lantai, -1 juga kalau tidak ada
 DEGREE_TO_RAD	LREAL	0.017453292		False	True	Do not publish	

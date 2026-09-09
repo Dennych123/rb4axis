@@ -61,6 +61,8 @@ const GLOBAL_SIM = [
   ['SIM_JOG_STEP', 'LREAL', 'RW', 'besar satu langkah jog - mm atau derajat'],
   ['SIM_JOG_P', 'ARRAY[0..3] OF BOOL', 'W', 'tombol jog arah plus per sumbu'],
   ['SIM_JOG_N', 'ARRAY[0..3] OF BOOL', 'W', 'tombol jog arah minus per sumbu'],
+  ['SIM_JOG_SET', 'ARRAY[0..3] OF LREAL', 'RW', 'target sumbu dari slider jog - dipakai waktu SIM_JOG_SET_EXEC'],
+  ['SIM_JOG_SET_EXEC', 'BOOL', 'W', 'tepi naik: pakai SIM_JOG_SET sebagai target sumbu (slider dilepas)'],
 
   ['SIM_MOVE_EXEC', 'BOOL', 'W', 'tepi naik: jalankan move ke SIM_WORLD_CMD'],
   ['SIM_MOVE_DONE', 'BOOL', 'R', 'semua sumbu sudah sampai target'],
@@ -126,6 +128,9 @@ const GLOBAL_SIM = [
   ['SIM_ST_W', 'LREAL', 'R', 'lebar badan mesin (arah rel), mm - dipakai gambar DAN penjaga tabrakan'],
   ['SIM_ST_D', 'LREAL', 'R', 'kedalaman badan mesin, mm'],
   ['SIM_ST_MARGIN', 'LREAL', 'R', 'jarak aman di sekeliling badan mesin, mm'],
+  ['SIM_ST_COVER', 'ARRAY[0..5] OF LREAL', 'R', 'sudut penutup tiap mesin: 0 menekan PCB, penuh = terbuka'],
+  ['SIM_COVER_SUDUT', 'LREAL', 'R', 'bukaan penuh penutup, derajat'],
+  ['SIM_COVER_VEL', 'LREAL', 'R', 'kecepatan penutup, derajat/detik'],
   ['SIM_COLLIDE', 'BOOL', 'R', 'lengan sedang menyentuh badan mesin atau lantai'],
   ['SIM_COLLIDE_ST', 'INT', 'R', 'yang disentuh: indeks stasiun, -1 lantai, -1 juga kalau tidak ada']
 ];
@@ -167,6 +172,8 @@ const LOKAL = [
   ['LAST_HOME', 'BOOL', 'keadaan SIM_HOME_EXEC scan sebelumnya'],
   ['EDGE_MOVE', 'BOOL', 'tepi naik SIM_MOVE_EXEC'],
   ['EDGE_HOME', 'BOOL', 'tepi naik SIM_HOME_EXEC'],
+  ['LAST_JSET', 'BOOL', 'keadaan SIM_JOG_SET_EXEC scan sebelumnya'],
+  ['EDGE_JSET', 'BOOL', 'tepi naik SIM_JOG_SET_EXEC'],
   ['LAST_RUN', 'BOOL', 'keadaan SIM_AUTORUN scan sebelumnya'],
   ['EDGE_RUN', 'BOOL', 'tepi naik SIM_AUTORUN'],
   ['LAST_CSTOP', 'BOOL', 'keadaan SIM_CYCLE_STOP scan sebelumnya'],
@@ -191,6 +198,7 @@ const LOKAL = [
   ['VT', 'LREAL', 'kecepatan yang dituju profil trapesium scan ini'],
   ['VB', 'LREAL', 'kecepatan tertinggi yang masih bisa direm sebelum target'],
   ['DV', 'LREAL', 'perubahan kecepatan maksimum satu scan = akselerasi x dt'],
+  ['COVER_TARGET', 'LREAL', 'sudut penutup yang dituju stasiun yang sedang dihitung'],
   ['OVR', 'LREAL', 'override kecepatan sebagai pecahan (0.01..1.0)']
 ];
 
@@ -294,12 +302,17 @@ function blokInit(cfg) {
   L.push(t('SIM_ST_W := ' + lreal(cfg.siklus.mesin.lebar) + ';'));
   L.push(t('SIM_ST_D := ' + lreal(cfg.siklus.mesin.dalam) + ';'));
   L.push(t('SIM_ST_MARGIN := ' + lreal(cfg.siklus.mesin.margin) + ';'));
+  L.push(t('SIM_COVER_SUDUT := ' + lreal(cfg.siklus.mesin.cover.sudut) + ';'));
+  L.push(t('SIM_COVER_VEL := ' + lreal(cfg.siklus.mesin.cover.kecepatan) + ';'));
   cfg.siklus.stasiun.forEach((s, i) => {
     L.push(t('// ' + s.nama));
     L.push(t('SIM_ST_X[' + i + '] := ' + lreal(s.x) + ';   SIM_ST_Y[' + i + '] := ' + lreal(s.y) + ';'));
     L.push(t('SIM_ST_Z[' + i + '] := ' + lreal(s.z) + ';   SIM_ST_T[' + i + '] := ' + lreal(s.theta) + ';'));
     L.push(t('SIM_ST_TIPE[' + i + '] := ' + s.tipe + ';   SIM_ST_PROSES[' + i + '] := ' + lreal(s.proses) + ';'));
     L.push(t('SIM_ST_STATE[' + i + '] := 0;   SIM_ST_TIMER[' + i + '] := 0.0;'));
+    // Penutup mulai TERBUKA. Mulai tertutup berarti pekerjaan pertama menunggu
+    // penutup membuka sementara di layar tidak ada yang bergerak.
+    L.push(t('SIM_ST_COVER[' + i + '] := ' + lreal(cfg.siklus.mesin.cover.sudut) + ';'));
   });
   L.push('');
   // Panel dimulai dari keadaan paling aman yang masuk akal: MANUAL, tidak emergency,

@@ -21,6 +21,8 @@ LAST_MOVE	BOOL		False	False	keadaan SIM_MOVE_EXEC scan sebelumnya
 LAST_HOME	BOOL		False	False	keadaan SIM_HOME_EXEC scan sebelumnya
 EDGE_MOVE	BOOL		False	False	tepi naik SIM_MOVE_EXEC
 EDGE_HOME	BOOL		False	False	tepi naik SIM_HOME_EXEC
+LAST_JSET	BOOL		False	False	keadaan SIM_JOG_SET_EXEC scan sebelumnya
+EDGE_JSET	BOOL		False	False	tepi naik SIM_JOG_SET_EXEC
 LAST_RUN	BOOL		False	False	keadaan SIM_AUTORUN scan sebelumnya
 EDGE_RUN	BOOL		False	False	tepi naik SIM_AUTORUN
 LAST_CSTOP	BOOL		False	False	keadaan SIM_CYCLE_STOP scan sebelumnya
@@ -45,4 +47,5 @@ NOW_ST	INT		False	False	stasiun yang tersentuh, -1 lantai atau tidak ada
 VT	LREAL		False	False	kecepatan yang dituju profil trapesium scan ini
 VB	LREAL		False	False	kecepatan tertinggi yang masih bisa direm sebelum target
 DV	LREAL		False	False	perubahan kecepatan maksimum satu scan = akselerasi x dt
+COVER_TARGET	LREAL		False	False	sudut penutup yang dituju stasiun yang sedang dihitung
 OVR	LREAL		False	False	override kecepatan sebagai pecahan (0.01..1.0)

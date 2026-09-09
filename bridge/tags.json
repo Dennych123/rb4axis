@@ -59,6 +59,11 @@
       "komen": "besar satu langkah jog - mm atau derajat"
     },
     {
+      "nama": "SIM_JOG_SET",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "target sumbu dari slider jog - dipakai waktu SIM_JOG_SET_EXEC"
+    },
+    {
       "nama": "SIM_MOVE_DONE",
       "tipe": "BOOL",
       "komen": "semua sumbu sudah sampai target"
@@ -299,6 +304,21 @@
       "komen": "jarak aman di sekeliling badan mesin, mm"
     },
     {
+      "nama": "SIM_ST_COVER",
+      "tipe": "ARRAY[0..5] OF LREAL",
+      "komen": "sudut penutup tiap mesin: 0 menekan PCB, penuh = terbuka"
+    },
+    {
+      "nama": "SIM_COVER_SUDUT",
+      "tipe": "LREAL",
+      "komen": "bukaan penuh penutup, derajat"
+    },
+    {
+      "nama": "SIM_COVER_VEL",
+      "tipe": "LREAL",
+      "komen": "kecepatan penutup, derajat/detik"
+    },
+    {
       "nama": "SIM_COLLIDE",
       "tipe": "BOOL",
       "komen": "lengan sedang menyentuh badan mesin atau lantai"
@@ -419,6 +439,16 @@
       "nama": "SIM_JOG_N",
       "tipe": "ARRAY[0..3] OF BOOL",
       "komen": "tombol jog arah minus per sumbu"
+    },
+    {
+      "nama": "SIM_JOG_SET",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "target sumbu dari slider jog - dipakai waktu SIM_JOG_SET_EXEC"
+    },
+    {
+      "nama": "SIM_JOG_SET_EXEC",
+      "tipe": "BOOL",
+      "komen": "tepi naik: pakai SIM_JOG_SET sebagai target sumbu (slider dilepas)"
     },
     {
       "nama": "SIM_MOVE_EXEC",
