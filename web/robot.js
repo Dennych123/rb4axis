@@ -41,6 +41,7 @@ var st = {
   ctRun: 0, ctLast: 0, ctAvg: 0, ctN: 0,
   selAuto: false, estop: false, homed: true, stopReq: false, state: 0, abortId: 0,
   drop: null, jatuh: null,        // pencacah produk jatuh + animasi jatuhnya
+  tcpLalu: null,                  // TCP frame sebelumnya - dipakai menaksir kecepatan lempar
   tSampel: 0,                     // kapan nilai sumbu terakhir datang - dasar ramalan
   collide: false, collideSt: -1,
   approach: 140,
@@ -192,6 +193,9 @@ function stream() {
           tipe: tp[i] || 0, x: x, y: sy[i], z: sz[i], theta: stt[i] || 0, proses: pr[i] || 0
         }));
         if (refStasiun.length !== st.stasiun.length) bikinPanelStatis();
+        // Collider mesin ikut pose dari PLC. Kalau tidak, PCB memantul di tempat yang
+        // mesinnya sudah pindah.
+        if (fisika && fisika.stasiun.length !== st.stasiun.length) fisikaStasiun();
       }
       if (v.SIM_VEL) st.vel = keArray(v.SIM_VEL, 4);
       if (v.SIM_ACC) st.acc = keArray(v.SIM_ACC, 4);
@@ -259,9 +263,11 @@ function langkahSumbu(pos, cmd, vel, vmax, acc, dt) {
 }
 
 var tSebelum = 0;
+var tDelta = 0;
 function offlineStep(t) {
   var dt = Math.min((t - tSebelum) / 1000, 0.1);
   tSebelum = t;
+  tDelta = dt;
   if (!dt) return;
   if (st.plc) { haluskan(dt); return; }
 
@@ -622,15 +628,122 @@ function ruasKe(mesh, a, b) {
   mesh.visible = panjang > 0.5;
 }
 
-// Produk jatuh: dilepas dari TCP terakhir lalu dipercepat gravitasi sampai lantai,
-// diam sebentar, lalu hilang. Jatuhnya BUKAN keadaan PLC - di sana produknya sudah
-// tidak ada begitu gripper terbuka. Ini gambar dari sebuah kejadian, dan lamanya
-// tidak boleh dipakai menyimpulkan apa pun tentang sel.
+// ======================================================================= fisika
+// Rapier dipakai untuk SATU hal: benda kerja yang jatuh. Bukan untuk aktuator, bukan
+// untuk sensor, bukan untuk interlock.
+//
+// Pembagian itu bukan kehati-hatian berlebih. Fisika di browser jalan mengikuti frame,
+// dan frame-nya berubah-ubah; PLC jalan 4 ms tetap. Apa pun yang menggerbang keselamatan
+// atau urutan harus tetap di PLC, kalau tidak hasilnya tidak bisa diulang - dan yang
+// tidak bisa diulang tidak bisa dipakai menjawab "kenapa mesinnya begitu".
+//
+// Yang dihitung Rapier di sini juga bukan pertanyaan PLC. PLC sudah bilang produknya
+// LEPAS (SIM_PART_STATE 0, SIM_DROP_COUNT naik). Yang belum dijawab siapa pun: jatuhnya
+// ke mana, memantul ke mana, berhenti di mana. Itu memang urusan fisika.
+//
+// Satuan: PLC dan gambar pakai MILIMETER, fisika pakai METER. Solver rigid body
+// dirancang untuk angka sekitar 1, bukan sekitar 1000 - dibiarkan dalam mm, tumpukan
+// bergetar dan benda tipis tembus lantai. Konversinya di SATU tempat: SK.
+var SK = 0.001;                                  // mm -> m
+var fisika = null;
+var JATUH_MAKS = 8;                              // benda jatuh yang disimpan sebelum didaur ulang
+
+function fisikaBangun() {
+  if (fisika || typeof window.RAPIER === 'undefined' || !renderer) return;
+  var R = window.RAPIER;
+  var dunia = new R.World({ x: 0, y: -9.81, z: 0 });
+  dunia.timestep = 1 / 120;
+
+  // Lantai. Ketebalannya nyata (bukan bidang tipis): benda cepat menembus collider tipis
+  // di antara dua langkah, dan yang kelihatan cuma PCB yang lenyap ke bawah grid.
+  var lantai = dunia.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(0, -0.13 * 1, 0));
+  dunia.createCollider(R.ColliderDesc.cuboid(3, 0.1, 2).setRestitution(0.1).setFriction(0.8), lantai);
+
+  fisika = { R: R, dunia: dunia, benda: [], sisa: 0, stasiun: [] };
+  fisikaStasiun();
+  return true;
+}
+
+// Badan mesin ikut jadi collider statis, dan ukurannya diambil dari tag PLC yang SAMA
+// yang dipakai menggambar dan menjaga tabrakan. Kotak keempat yang berdiri sendiri di
+// sini berarti PCB memantul di tempat yang tidak ada mesinnya.
+function fisikaStasiun() {
+  if (!fisika) return;
+  var R = fisika.R;
+  for (var i = 0; i < fisika.stasiun.length; i++) fisika.dunia.removeRigidBody(fisika.stasiun[i]);
+  fisika.stasiun = [];
+  for (var s = 0; s < st.stasiun.length; s++) {
+    var sd = st.stasiun[s];
+    var tinggi = Math.max(20, sd.z + 30);
+    var b = fisika.dunia.createRigidBody(fisika.R.RigidBodyDesc.fixed()
+      .setTranslation(sd.x * SK, (sd.z - tinggi / 2) * SK, sd.y * SK));
+    fisika.dunia.createCollider(R.ColliderDesc.cuboid(st.mesin.lebar / 2 * SK, tinggi / 2 * SK,
+      st.mesin.dalam / 2 * SK).setFriction(0.7), b);
+    fisika.stasiun.push(b);
+  }
+}
+
+// Satu PCB dilepas dari TCP, dengan kecepatan lengan saat itu. Tanpa kecepatan awal,
+// benda selalu jatuh lurus ke bawah - dan itu justru menyembunyikan hal yang mau
+// dilihat: produk yang terlempar waktu lengannya sedang bergerak.
+function fisikaJatuhkan(tcp, kecepatan) {
+  if (!fisika) return false;
+  var R = fisika.R, pcb = st.pcb;
+  var bd = fisika.dunia.createRigidBody(R.RigidBodyDesc.dynamic()
+    .setTranslation(tcp.x * SK, tcp.y * SK, tcp.z * SK)
+    .setLinvel(kecepatan.x * SK, kecepatan.y * SK, kecepatan.z * SK)
+    .setAngvel({ x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 2, z: (Math.random() - 0.5) * 4 }));
+  fisika.dunia.createCollider(R.ColliderDesc.cuboid(pcb.panjang / 2 * SK, pcb.tebal / 2 * SK,
+    pcb.lebar / 2 * SK).setRestitution(0.15).setFriction(0.6).setDensity(0.5), bd);
+
+  var mesh = kotak(1, 1, 1, MAT.pcbJatuh);
+  mesh.scale.set(pcb.panjang, pcb.tebal, pcb.lebar);
+  scene.add(mesh);
+  fisika.benda.push({ bd: bd, mesh: mesh });
+
+  // Yang paling lama didaur ulang. Menyimpan semuanya berarti demo yang jalan sejam
+  // berakhir dengan ratusan benda tidur yang tetap ikut dihitung tiap langkah.
+  while (fisika.benda.length > JATUH_MAKS) {
+    var tua = fisika.benda.shift();
+    fisika.dunia.removeRigidBody(tua.bd);
+    scene.remove(tua.mesh);
+    tua.mesh.geometry.dispose();
+  }
+  return true;
+}
+
+// Langkah waktu TETAP, dengan akumulator. Memakai selisih waktu frame bikin hasilnya
+// berbeda antara laptop cepat dan laptop lambat - dan simulasi yang hasilnya berubah
+// menurut komputernya tidak bisa dipakai membuktikan apa pun.
+function fisikaLangkah(dt) {
+  if (!fisika || !fisika.benda.length) return;
+  fisika.sisa += Math.min(dt, 0.1);
+  var n = 0;
+  while (fisika.sisa >= fisika.dunia.timestep && n < 8) {
+    fisika.dunia.step();
+    fisika.sisa -= fisika.dunia.timestep;
+    n++;
+  }
+  for (var i = 0; i < fisika.benda.length; i++) {
+    var t = fisika.benda[i].bd.translation(), r = fisika.benda[i].bd.rotation();
+    fisika.benda[i].mesh.position.set(t.x / SK, t.y / SK, t.z / SK);
+    fisika.benda[i].mesh.quaternion.set(r.x, r.y, r.z, r.w);
+  }
+}
+
+// Produk jatuh. Kalau Rapier ada, dia yang menghitung ke mana. Kalau tidak, dipakai
+// gerak jatuh sederhana yang lama - halaman tetap jalan di mesin tanpa internet.
+//
+// Jatuhnya BUKAN keadaan PLC: di sana produknya sudah tidak ada begitu gripper terbuka.
+// Ini gambar dari sebuah kejadian, dan lamanya tidak boleh dipakai menyimpulkan apa pun
+// tentang sel.
 var G = 9810;                                   // mm/s2
 function mulaiJatuh() {
   if (!renderer) return;                        // three.js tidak termuat - tidak ada yang digambar
   var g = gripperPoints(st.joint, cfgKin(), st.grip.pos);
-  st.jatuh = { p: ke3(g.tcp), t: (typeof performance !== 'undefined' ? performance.now() : Date.now()) };
+  var tcp = ke3(g.tcp);
+  if (fisika && fisikaJatuhkan(tcp, st.tcpKec || { x: 0, y: 0, z: 0 })) return;
+  st.jatuh = { p: tcp, t: (typeof performance !== 'undefined' ? performance.now() : Date.now()) };
 }
 
 function gambarJatuh(pcb) {
@@ -669,6 +782,16 @@ function gambar() {
   ruasKe(bagian.gripBadan, ke3(titik[4]), ke3(g.pangkal));
   for (var j = 0; j < 2; j++) ruasKe(bagian.jari[j], ke3(g.jari[j].atas), ke3(g.jari[j].ujung));
   bagian.tcp.position.copy(ke3(g.tcp));
+  // Kecepatan TCP ditaksir dari perpindahannya antar frame. Dipakai HANYA sebagai
+  // kecepatan awal benda yang jatuh - tidak ada yang lain yang bergantung padanya, jadi
+  // taksiran kasar sudah cukup.
+  var tcpKini = ke3(g.tcp);
+  if (st.tcpLalu && tDelta > 0) {
+    st.tcpKec = { x: (tcpKini.x - st.tcpLalu.x) / tDelta,
+                  y: (tcpKini.y - st.tcpLalu.y) / tDelta,
+                  z: (tcpKini.z - st.tcpLalu.z) / tDelta };
+  }
+  st.tcpLalu = tcpKini;
 
   // ------------------------------------------------------------ stasiun + PCB
   var pcb = st.pcb;
@@ -1353,6 +1476,25 @@ function pasangKontrol() {
   el('reset').onclick = function () { kirim('SIM_RESET', true); };
 }
 
+// Rapier datang belakangan (WASM dimuat asinkron), jadi dunianya dibangun waktu dia
+// mengabari - bukan waktu halaman dimuat.
+window.addEventListener('rapier-siap', function () {
+  fisikaBangun();
+  fisikaInfoTampil();
+});
+
+function fisikaInfoTampil() {
+  var e = el('fisikaInfo');
+  if (!e) return;
+  e.innerHTML = fisika
+    ? 'Physics: <b>Rapier</b> is running. It is used for <b>one thing only</b>: where a '
+      + 'dropped board falls. Actuators, sensors, interlocks and the sequence all stay in '
+      + 'the PLC, at a fixed 4 ms scan. Browser physics follows the frame rate, and '
+      + 'anything that gates safety must not depend on that.'
+    : 'Physics: not loaded. A dropped board falls with a simple animation instead. '
+      + 'Nothing else changes &mdash; the physics engine is an extra here, not a requirement.';
+}
+
 function muatConfig() {
   return fetch('/api/config').then(function (r) { return r.json(); }).then(function (c) {
     st.dim.L1 = c.link.L1; st.dim.L2 = c.link.L2; st.dim.L3 = c.link.L3; st.dim.L4 = c.link.L4;
@@ -1404,6 +1546,7 @@ function muatConfig() {
 function putar(t) {
   offlineStep(t);
   gambar();
+  fisikaLangkah(tDelta);
   // Panel paling sering 8x per detik. Mata tidak bisa membaca angka yang berganti 20x
   // per detik, dan tiap gambaran panel menyentuh puluhan elemen di tengah frame.
   if ((perluPanel || !st.plc) && t - panelTerakhir > 120) {
@@ -1420,6 +1563,7 @@ muatConfig().then(function () {
   bikinPanelStatis();
   bikinPanelKiri();
   bikinSlider();
+  fisikaInfoTampil();
   panelTampil();
   if (bikinScene()) { ukur(); requestAnimationFrame(putar); }
   window.addEventListener('resize', ukur);

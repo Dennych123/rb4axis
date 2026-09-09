@@ -139,6 +139,59 @@ chk('panel digambar ter-throttle dari putar(), bukan dari tiap pesan SSE',
     && !/es\.onmessage[\s\S]{0,2000}?panelTampil\(\);/.test(robot),
     'kabar SSE cuma menandai; yang menggambar putar()');
 
+// ------------------------------------------------------------------ fisika
+// Rapier dipakai untuk SATU hal: ke mana benda yang jatuh mendarat. Batas itu yang
+// diuji di sini, bukan fisikanya - fisikanya milik Rapier.
+//
+// Kenapa batasnya penting: fisika di browser jalan mengikuti frame, dan frame-nya
+// berubah menurut komputernya. PLC jalan 4 ms tetap. Begitu ada interlock atau sensor
+// yang bergantung pada fisika browser, hasilnya berhenti bisa diulang - dan simulasi
+// yang hasilnya berubah menurut laptopnya tidak bisa dipakai membuktikan apa pun.
+chk('fisika cuma dipanggil dari jalur benda JATUH',
+    /function mulaiJatuh\(\)[\s\S]{0,400}?fisikaJatuhkan\(/.test(robot),
+    'satu-satunya pintu masuk fisika');
+chk('PCB yang dipegang dan yang di stasiun TIDAK lewat fisika', (() => {
+  const blok = robot.slice(robot.indexOf('// ---------------------------------------------------------- penutup berengsel'),
+                           robot.indexOf('function panelTampil'));
+  return !/fisika/.test(blok);
+})(), 'posisi produk yang dipegang/diletakkan ditentukan PLC, bukan solver');
+chk('aktuator tidak punya badan dinamis', !/RigidBodyDesc\.dynamic[\s\S]{0,200}?(jari|cover|lengan)/.test(robot),
+    'aktuator disetir PLC; membuatnya dynamic berarti solver ikut memutuskan posisinya');
+chk('fisika tidak pernah menulis ke PLC', (() => {
+  const i = robot.indexOf('function fisikaBangun');
+  const j = robot.indexOf('function mulaiJatuh');
+  return !/kirim\(/.test(robot.slice(i, j));
+})(), 'satu arah: PLC memutuskan, fisika menggambar akibatnya');
+
+// Langkah waktu TETAP. Memakai selisih waktu frame bikin hasil di laptop cepat berbeda
+// dengan di laptop lambat.
+chk('langkah fisika tetap, pakai akumulator',
+    /dunia\.timestep = 1 \/ 120/.test(robot)
+    && /while \(fisika\.sisa >= fisika\.dunia\.timestep/.test(robot));
+chk('jumlah langkah per frame dibatasi', /&& n < \d+\)/.test(robot),
+    'tanpa batas, satu frame yang telat memicu ratusan langkah dan halamannya membeku');
+
+// Satuan: PLC dan gambar milimeter, solver meter. Solver rigid body dirancang untuk
+// angka sekitar 1; dibiarkan dalam mm, tumpukan bergetar dan benda tipis tembus lantai.
+chk('konversi satuan mm->m ada di SATU tempat', /var SK = 0\.001;/.test(robot));
+
+// Halaman WAJIB tetap jalan tanpa Rapier: mesin di pabrik sering tanpa internet.
+chk('ada jalan mundur kalau Rapier tidak termuat',
+    /if \(fisika && fisikaJatuhkan\(/.test(robot) && /st\.jatuh = \{ p: tcp/.test(robot));
+chk('dunia dibangun waktu Rapier mengabari, bukan waktu halaman dimuat',
+    /addEventListener\('rapier-siap'/.test(robot));
+
+// Collider mesin lahir dari data yang SAMA dengan yang digambar dan yang dipakai
+// penjaga tabrakan. Kotak keempat yang berdiri sendiri = PCB memantul di tempat yang
+// mesinnya tidak ada.
+chk('collider stasiun dibangun dari st.stasiun + st.mesin',
+    /function fisikaStasiun[\s\S]{0,900}?st\.mesin\.lebar[\s\S]{0,200}?st\.mesin\.dalam/.test(robot));
+
+const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8');
+chk('Rapier dimuat lokal dulu, baru CDN dengan versi DIPATOK',
+    /'\.\/rapier3d-compat\.js'/.test(html) && /rapier3d-compat@\d+\.\d+\.\d+/.test(html),
+    'versi tanpa patokan bikin halaman ini bisa rusak sendiri suatu hari');
+
 // ------------------------------------- panel penjelas memakai rumus yang SAMA
 // Panel yang menjelaskan kinematik sambil menghitung sendiri adalah cara paling halus
 // untuk berbohong: gambarnya benar, angkanya benar, penjelasannya salah - dan yang

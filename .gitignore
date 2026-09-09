@@ -1,5 +1,6 @@
 node_modules/
 three.min.js
+rapier3d-compat.js
 *.bak
 
 # Kunci privat klien OPC UA. Pernah ikut ter-commit sekali di repo alat.
