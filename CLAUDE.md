@@ -213,6 +213,19 @@ paling halus untuk berbohong - gambar benar, angka benar, penjelasan salah - dan
 membacanya justru orang yang belum bisa menilai. `viz.test.js` mengadu keduanya bit per
 bit DAN menolak `Math.acos/atan/asin` muncul di `robot.js` sama sekali.
 
+**Pose world ada DUA: `SIM_WORLD_POS` (REAL, bentuk mesin) dan `SIM_WORLD_POS_L`
+(LREAL, buat menghitung).** Yang menghitung — jog world, penjaga tabrakan, panel — wajib
+memakai yang LREAL. REAL cuma ~7 angka berarti, dan jog membangun pose berikutnya DARI
+pose sekarang: pembulatan di jalur umpan balik menumpuk tiap tekan. Jangan mengonversi
+balik `REAL_TO_LREAL(SIM_WORLD_POS[i])` — angka yang sudah hilang tidak kembali.
+
+**Jangan memanjangkan `PI`/`DEGREE_TO_RAD`/`RAD_TO_DEGREE`.** Sudah diukur: konstanta
+penuh cuma menggeser TCP ~2.5e-5 mm — seorde dengan pembulatan REAL yang baru saja
+dihapus, dan nol pengaruhnya ke kehalusan (satu frame di kecepatan penuh = 14 mm).
+Harganya mahal: konstanta itu disalin dari tabel global project mesin, dan itu yang
+membuat hasil PLC bisa diadu ke hasil JS serta membuat lantai round-trip ~5e-6 derajat
+jadi angka yang terdokumentasi, bukan misteri.
+
 **Perintah yang DITOLAK tidak menggerakkan apa pun — dan `SIM_MOVE_DONE` tetap TRUE.**
 Tiap penantian sesudah permintaan IK karena itu menuntut `NOT SIM_ERROR` juga. Tanpa itu
 sekuenser melangkah maju seolah lengannya sudah sampai, dan waypoint yang dilewati justru

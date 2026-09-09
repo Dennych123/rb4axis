@@ -40,7 +40,7 @@ const KATA = new Set([
   'IF', 'THEN', 'ELSE', 'ELSIF', 'END_IF', 'FOR', 'TO', 'DO', 'END_FOR',
   'CASE', 'OF', 'END_CASE', 'AND', 'OR', 'NOT', 'TRUE', 'FALSE',
   'ABS', 'SQRT', 'SIN', 'COS', 'ATAN', 'ACOS', 'MOD',
-  'REAL_TO_LREAL', 'LREAL_TO_REAL', 'UDINT_TO_INT'
+  'REAL_TO_LREAL', 'LREAL_TO_REAL', 'UDINT_TO_INT', 'INT_TO_LREAL'
 ]);
 
 // Nama pin FB (dipakai sebagai IK2.DONE, FK2.ROBOT_POS_WORLD_OUTPUT, ...) diambil
@@ -312,6 +312,51 @@ chk('halaman menghaluskan GAMBAR, bukan angkanya', (() => {
   const r = fs.readFileSync(path.join(__dirname, '..', 'web', 'robot.js'), 'utf8');
   return /function haluskan\(dt\)/.test(r) && /el\('j' \+ i\)\.textContent = f2\(st\.jointPlc\[i\]\)/.test(r);
 })(), 'panel yang ikut dihaluskan menghapus satu-satunya tempat membandingkan layar dengan simulator');
+
+// ------------------------------------------------------ pose world: REAL dan LREAL
+// FB mengeluarkan dua bentuk pose yang sama. Yang REAL ada supaya bentuknya identik
+// dengan FB di mesin; yang LREAL yang dipakai MENGHITUNG. REAL cuma ~7 angka berarti,
+// dan jog world membangun pose berikutnya DARI pose sekarang - pembulatan di jalur
+// umpan balik menumpuk tiap tekan.
+chk('pose world diterbitkan dalam dua bentuk',
+    glob.includes('SIM_WORLD_POS') && glob.includes('SIM_WORLD_POS_L'));
+chk('yang LREAL diambil dari pin WORLD_LREAL milik FB, bukan dikonversi balik',
+    /FK_WORLD_L := FK2\.WORLD_LREAL;/.test(kode)
+    && !/SIM_WORLD_POS_L\[i\] := REAL_TO_LREAL/.test(kode),
+    'mengonversi balik dari REAL tidak mengembalikan angka yang sudah hilang');
+chk('jog world membangun pose dari yang LREAL',
+    /POSE_REQ\[i\] := SIM_WORLD_POS_L\[i\];/.test(kode)
+    && !/POSE_REQ\[i\] := REAL_TO_LREAL\(SIM_WORLD_POS\[i\]\)/.test(kode));
+chk('penjaga tabrakan menilai pose LREAL', /CK_X\[2\] := SIM_WORLD_POS_L\[0\];/.test(kode));
+chk('halaman memakai LREAL kalau ada, REAL kalau tidak', (() => {
+  const r = fs.readFileSync(path.join(__dirname, '..', 'web', 'robot.js'), 'utf8');
+  return /if \(v\.SIM_WORLD_POS_L\)[\s\S]{0,120}?else if \(v\[TAG\.world\]\)/.test(r);
+})(), 'jatuh balik ke REAL bikin halaman tetap hidup di project lama yang belum punya tag itu');
+
+// ---------------------------------------------------------- cycle time
+// Diukur KELUAR ke KELUAR: itu yang menentukan berapa produk per jam. Diukur di tempat
+// lain (mulai ambil, mulai antar) angkanya lebih kecil dan lebih enak dilihat, tapi
+// menjawab pertanyaan yang lain.
+chk('cycle time diambil waktu produk keluar di WIP OUT',
+    /IF SIM_ST_TIPE\[ST_IDX\] = 3 THEN[\s\S]{0,900}?SIM_CT_LAST := SIM_CT_RUN;/.test(kode));
+chk('produk PERTAMA tidak dihitung (tidak punya produk sebelumnya)',
+    /IF CT_ADA THEN[\s\S]{0,900}?CT_ADA := TRUE;/.test(kode),
+    'menghitungnya berarti waktu mengisi sel kosong ikut jadi cycle time');
+chk('penghitung jalan HANYA selama siklus jalan',
+    /IF SIM_AUTO THEN[\s\S]{0,120}?SIM_CT_RUN := SIM_CT_RUN \+ SIM_DT;/.test(kode),
+    'ikut menghitung waktu berhenti = satu jeda menelan rata-rata sepuluh produk');
+chk('rata-rata dibagi JUMLAH SAMPEL, bukan selalu 10',
+    /CT_SUM \/ INT_TO_LREAL\(SIM_CT_N\)/.test(kode)
+    && /FOR i := 0 TO SIM_CT_N - 1 DO/.test(kode),
+    'dibagi 10 sejak awal bikin menit-menit pertama terbaca jauh lebih baik dari kenyataan');
+chk('buffer melingkar sepuluh slot',
+    /IF CT_IDX > 9 THEN[\s\S]{0,60}?CT_IDX := 0;/.test(kode)
+    && p.some(l => l.startsWith('CT_BUF\tARRAY[0..9] OF LREAL')));
+chk('buffer dikosongkan waktu init - variabel program tidak ikut blok init',
+    /FOR i := 0 TO 9 DO[\s\S]{0,80}?CT_BUF\[i\] := 0\.0;/.test(kode)
+    && /CT_ADA := FALSE;/.test(kode));
+chk('tag cycle time dipublikasikan',
+    ['SIM_CT_RUN', 'SIM_CT_LAST', 'SIM_CT_AVG10', 'SIM_CT_N'].every(n => glob.includes(n)));
 
 // ------------------------------------------------------------ penutup mesin
 // Penutup berengsel yang menekan PCB ke probe base. Tiga aturannya, dan ketiganya

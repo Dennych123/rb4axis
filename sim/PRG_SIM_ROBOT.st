@@ -165,6 +165,10 @@ IF NOT SIM_INIT_DONE THEN
 	SIM_JOB_DST := -1;
 	SIM_DROP_COUNT := 0;
 	SIM_GRIP_CMD := FALSE;
+	SIM_CT_RUN := 0.0;
+	SIM_CT_LAST := 0.0;
+	SIM_CT_AVG10 := 0.0;
+	SIM_CT_N := 0;
 	// >>> DIBANGKITKAN
 
 	FOR i := 0 TO 3 DO
@@ -172,6 +176,16 @@ IF NOT SIM_INIT_DONE THEN
 		SIM_JOINT_CMD[i] := SIM_HOME[i];
 		SIM_JOINT_VEL[i] := 0.0;
 	END_FOR;
+
+	// Buffer cycle time ikut dikosongkan. Ini variabel PROGRAM, jadi dia TIDAK ikut
+	// terhapus blok init yang dibangkitkan (blok itu cuma menulis global) - dan buffer
+	// lama yang tertinggal sesudah SIM_RESET bikin rata-rata pertama sesudah reset
+	// bercampur angka dari susunan sel yang sudah tidak ada.
+	FOR i := 0 TO 9 DO
+		CT_BUF[i] := 0.0;
+	END_FOR;
+	CT_IDX := 0;
+	CT_ADA := FALSE;
 
 	// Init menaruh sumbu TEPAT di pose home, jadi robot memang sedang home.
 	SIM_HOMED := TRUE;
@@ -601,8 +615,38 @@ IF SIM_AUTO THEN
 		27:	IF SIM_GRIP_OPEN THEN
 				SIM_PART_STATE := 0;
 				IF SIM_ST_TIPE[ST_IDX] = 3 THEN
-					// WIP OUT: produk keluar dari sel.
+					// WIP OUT: produk keluar dari sel. Di SINI cycle time diambil -
+					// keluar ke keluar, karena itu yang menentukan berapa produk per jam
+					// keluar dari sel. Diukur di tempat lain (mulai ambil, mulai antar)
+					// angkanya lebih kecil dan lebih enak dilihat, tapi tidak menjawab
+					// pertanyaan yang ditanyakan orang.
 					SIM_CYCLE_COUNT := SIM_CYCLE_COUNT + 1;
+					IF CT_ADA THEN
+						// Produk PERTAMA tidak punya jarak: tidak ada produk sebelumnya.
+						// Menghitungnya juga berarti waktu mengisi sel yang masih kosong
+						// ikut jadi "cycle time", dan angka pertama selalu jelek tanpa
+						// sebab yang berarti.
+						SIM_CT_LAST := SIM_CT_RUN;
+						CT_BUF[CT_IDX] := SIM_CT_LAST;
+						CT_IDX := CT_IDX + 1;
+						IF CT_IDX > 9 THEN
+							CT_IDX := 0;
+						END_IF;
+						IF SIM_CT_N < 10 THEN
+							SIM_CT_N := SIM_CT_N + 1;
+						END_IF;
+						// Dibagi JUMLAH SAMPEL, bukan selalu 10: sebelum sepuluh produk
+						// terkumpul, slot yang belum terisi masih 0 dan rata-rata dibagi
+						// 10 menunjukkan angka yang jauh lebih kecil dari kenyataan -
+						// persis di menit-menit pertama waktu orang paling memperhatikan.
+						CT_SUM := 0.0;
+						FOR i := 0 TO SIM_CT_N - 1 DO
+							CT_SUM := CT_SUM + CT_BUF[i];
+						END_FOR;
+						SIM_CT_AVG10 := CT_SUM / INT_TO_LREAL(SIM_CT_N);
+					END_IF;
+					CT_ADA := TRUE;
+					SIM_CT_RUN := 0.0;
 				ELSE
 					SIM_ST_STATE[ST_IDX] := 1;
 					SIM_ST_TIMER[ST_IDX] := SIM_ST_PROSES[ST_IDX];
@@ -643,8 +687,11 @@ ELSIF (AX >= 0) AND (SIM_JOG_MODE = 0) THEN
 	SIM_JOINT_CMD[AX] := SIM_JOINT_CMD[AX] + DELTA;
 
 ELSIF AX >= 0 THEN
+	// Pose kandidat dibangun dari pose LREAL, bukan dari REAL yang dikonversi balik:
+	// tiap tekan jog menambah langkah ke pose SEKARANG, jadi pembulatan 32-bit di sini
+	// ikut menumpuk tekan demi tekan.
 	FOR i := 0 TO 3 DO
-		POSE_REQ[i] := REAL_TO_LREAL(SIM_WORLD_POS[i]);
+		POSE_REQ[i] := SIM_WORLD_POS_L[i];
 	END_FOR;
 	IF SIM_JOG_MODE = 1 THEN
 		// Jog WORLD: satu sumbu world digeser apa adanya (X, Y, Z, theta_EE).
@@ -713,10 +760,10 @@ CK_X[1] := POSE_REQ[0];
 CK_Y[1] := POSE_REQ[1] - SIM_GRIP_LEN * COS(TH);
 CK_Z[1] := POSE_REQ[2] - SIM_GRIP_LEN * SIN(TH);
 
-TH := REAL_TO_LREAL(SIM_WORLD_POS[3]) * DEGREE_TO_RAD;
-CK_X[2] := REAL_TO_LREAL(SIM_WORLD_POS[0]);
-CK_Y[2] := REAL_TO_LREAL(SIM_WORLD_POS[1]);
-CK_Z[2] := REAL_TO_LREAL(SIM_WORLD_POS[2]);
+TH := SIM_WORLD_POS_L[3] * DEGREE_TO_RAD;
+CK_X[2] := SIM_WORLD_POS_L[0];
+CK_Y[2] := SIM_WORLD_POS_L[1];
+CK_Z[2] := SIM_WORLD_POS_L[2];
 CK_X[3] := CK_X[2];
 CK_Y[3] := CK_Y[2] - SIM_GRIP_LEN * COS(TH);
 CK_Z[3] := CK_Z[2] - SIM_GRIP_LEN * SIN(TH);
@@ -896,11 +943,30 @@ SIM_MOVE_DONE := NOT SIM_BUSY;
 // lengan tetap bergerak, angkanya membeku.
 FK2(EXECUTE := TRUE, ROBOT_POS_INPUT := SIM_JOINT_POS);
 FK_WORLD := FK2.ROBOT_POS_WORLD_OUTPUT;
+FK_WORLD_L := FK2.WORLD_LREAL;
 FK_JOINT := FK2.ROBOT_POS_JOINT_OUTPUT;
 FOR i := 0 TO 3 DO
 	SIM_WORLD_POS[i] := FK_WORLD[i];
+	SIM_WORLD_POS_L[i] := FK_WORLD_L[i];
 	SIM_JOINT_OUT[i] := FK_JOINT[i];
 END_FOR;
+
+// DUA bentuk pose world, dan itu sengaja:
+//
+//   SIM_WORLD_POS    REAL 32-bit. Bentuk yang SAMA dengan keluaran FB di mesin, jadi
+//                    apa pun yang meniru mesin (HMI, pembanding) membaca yang ini.
+//   SIM_WORLD_POS_L  LREAL. Pose yang sama tanpa dibulatkan ke 32-bit.
+//
+// Yang MENGHITUNG memakai yang LREAL. REAL cuma punya ~7 angka berarti: pose di 430 mm
+// dibulatkan sekitar 1.3e-5 mm tiap kali dibaca, dan jog world membangun pose berikutnya
+// DARI pose sekarang - jadi pembulatan itu ikut menumpuk tiap tekan. Bukan besar; tapi
+// pembulatan yang tidak perlu ada di jalur umpan balik itu hutang yang bunganya dibayar
+// di tempat yang jauh dari sini.
+//
+// Perbandingannya: memanjangkan konstanta DEGREE_TO_RAD (10 angka, milik project mesin)
+// cuma menggeser TCP ~2.5e-5 mm - seorde dengan pembulatan REAL ini, dan harganya jauh
+// lebih mahal: sim berhenti memakai konstanta yang sama dengan mesinnya, dan hasil PLC
+// tidak lagi bisa diadu ke hasil JS. Jadi yang dibetulkan jalurnya, bukan konstantanya.
 
 // Batas dinilai atas posisi SEKARANG, bukan atas pose yang diminta - yang diminta
 // sudah dinilai IK V2 sendiri lewat LIMIT_HIT. Dua-duanya perlu: yang satu menolak
@@ -914,5 +980,12 @@ SIM_LIMIT[4] := SIM_JOINT_POS[2] < (REAL_TO_LREAL(PD1300_004) + 1.0);
 SIM_LIMIT[5] := SIM_JOINT_POS[2] > (REAL_TO_LREAL(PD1300_005) - 1.0);
 SIM_LIMIT[6] := SIM_JOINT_POS[3] < (REAL_TO_LREAL(PD1300_006) + 1.0);
 SIM_LIMIT[7] := SIM_JOINT_POS[3] > (REAL_TO_LREAL(PD1300_007) - 1.0);
+
+// Penghitung cycle time berjalan HANYA selama siklus jalan. Ikut menghitung waktu
+// berhenti berarti satu jeda makan siang menelan rata-rata sepuluh produk, dan angkanya
+// berhenti berarti apa-apa. Yang diukur kemampuan selnya, bukan panjang shift.
+IF SIM_AUTO THEN
+	SIM_CT_RUN := SIM_CT_RUN + SIM_DT;
+END_IF;
 
 SIM_HEARTBEAT := SIM_HEARTBEAT + 1;

@@ -36,7 +36,12 @@
     {
       "nama": "SIM_WORLD_POS",
       "tipe": "ARRAY[0..3] OF REAL",
-      "komen": "pose world hasil FK: X Y Z theta_EE - sudah termasuk tool"
+      "komen": "pose world hasil FK dalam REAL - bentuk yang sama dengan FB mesin"
+    },
+    {
+      "nama": "SIM_WORLD_POS_L",
+      "tipe": "ARRAY[0..3] OF LREAL",
+      "komen": "pose world yang SAMA dalam LREAL - ini yang dipakai menghitung"
     },
     {
       "nama": "SIM_WORLD_CMD",
@@ -212,6 +217,26 @@
       "nama": "SIM_CYCLE_COUNT",
       "tipe": "UDINT",
       "komen": "jumlah PCB yang sudah keluar lewat WIP OUT"
+    },
+    {
+      "nama": "SIM_CT_RUN",
+      "tipe": "LREAL",
+      "komen": "detik berjalan sejak produk terakhir keluar - jalan hanya selama AUTO"
+    },
+    {
+      "nama": "SIM_CT_LAST",
+      "tipe": "LREAL",
+      "komen": "cycle time produk terakhir: keluar ke keluar, detik"
+    },
+    {
+      "nama": "SIM_CT_AVG10",
+      "tipe": "LREAL",
+      "komen": "rata-rata cycle time 10 produk terakhir, detik"
+    },
+    {
+      "nama": "SIM_CT_N",
+      "tipe": "INT",
+      "komen": "berapa cycle time yang sudah terkumpul (maks 10) - rata-ratanya dibagi ini"
     },
     {
       "nama": "SIM_TARGET_ST",

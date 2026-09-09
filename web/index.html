@@ -286,14 +286,30 @@
     <div id="cSebab">-</div>
     <div class="angka">
       <div><b id="cCount">0</b><span>done</span></div>
-      <div><b id="cPart">-</b><span>gripper</span></div>
-      <div><b id="cStep">-</b><span>step</span></div>
+      <div><b id="cCt">-</b><span>last c/t</span></div>
+      <div><b id="cCtAvg">-</b><span>avg 10</span></div>
     </div>
     <table style="margin-top:8px">
-      <tr><td class="k">job</td><td class="v" id="cJob">-</td></tr>
-      <tr><td class="k">target</td><td class="v" id="cTuju">-</td></tr>
-      <tr><td class="k">collision</td><td class="v" id="cTabrak">-</td></tr>
+      <tr><td class="k">since last out</td><td class="v" id="cCtRun">-</td>
+          <td class="k">step</td><td class="v" id="cStep">-</td></tr>
+      <tr><td class="k">job</td><td class="v" id="cJob">-</td>
+          <td class="k">gripper</td><td class="v" id="cPart">-</td></tr>
+      <tr><td class="k">target</td><td class="v" id="cTuju">-</td>
+          <td class="k">collision</td><td class="v" id="cTabrak">-</td></tr>
     </table>
+    <details>
+      <summary class="k2">how cycle time is measured</summary>
+      <div class="ket">
+        Counted <b>out to out</b>: from one board leaving WIP OUT to the next one leaving.
+        That is what decides boards per hour.<br>
+        The <b>first</b> board is not counted &mdash; there is nothing before it, and the
+        time to fill an empty cell is not a cycle time.<br>
+        The clock runs <b>only while the cycle runs</b>. A stop is not part of the cell's
+        capability.<br>
+        <b>avg 10</b> is divided by how many samples exist, not always by 10 &mdash;
+        otherwise the first minutes read far better than the truth.
+      </div>
+    </details>
   </div>
 
   <div class="kartu">

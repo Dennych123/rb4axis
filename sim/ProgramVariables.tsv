@@ -12,6 +12,7 @@ GRIP_TARGET	LREAL		False	False	bukaan gripper yang dituju
 ST_IDX	INT		False	False	indeks stasiun yang sedang dikerjakan sekuenser
 IK_OUT	ARRAY[0..3] OF LREAL		False	False	salinan ROBOT_POS_OUTPUT milik IK2
 FK_WORLD	ARRAY[0..3] OF REAL		False	False	salinan ROBOT_POS_WORLD_OUTPUT milik FK2
+FK_WORLD_L	ARRAY[0..3] OF LREAL		False	False	salinan WORLD_LREAL milik FK2 - pose world tanpa pembulatan 32-bit
 FK_JOINT	ARRAY[0..3] OF REAL		False	False	salinan ROBOT_POS_JOINT_OUTPUT milik FK2
 LAST_P	ARRAY[0..3] OF BOOL		False	False	keadaan tombol plus scan sebelumnya
 LAST_N	ARRAY[0..3] OF BOOL		False	False	keadaan tombol minus scan sebelumnya
@@ -49,4 +50,8 @@ VB	LREAL		False	False	kecepatan tertinggi yang masih bisa direm sebelum target
 DV	LREAL		False	False	perubahan kecepatan maksimum satu scan = akselerasi x dt
 COVER_TARGET	LREAL		False	False	sudut penutup yang dituju stasiun yang sedang dihitung
 ZONA_HIT	BOOL		False	False	titik yang sedang diperiksa ada di ruang sapuan penutup
+CT_BUF	ARRAY[0..9] OF LREAL		False	False	sepuluh cycle time terakhir - buffer melingkar
+CT_IDX	INT		False	False	slot berikutnya di CT_BUF
+CT_SUM	LREAL		False	False	jumlah isi CT_BUF waktu menghitung rata-rata
+CT_ADA	BOOL		False	False	sudah pernah ada produk keluar sejak reset - produk pertama tidak punya jarak
 OVR	LREAL		False	False	override kecepatan sebagai pecahan (0.01..1.0)

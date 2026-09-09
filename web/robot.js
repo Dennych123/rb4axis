@@ -38,6 +38,7 @@ var st = {
   // panel: selector, emergency, dan syarat home. Semuanya dibaca dari PLC - halaman
   // TIDAK menyimpulkan sendiri boleh-tidaknya jalan, karena kesimpulannya bisa beda
   // dari yang dipakai PLC memutuskan.
+  ctRun: 0, ctLast: 0, ctAvg: 0, ctN: 0,
   selAuto: false, estop: false, homed: true, stopReq: false, state: 0, abortId: 0,
   drop: null, jatuh: null,        // pencacah produk jatuh + animasi jatuhnya
   tSampel: 0,                     // kapan nilai sumbu terakhir datang - dasar ramalan
@@ -124,7 +125,11 @@ function stream() {
         st.tSampel = jam();
       }
       if (v.SIM_JOINT_VEL) st.jointVel = keArray(v.SIM_JOINT_VEL, 4);
-      if (v[TAG.world]) st.world = keArray(v[TAG.world], 4);
+      // LREAL kalau ada, REAL kalau tidak. Yang REAL sudah dibulatkan ke 32 bit, dan
+      // halaman memakai pose ini sebagai dasar slider world dan panel penjelas - dua
+      // tempat yang angkanya dibaca orang sampai tiga desimal.
+      if (v.SIM_WORLD_POS_L) st.world = keArray(v.SIM_WORLD_POS_L, 4);
+      else if (v[TAG.world]) st.world = keArray(v[TAG.world], 4);
       if (v[TAG.limit]) st.limit = keArray(v[TAG.limit], 8);
       if (v[TAG.beat] !== undefined) st.beat = v[TAG.beat];
       st.err = !!v[TAG.err]; st.errId = v[TAG.errId] || 0;
@@ -143,6 +148,10 @@ function stream() {
       if (v.SIM_AUTO !== undefined) st.auto = !!v.SIM_AUTO;
       if (v.SIM_CYCLE_STEP !== undefined) st.langkah = v.SIM_CYCLE_STEP;
       if (v.SIM_CYCLE_COUNT !== undefined) st.siklus = v.SIM_CYCLE_COUNT;
+      if (v.SIM_CT_RUN !== undefined) st.ctRun = v.SIM_CT_RUN;
+      if (v.SIM_CT_LAST !== undefined) st.ctLast = v.SIM_CT_LAST;
+      if (v.SIM_CT_AVG10 !== undefined) st.ctAvg = v.SIM_CT_AVG10;
+      if (v.SIM_CT_N !== undefined) st.ctN = v.SIM_CT_N;
       if (v.SIM_TARGET_ST !== undefined) st.tujuan = v.SIM_TARGET_ST;
       if (v.SIM_PART_STATE !== undefined) st.part = v.SIM_PART_STATE;
       // Jatuhnya produk datang sebagai PENCACAH, bukan pulsa: bridge mengambil sampel
@@ -1193,6 +1202,14 @@ function panelTampil() {
   el('cTuju').textContent = sd ? sd.nama : st.tujuan;
   el('cPart').textContent = st.part === 1 ? 'HOLDING' : 'empty';
   el('cCount').textContent = st.siklus;
+  // Cycle time: keluar ke keluar. Ditulis "-" sampai ada dua produk keluar, bukan 0 -
+  // angka 0 di layar terbaca seperti sel yang sangat cepat, bukan seperti belum diukur.
+  el('cCt').textContent = st.ctLast > 0 ? st.ctLast.toFixed(1) + 's' : '-';
+  el('cCtAvg').textContent = st.ctN > 0 ? st.ctAvg.toFixed(1) + 's' : '-';
+  el('cCtRun').textContent = st.ctRun > 0 ? st.ctRun.toFixed(1) + ' s' : '-';
+  // Berapa sampel yang dipakai ikut ditulis: "avg 10" yang ternyata rata-rata 3 sampel
+  // itu angka yang berbeda, dan bedanya tidak kelihatan dari angkanya sendiri.
+  el('cCtAvg').parentNode.lastChild.textContent = st.ctN >= 10 ? 'avg 10' : 'avg ' + st.ctN;
   var bawa = st.part === 1 && st.jobDst >= 0 && st.stasiun[st.jobDst];
   el('cSebab').textContent = !st.homed
     ? (NAMA_ABORT[st.abortId] || 'stopped') + ' - press Home first'

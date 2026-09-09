@@ -5,7 +5,8 @@ SIM_HEARTBEAT	UDINT			False	False	Publish Only	naik tiap scan - bukti program si
 SIM_JOINT_POS	ARRAY[0..3] OF LREAL			False	False	Publish Only	posisi sumbu sekarang: X mm, theta1-3 derajat
 SIM_JOINT_CMD	ARRAY[0..3] OF LREAL			False	False	Publish Only	target sumbu yang dikejar motion model
 SIM_JOINT_OUT	ARRAY[0..3] OF REAL			False	False	Publish Only	keluaran joint FORWARD_KINEMATIC
-SIM_WORLD_POS	ARRAY[0..3] OF REAL			False	False	Publish Only	pose world hasil FK: X Y Z theta_EE - sudah termasuk tool
+SIM_WORLD_POS	ARRAY[0..3] OF REAL			False	False	Publish Only	pose world hasil FK dalam REAL - bentuk yang sama dengan FB mesin
+SIM_WORLD_POS_L	ARRAY[0..3] OF LREAL			False	False	Publish Only	pose world yang SAMA dalam LREAL - ini yang dipakai menghitung
 SIM_WORLD_CMD	ARRAY[0..3] OF LREAL			False	False	Publish Only	target move point: X Y Z theta_EE
 SIM_JOG_MODE	INT			False	False	Publish Only	0 joint / 1 world / 2 tool
 SIM_JOG_HOLD	BOOL			False	False	Publish Only	TRUE: tahan-jalan (tambahan viz). FALSE: satu langkah per tekan, seperti mesin
@@ -48,6 +49,10 @@ SIM_ABORT_ID	INT			False	False	Publish Only	sebab berhenti total: 0 tidak ada, 1
 SIM_AUTO	BOOL			False	False	Publish Only	siklus sedang jalan. Dinyalakan SIM_AUTORUN, bukan ditulis halaman
 SIM_CYCLE_STEP	INT			False	False	Publish Only	langkah sekuenser - buat melihat di mana sekuensnya berhenti
 SIM_CYCLE_COUNT	UDINT			False	False	Publish Only	jumlah PCB yang sudah keluar lewat WIP OUT
+SIM_CT_RUN	LREAL			False	False	Publish Only	detik berjalan sejak produk terakhir keluar - jalan hanya selama AUTO
+SIM_CT_LAST	LREAL			False	False	Publish Only	cycle time produk terakhir: keluar ke keluar, detik
+SIM_CT_AVG10	LREAL			False	False	Publish Only	rata-rata cycle time 10 produk terakhir, detik
+SIM_CT_N	INT			False	False	Publish Only	berapa cycle time yang sudah terkumpul (maks 10) - rata-ratanya dibagi ini
 SIM_TARGET_ST	INT			False	False	Publish Only	stasiun yang sedang dituju
 SIM_JOB_SRC	INT			False	False	Publish Only	stasiun asal pekerjaan sekarang, -1 kalau menganggur
 SIM_JOB_DST	INT			False	False	Publish Only	stasiun tujuan pekerjaan sekarang, -1 kalau menganggur

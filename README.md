@@ -145,6 +145,30 @@ sebelahnya. Dikirim waktu slider DILEPAS: satu tulis per piksel gerakan mouse me
 sesi OPC UA yang sama yang sedang membaca 80 tag, dan yang kelihatan justru robot yang
 tersendat - lawan dari yang sedang disetel.
 
+**Cycle time diukur KELUAR ke KELUAR** - dari satu produk meninggalkan WIP OUT sampai
+berikutnya. Itu yang menentukan berapa produk per jam; diukur di tempat lain (mulai
+ambil, mulai antar) angkanya lebih kecil dan lebih enak dilihat, tapi menjawab pertanyaan
+yang lain. Tiga aturan yang menempel padanya:
+
+* **Produk pertama tidak dihitung** - tidak ada produk sebelumnya, dan waktu mengisi sel
+  yang masih kosong bukan cycle time.
+* **Jamnya jalan hanya selama siklus jalan.** Ikut menghitung waktu berhenti berarti satu
+  jeda menelan rata-rata sepuluh produk, dan angkanya berhenti berarti apa-apa.
+* **Rata-rata dibagi JUMLAH SAMPEL, bukan selalu 10.** Dibagi 10 sejak awal, menit-menit
+  pertama terbaca jauh lebih baik dari kenyataan - persis waktu orang paling memperhatikan.
+  Panelnya menulis `avg 3` sampai sepuluh sampel terkumpul.
+
+**Pose world diterbitkan dalam DUA bentuk.** `SIM_WORLD_POS` REAL 32-bit - bentuk yang
+sama dengan keluaran FB di mesin, buat apa pun yang meniru mesin. `SIM_WORLD_POS_L` LREAL
+- pose yang sama tanpa dibulatkan, dan **itu yang dipakai menghitung**: jog world
+membangun pose berikutnya dari pose sekarang, jadi pembulatan 32-bit (~1.3e-5 mm di 430
+mm) ikut menumpuk tiap tekan.
+
+Bandingannya, kalau tergoda memanjangkan konstanta: `DEGREE_TO_RAD` yang 10 angka itu
+cuma menggeser TCP ~2.5e-5 mm - seorde dengan pembulatan REAL di atas, dan harganya jauh
+lebih mahal, karena konstanta itu milik project mesin dan menggantinya membuat hasil PLC
+tidak lagi bisa diadu ke hasil JS. Yang dibetulkan jalurnya, bukan konstantanya.
+
 **Override kecepatan (`SIM_SPEED_OVR`, 1..100 %)** menskalakan semua gerakan sumbu -
 siklus otomatis maupun jog. Dua hal yang TIDAK ikut, dan keduanya sengaja: **akselerasi**
 (override yang ikut mengubahnya bikin jarak pengereman berubah, jadi pelan-pelan

@@ -53,7 +53,8 @@ const GLOBAL_SIM = [
   ['SIM_JOINT_POS', 'ARRAY[0..3] OF LREAL', 'R', 'posisi sumbu sekarang: X mm, theta1-3 derajat'],
   ['SIM_JOINT_CMD', 'ARRAY[0..3] OF LREAL', 'R', 'target sumbu yang dikejar motion model'],
   ['SIM_JOINT_OUT', 'ARRAY[0..3] OF REAL', 'R', 'keluaran joint FORWARD_KINEMATIC'],
-  ['SIM_WORLD_POS', 'ARRAY[0..3] OF REAL', 'R', 'pose world hasil FK: X Y Z theta_EE - sudah termasuk tool'],
+  ['SIM_WORLD_POS', 'ARRAY[0..3] OF REAL', 'R', 'pose world hasil FK dalam REAL - bentuk yang sama dengan FB mesin'],
+  ['SIM_WORLD_POS_L', 'ARRAY[0..3] OF LREAL', 'R', 'pose world yang SAMA dalam LREAL - ini yang dipakai menghitung'],
   ['SIM_WORLD_CMD', 'ARRAY[0..3] OF LREAL', 'RW', 'target move point: X Y Z theta_EE'],
 
   ['SIM_JOG_MODE', 'INT', 'RW', '0 joint / 1 world / 2 tool'],
@@ -110,6 +111,10 @@ const GLOBAL_SIM = [
   ['SIM_AUTO', 'BOOL', 'R', 'siklus sedang jalan. Dinyalakan SIM_AUTORUN, bukan ditulis halaman'],
   ['SIM_CYCLE_STEP', 'INT', 'R', 'langkah sekuenser - buat melihat di mana sekuensnya berhenti'],
   ['SIM_CYCLE_COUNT', 'UDINT', 'R', 'jumlah PCB yang sudah keluar lewat WIP OUT'],
+  ['SIM_CT_RUN', 'LREAL', 'R', 'detik berjalan sejak produk terakhir keluar - jalan hanya selama AUTO'],
+  ['SIM_CT_LAST', 'LREAL', 'R', 'cycle time produk terakhir: keluar ke keluar, detik'],
+  ['SIM_CT_AVG10', 'LREAL', 'R', 'rata-rata cycle time 10 produk terakhir, detik'],
+  ['SIM_CT_N', 'INT', 'R', 'berapa cycle time yang sudah terkumpul (maks 10) - rata-ratanya dibagi ini'],
   ['SIM_TARGET_ST', 'INT', 'R', 'stasiun yang sedang dituju'],
   ['SIM_JOB_SRC', 'INT', 'R', 'stasiun asal pekerjaan sekarang, -1 kalau menganggur'],
   ['SIM_JOB_DST', 'INT', 'R', 'stasiun tujuan pekerjaan sekarang, -1 kalau menganggur'],
@@ -165,6 +170,7 @@ const LOKAL = [
   // Anggota skalar seperti IK2.DONE tidak kena aturan itu.
   ['IK_OUT', 'ARRAY[0..3] OF LREAL', 'salinan ROBOT_POS_OUTPUT milik IK2'],
   ['FK_WORLD', 'ARRAY[0..3] OF REAL', 'salinan ROBOT_POS_WORLD_OUTPUT milik FK2'],
+  ['FK_WORLD_L', 'ARRAY[0..3] OF LREAL', 'salinan WORLD_LREAL milik FK2 - pose world tanpa pembulatan 32-bit'],
   ['FK_JOINT', 'ARRAY[0..3] OF REAL', 'salinan ROBOT_POS_JOINT_OUTPUT milik FK2'],
   ['LAST_P', 'ARRAY[0..3] OF BOOL', 'keadaan tombol plus scan sebelumnya'],
   ['LAST_N', 'ARRAY[0..3] OF BOOL', 'keadaan tombol minus scan sebelumnya'],
@@ -202,6 +208,10 @@ const LOKAL = [
   ['DV', 'LREAL', 'perubahan kecepatan maksimum satu scan = akselerasi x dt'],
   ['COVER_TARGET', 'LREAL', 'sudut penutup yang dituju stasiun yang sedang dihitung'],
   ['ZONA_HIT', 'BOOL', 'titik yang sedang diperiksa ada di ruang sapuan penutup'],
+  ['CT_BUF', 'ARRAY[0..9] OF LREAL', 'sepuluh cycle time terakhir - buffer melingkar'],
+  ['CT_IDX', 'INT', 'slot berikutnya di CT_BUF'],
+  ['CT_SUM', 'LREAL', 'jumlah isi CT_BUF waktu menghitung rata-rata'],
+  ['CT_ADA', 'BOOL', 'sudah pernah ada produk keluar sejak reset - produk pertama tidak punya jarak'],
   ['OVR', 'LREAL', 'override kecepatan sebagai pecahan (0.01..1.0)']
 ];
 
@@ -339,6 +349,10 @@ function blokInit(cfg) {
   L.push(t('SIM_JOB_DST := -1;'));
   L.push(t('SIM_DROP_COUNT := 0;'));
   L.push(t('SIM_GRIP_CMD := FALSE;'));
+  L.push(t('SIM_CT_RUN := 0.0;'));
+  L.push(t('SIM_CT_LAST := 0.0;'));
+  L.push(t('SIM_CT_AVG10 := 0.0;'));
+  L.push(t('SIM_CT_N := 0;'));
   return L;
 }
 
