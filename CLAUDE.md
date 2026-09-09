@@ -206,14 +206,6 @@ terbaca sebagai "laggy". Ramalannya wajib dibatasi (120 ms): tanpa batas, kabar 
 berhenti datang bikin lengan terbang menjauh, dan itu terlihat seperti robot yang kabur
 alih-alih sambungan yang putus.
 
-**Rapier CUMA buat benda kerja yang jatuh.** Aktuator, sensor, interlock, sekuens, dan
-penjaga tabrakan tetap di PLC. Fisika browser ikut laju frame; apa pun yang menggerbang
-keselamatan atau urutan tidak boleh bergantung pada itu, karena hasilnya berhenti bisa
-diulang. Tiga aturan turunannya, semuanya ada tesnya: satuan solver METER (`SK`), langkah
-waktu TETAP dengan akumulator + batas langkah per frame, dan halaman WAJIB tetap jalan
-kalau Rapier tidak termuat. Aktuator tidak boleh jadi `RigidBodyDesc.dynamic` — begitu
-solver ikut memutuskan posisinya, yang digambar bukan lagi yang diperintah PLC.
-
 **Panel penjelas WAJIB membaca `fkSteps()`/`ikSteps()`, bukan menghitung sendiri.**
 Kedua fungsi itu yang dipanggil `forwardKinematicV2`/`inverseKinematicV2`, jadi satu
 sumber untuk PLC, tes, gambar, dan penjelasan. Panel yang menghitung sendiri adalah cara

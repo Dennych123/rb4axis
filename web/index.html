@@ -256,7 +256,6 @@
       If the target comes back out, both directions agree.
     </div>
     <div id="rtFlow"></div>
-    <div class="ket" id="fisikaInfo" style="margin-top:8px"></div>
     <details>
       <summary class="k2">why it never reaches zero</summary>
       <div class="ket">
@@ -450,30 +449,6 @@
 if (typeof THREE === 'undefined') {
   document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
 }
-</script>
-<!-- Rapier: mesin fisika rigid body, dipakai HANYA untuk benda kerja yang jatuh.
-     Aktuator, sensor, interlock, dan sekuens tetap dihitung PLC - fisika di browser
-     laju frame-nya berubah-ubah, dan apa pun yang menggerbang keselamatan tidak boleh
-     bergantung pada itu.
-
-     Salinan lokal dulu (taruh rapier3d-compat.js di folder web/ kalau mesinnya offline),
-     baru CDN dengan versi DIPATOK. Kalau dua-duanya gagal, halaman tetap jalan: benda
-     yang jatuh digambar dengan gerak jatuh sederhana. Fisika di sini tambahan, bukan
-     syarat. -->
-<script type="module">
-  (async () => {
-    for (const url of ['./rapier3d-compat.js',
-                       'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/+esm']) {
-      try {
-        const R = await import(url);
-        await R.init();
-        window.RAPIER = R;
-        window.dispatchEvent(new Event('rapier-siap'));
-        return;
-      } catch (e) { /* coba sumber berikutnya */ }
-    }
-    console.info('Rapier tidak termuat - benda jatuh digambar tanpa fisika.');
-  })();
 </script>
 <script src="kin.js"></script>
 <script src="robot.js"></script>

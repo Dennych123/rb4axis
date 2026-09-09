@@ -169,31 +169,6 @@ cuma menggeser TCP ~2.5e-5 mm - seorde dengan pembulatan REAL di atas, dan harga
 lebih mahal, karena konstanta itu milik project mesin dan menggantinya membuat hasil PLC
 tidak lagi bisa diadu ke hasil JS. Yang dibetulkan jalurnya, bukan konstantanya.
 
-**Fisika rigid body (Rapier) dipakai untuk SATU hal: ke mana produk yang jatuh
-mendarat.** Aktuator, sensor, interlock, dan sekuens tetap dihitung PLC.
-
-Pembagiannya begini, dan bukan kehati-hatian berlebih:
-
-| | dihitung di | kenapa |
-|---|---|---|
-| aktuator, sensor, interlock, sekuens, tabrakan | PLC (ST), 4 ms tetap | harus bisa diulang. Fisika browser ikut laju frame, dan laju frame berubah menurut komputernya |
-| produk yang jatuh: ke mana, memantul ke mana, berhenti di mana | Rapier di browser | ini memang pertanyaan fisika, dan PLC tidak pernah menjawabnya |
-
-PLC sudah bilang produknya lepas (`SIM_PART_STATE` 0, `SIM_DROP_COUNT` naik). Yang belum
-dijawab siapa pun cuma "jatuhnya ke mana". Itu batas yang dipegang, dan ada tesnya.
-
-Tiga hal teknis yang menempel:
-
-* **Satuan.** PLC dan gambar milimeter, solver meter. Solver rigid body dirancang untuk
-  angka sekitar 1; dibiarkan dalam mm, tumpukan bergetar dan benda tipis tembus lantai.
-  Konversinya di satu tempat (`SK`).
-* **Langkah waktu tetap** (1/120 s, dengan akumulator dan batas langkah per frame). Pakai
-  selisih waktu frame, hasilnya beda antara laptop cepat dan laptop lambat.
-* **Halaman tetap jalan tanpa Rapier.** Kalau modulnya tidak termuat, benda jatuh digambar
-  dengan gerak jatuh sederhana. Mesin di pabrik sering tanpa internet - taruh
-  `rapier3d-compat.js` di folder `web/` kalau mau lokal. Tidak ada dependensi npm baru;
-  yang dimuat browser, bukan Node.
-
 **Override kecepatan (`SIM_SPEED_OVR`, 1..100 %)** menskalakan semua gerakan sumbu -
 siklus otomatis maupun jog. Dua hal yang TIDAK ikut, dan keduanya sengaja: **akselerasi**
 (override yang ikut mengubahnya bikin jarak pengereman berubah, jadi pelan-pelan
