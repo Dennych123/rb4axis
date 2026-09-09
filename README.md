@@ -109,9 +109,23 @@ barang yang sedang dipegangnya. Panjang gripper masuk TCP - `gen_sim.js` menulis
 **Tiap mesin punya penutup berengsel yang MENEKAN PCB ke probe base.** Penutup menutup
 hanya selama memproses, dan **waktu prosesnya baru jalan setelah penutupnya rapat** -
 menghitung sebelum rapat berarti mesin mengaku menguji papan yang belum tersentuh probe,
-dan hasilnya tetap keluar "selesai". Robot **tidak turun** ke stasiun yang penutupnya
-belum terbuka penuh: penutup itu badan yang bergerak di ruang yang sama dengan gripper,
-dan penjaga tabrakan tidak mengenalnya - yang menjaga di sini URUTAN, bukan geometri.
+dan hasilnya tetap keluar "selesai".
+
+Penutup itu **badan tabrakan**, bukan hiasan, dan dijaga dari dua arah:
+
+* **Robot tidak turun** ke stasiun yang penutupnya belum terbuka penuh. Ditunggu SEBELUM
+  pose approach diminta - kalau sesudahnya, penjaga menolak pose itu (benar), sumbu tidak
+  bergerak, `SIM_MOVE_DONE` tetap TRUE karena memang tidak ada yang bergerak, dan
+  sekuenser melangkah maju seolah sudah sampai: lengan turun LANGSUNG dari pose jalan ke
+  permukaan, melewatkan approach.
+* **Penutup tidak menutup selama ada bagian lengan di ruangnya** (`SIM_ST_ZONA`). Tanpa
+  interlock itu penutup sudah mulai menutup begitu produk diletakkan, sementara gripper
+  masih naik lewat ruang yang sama - daunnya mengayun menimpa lengan. Ada yang masuk lagi
+  di tengah jalan, penutup MEMBUKA balik; itu light curtain, bukan penundaan.
+
+Dan tiap penantian sesudah permintaan IK menuntut perintahnya **diterima**
+(`NOT SIM_ERROR`), bukan cuma sumbu berhenti. Perintah yang ditolak tidak menggerakkan
+apa pun, jadi tanpa syarat itu sekuenser selalu melangkah maju seolah lengannya sampai.
 
 **Dua panel, dua-duanya bisa disembunyikan.** Kanan menjalankan sel; kiri menjelaskan
 kinematiknya sambil menunjukkan angkanya bergerak: koordinat nol tiap kerangka (world,

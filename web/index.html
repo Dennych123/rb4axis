@@ -177,11 +177,12 @@
 <div class="panel kiri" id="panelKiri">
   <h1>How the kinematics works</h1>
   <div class="cerita">
-    The arm is <b>1 linear axis + 3 rotating joints</b>. Axis 0 slides along the rail and
-    becomes X directly. Joints 1-3 all rotate about the X axis, so the whole arm stays in
-    one flat Y-Z plane &mdash; which is why the maths below is two-dimensional.
-    Every number on this panel is read from the same functions the PLC program mirrors;
-    the page never does the trigonometry itself.
+    The arm has <b>one slide and three joints</b>.<br>
+    The slide runs along the rail. That is X.<br>
+    All three joints turn the same way. So the arm always stays flat, in one plane.<br>
+    That means the maths here is 2D. Just triangles.<br>
+    Every number below is taken from the same code the PLC runs. This page does no
+    maths of its own.
   </div>
 
   <div class="kartu">
@@ -191,32 +192,43 @@
       <label><input type="checkbox" id="showFrames" checked> show axes in 3D</label>
       <label><input type="checkbox" id="showTri" checked> show IK triangle</label>
     </div>
+    <div class="ket">These numbers are live. Move the robot and watch them change.</div>
     <details>
       <summary class="k2">what a "zero" means here</summary>
       <div class="ket">
-        <b>World zero</b> sits on the floor at the middle of the rail: X along the rail,
-        Y away from the column, Z up. <b>Joint zero</b> is a pose, not a place &mdash; all
-        angles at 0 means the arm points straight out along +Y. <b>Tool zero</b> (the TCP)
-        is at the fingertips, because the gripper length was added to the tool offset once,
-        in the generator. Red/green/blue in 3D = X/Y/Z.
+        Zero is where measuring starts from.<br>
+        <b>World zero</b>: on the floor, middle of the rail.<br>
+        <b>Joint zero</b>: all angles at 0. The arm points straight out.<br>
+        <b>Tool zero (TCP)</b>: the tip of the fingers. That is the point the robot
+        really moves.<br>
+        In the 3D view: red = X, green = Y, blue = Z.
       </div>
     </details>
   </div>
 
   <div class="kartu">
     <p class="judul">Forward: angles &rarr; position</p>
-    <div class="cerita">Each link contributes its own length turned by its own accumulated
-      angle. Add the contributions up and you have where the wrist is; add the tool offset
-      and you have the fingertips.</div>
+    <div class="cerita">
+      Angles in, position out.<br>
+      Every link is a stick of known length, turned by its own angle.<br>
+      <b>cos</b> gives the sideways part. <b>sin</b> gives the upward part.<br>
+      Add the parts up: that is the wrist. Add the tool: that is the fingers.
+    </div>
     <div id="fkFlow"></div>
   </div>
 
   <div class="kartu">
     <p class="judul">Inverse: position &rarr; angles</p>
-    <div class="cerita">Work backwards. Strip the tool and the last link off the target,
-      and what is left is the <b>wrist point</b>. The upper arm (L2), the forearm (L3) and
-      the distance R to that wrist point form a triangle &mdash; and a triangle with three
-      known sides has known angles. That is the whole trick.</div>
+    <div class="cerita">
+      Position in, angles out. The other way round.<br>
+      <b>1.</b> Take the tool and the last link off the target. What is left is the
+      <b>wrist</b>.<br>
+      <b>2.</b> Measure <b>R</b>: the straight line from shoulder to wrist.<br>
+      <b>3.</b> Now you have a triangle. Sides L2, L3 and R &mdash; all three known.<br>
+      Three known sides means the angles are known too (law of cosines). That is the
+      whole trick. The yellow triangle in the 3D view is this one.<br>
+      If R is longer than L2 + L3, the arm cannot reach. No triangle, no answer.
+    </div>
     <div class="jogrow">
       <span class="lbl">source</span>
       <select id="ikSrc">
@@ -229,25 +241,29 @@
     <details>
       <summary class="k2">why two answers exist</summary>
       <div class="ket">
-        A triangle can be folded two ways: elbow down or elbow up. Both put the fingertips
-        in exactly the same place. The machine always takes elbow down, so this simulation
-        does too by default; the checkbox in the control panel picks the mirror image.
+        The triangle can fold two ways: elbow down, or elbow up.<br>
+        Both put the fingers in the same spot.<br>
+        The real machine uses elbow down, so this does too. The checkbox in the control
+        panel tries the mirror.
       </div>
     </details>
   </div>
 
   <div class="kartu">
     <p class="judul">Round trip</p>
-    <div class="cerita">Feed the answer back through the forward equations. If the two
-      agree, both directions are consistent.</div>
+    <div class="cerita">
+      Put the answer back into the forward formula.<br>
+      If the target comes back out, both directions agree.
+    </div>
     <div id="rtFlow"></div>
     <details>
       <summary class="k2">why it never reaches zero</summary>
       <div class="ket">
-        The project's own constants are truncated to nine digits
-        (<code>DEGREE_TO_RAD = 0.017453292</code>), so degrees &rarr; radians &rarr; degrees
-        multiplies by <code>1 - 2.98e-8</code>. About <b>5e-6&deg;</b> is the floor, no
-        matter how right the formulas are &mdash; and those are the constants the PLC uses.
+        The PLC's constants are cut to 9 digits
+        (<code>DEGREE_TO_RAD = 0.017453292</code>).<br>
+        Degrees &rarr; radians &rarr; degrees loses a tiny bit each time.<br>
+        About <b>0.000005&deg;</b> is left over. That is the floor, not a bug. Using the
+        exact same constants as the PLC is what matters here.
       </div>
     </details>
   </div>

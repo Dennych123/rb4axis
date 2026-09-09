@@ -845,6 +845,17 @@ END_IF;</ST>
           <Variable name="SIM_COVER_VEL">
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
+          <Variable name="SIM_COVER_JANGKAU">
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ST_ZONA">
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
+          </Variable>
           <Variable name="SIM_COLLIDE">
             <Type><TypeName>BOOL</TypeName></Type>
           </Variable>
@@ -1161,6 +1172,10 @@ END_IF;</ST>
             <Documentation xsi:type="SimpleText">sudut penutup yang dituju stasiun yang sedang dihitung</Documentation>
             <Type><TypeName>LREAL</TypeName></Type>
           </Variable>
+          <Variable name="ZONA_HIT">
+            <Documentation xsi:type="SimpleText">titik yang sedang diperiksa ada di ruang sapuan penutup</Documentation>
+            <Type><TypeName>BOOL</TypeName></Type>
+          </Variable>
           <Variable name="OVR">
             <Documentation xsi:type="SimpleText">override kecepatan sebagai pecahan (0.01..1.0)</Documentation>
             <Type><TypeName>LREAL</TypeName></Type>
@@ -1284,42 +1299,43 @@ IF NOT SIM_INIT_DONE THEN
 	SIM_ST_MARGIN := 12.0;
 	SIM_COVER_SUDUT := 80.0;
 	SIM_COVER_VEL := 110.0;
+	SIM_COVER_JANGKAU := 262.4;
 	// WIP IN
 	SIM_ST_X[0] := -1400.0;   SIM_ST_Y[0] := 430.0;
 	SIM_ST_Z[0] := 250.0;   SIM_ST_T[0] := -90.0;
 	SIM_ST_TIPE[0] := 0;   SIM_ST_PROSES[0] := 0.0;
 	SIM_ST_STATE[0] := 0;   SIM_ST_TIMER[0] := 0.0;
-	SIM_ST_COVER[0] := 80.0;
+	SIM_ST_COVER[0] := 80.0;   SIM_ST_ZONA[0] := FALSE;
 	// ICC 1
 	SIM_ST_X[1] := -700.0;   SIM_ST_Y[1] := 430.0;
 	SIM_ST_Z[1] := 285.0;   SIM_ST_T[1] := -90.0;
 	SIM_ST_TIPE[1] := 1;   SIM_ST_PROSES[1] := 17.0;
 	SIM_ST_STATE[1] := 0;   SIM_ST_TIMER[1] := 0.0;
-	SIM_ST_COVER[1] := 80.0;
+	SIM_ST_COVER[1] := 80.0;   SIM_ST_ZONA[1] := FALSE;
 	// ICC 2
 	SIM_ST_X[2] := -300.0;   SIM_ST_Y[2] := 430.0;
 	SIM_ST_Z[2] := 285.0;   SIM_ST_T[2] := -90.0;
 	SIM_ST_TIPE[2] := 1;   SIM_ST_PROSES[2] := 17.0;
 	SIM_ST_STATE[2] := 0;   SIM_ST_TIMER[2] := 0.0;
-	SIM_ST_COVER[2] := 80.0;
+	SIM_ST_COVER[2] := 80.0;   SIM_ST_ZONA[2] := FALSE;
 	// DW 1
 	SIM_ST_X[3] := 300.0;   SIM_ST_Y[3] := 430.0;
 	SIM_ST_Z[3] := 250.0;   SIM_ST_T[3] := -90.0;
 	SIM_ST_TIPE[3] := 2;   SIM_ST_PROSES[3] := 15.0;
 	SIM_ST_STATE[3] := 0;   SIM_ST_TIMER[3] := 0.0;
-	SIM_ST_COVER[3] := 80.0;
+	SIM_ST_COVER[3] := 80.0;   SIM_ST_ZONA[3] := FALSE;
 	// DW 2
 	SIM_ST_X[4] := 700.0;   SIM_ST_Y[4] := 430.0;
 	SIM_ST_Z[4] := 250.0;   SIM_ST_T[4] := -90.0;
 	SIM_ST_TIPE[4] := 2;   SIM_ST_PROSES[4] := 15.0;
 	SIM_ST_STATE[4] := 0;   SIM_ST_TIMER[4] := 0.0;
-	SIM_ST_COVER[4] := 80.0;
+	SIM_ST_COVER[4] := 80.0;   SIM_ST_ZONA[4] := FALSE;
 	// WIP OUT
 	SIM_ST_X[5] := 1400.0;   SIM_ST_Y[5] := 430.0;
 	SIM_ST_Z[5] := 250.0;   SIM_ST_T[5] := -90.0;
 	SIM_ST_TIPE[5] := 3;   SIM_ST_PROSES[5] := 0.0;
 	SIM_ST_STATE[5] := 0;   SIM_ST_TIMER[5] := 0.0;
-	SIM_ST_COVER[5] := 80.0;
+	SIM_ST_COVER[5] := 80.0;   SIM_ST_ZONA[5] := FALSE;
 
 	SIM_SEL_AUTO := FALSE;
 	SIM_ESTOP := FALSE;
@@ -1530,7 +1546,17 @@ FOR i := 0 TO SIM_ST_N - 1 DO
 
 	// Penutup berengsel: menutup HANYA selama memproses, selain itu terbuka supaya
 	// gripper punya jalan masuk. WIP IN/OUT tidak punya penutup - rak terbuka.
-	IF (SIM_ST_STATE[i] = 1) AND (SIM_ST_TIPE[i] &lt;&gt; 0) AND (SIM_ST_TIPE[i] &lt;&gt; 3) THEN
+	//
+	// SIM_ST_ZONA[i] itu interlock-nya, dan bukan tambahan yang manis: penutup sudah
+	// mulai menutup begitu produk diletakkan, sementara gripper masih naik lewat ruang
+	// yang sama - jadi daun penutup mengayun MENIMPA lengan. Di layar dua benda saling
+	// menembus dan tidak ada satu pun yang mengeluh, karena penjaga tabrakan lama tidak
+	// tahu penutup itu ada.
+	//
+	// Sekarang penutup menunggu lengannya keluar dulu, dan kalau ada yang masuk lagi di
+	// tengah jalan dia MEMBUKA balik - itu perilaku light curtain, bukan penundaan.
+	IF (SIM_ST_STATE[i] = 1) AND (SIM_ST_TIPE[i] &lt;&gt; 0) AND (SIM_ST_TIPE[i] &lt;&gt; 3)
+	   AND NOT SIM_ST_ZONA[i] THEN
 		COVER_TARGET := 0.0;
 	ELSE
 		COVER_TARGET := SIM_COVER_SUDUT;
@@ -1599,6 +1625,13 @@ IF SIM_AUTO THEN
 	//
 	// Nomor langkah dipublikasikan (SIM_CYCLE_STEP) supaya waktu sekuensnya berhenti,
 	// yang kelihatan langkah mana - bukan cuma &quot;robotnya diam&quot;.
+	//
+	// Tiap penantian sesudah permintaan IK menuntut DUA hal: sumbu berhenti DAN
+	// perintahnya diterima (NOT SIM_ERROR). Perintah yang ditolak - di luar jangkauan,
+	// menembus mesin, kena soft limit - tidak menggerakkan apa pun, jadi SIM_MOVE_DONE
+	// tetap TRUE dan sekuenser akan melangkah maju seolah lengannya sudah sampai.
+	// Sekarang dia BERHENTI di langkah itu, dan nomor langkah + SIM_ERROR_ID menyebut
+	// persis apa yang ditolak.
 	CASE SIM_CYCLE_STEP OF
 
 		0:	// pilih pekerjaan
@@ -1654,7 +1687,19 @@ IF SIM_AUTO THEN
 			SIM_JOINT_CMD[0] := SIM_ST_X[ST_IDX];
 			SIM_CYCLE_STEP := 8;
 
-		8:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 10; END_IF;
+		8:	// Menunggu DUA hal: rel sampai, DAN penutup stasiunnya terbuka penuh.
+			//
+			// Penantiannya di SINI, sebelum pose approach diminta - bukan sesudahnya.
+			// Kalau menunggunya sesudah, pose approach diminta selagi penutup masih
+			// menutup, penjaga tabrakan menolaknya (benar), sumbu tidak bergerak, dan
+			// SIM_MOVE_DONE tetap TRUE karena memang tidak ada yang bergerak - jadi
+			// langkah berikutnya jalan dan lengan turun LANGSUNG dari pose jalan ke
+			// permukaan, melewatkan approach yang justru menjaganya tidak menyapu mesin.
+			// Di sini lengan menunggu di pose jalan, di luar ruang sapuan penutup, jadi
+			// interlock penutup tidak ikut terkunci.
+			IF SIM_MOVE_DONE AND (SIM_ST_COVER[ST_IDX] &gt;= SIM_COVER_SUDUT - 0.5) THEN
+				SIM_CYCLE_STEP := 10;
+			END_IF;
 
 		10:	// ke atas stasiun
 			POSE_REQ[0] := SIM_ST_X[ST_IDX];
@@ -1664,13 +1709,7 @@ IF SIM_AUTO THEN
 			NEED_IK := TRUE;
 			SIM_CYCLE_STEP := 11;
 
-		11:	// Menunggu DUA hal: lengan sampai di atas stasiun, DAN penutupnya terbuka
-			// penuh. Turun ke penutup yang masih bergerak berarti gripper dan penutup
-			// berbagi ruang yang sama - di layar itu cuma dua benda yang saling
-			// menembus, tanpa satu pun yang mengeluh.
-			IF SIM_MOVE_DONE AND (SIM_ST_COVER[ST_IDX] &gt;= SIM_COVER_SUDUT - 0.5) THEN
-				SIM_CYCLE_STEP := 12;
-			END_IF;
+		11:	IF SIM_MOVE_DONE AND NOT SIM_ERROR THEN SIM_CYCLE_STEP := 12; END_IF;
 
 		12:	// turun tegak ke permukaan stasiun - gripper menyumpit dari ATAS
 			POSE_REQ[0] := SIM_ST_X[ST_IDX];
@@ -1680,7 +1719,7 @@ IF SIM_AUTO THEN
 			NEED_IK := TRUE;
 			SIM_CYCLE_STEP := 13;
 
-		13:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 14; END_IF;
+		13:	IF SIM_MOVE_DONE AND NOT SIM_ERROR THEN SIM_CYCLE_STEP := 14; END_IF;
 
 		14:	SIM_GRIP_CMD := TRUE;
 			SIM_CYCLE_STEP := 15;
@@ -1701,7 +1740,7 @@ IF SIM_AUTO THEN
 			NEED_IK := TRUE;
 			SIM_CYCLE_STEP := 17;
 
-		17:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 18; END_IF;
+		17:	IF SIM_MOVE_DONE AND NOT SIM_ERROR THEN SIM_CYCLE_STEP := 18; END_IF;
 
 		18:	SIM_JOINT_CMD[1] := SIM_HOME[1];
 			SIM_JOINT_CMD[2] := SIM_HOME[2];
@@ -1717,7 +1756,11 @@ IF SIM_AUTO THEN
 		20:	SIM_JOINT_CMD[0] := SIM_ST_X[ST_IDX];
 			SIM_CYCLE_STEP := 21;
 
-		21:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 22; END_IF;
+		21:	// Sama seperti langkah 8: penutup tujuan harus sudah terbuka SEBELUM pose
+			// approach diminta.
+			IF SIM_MOVE_DONE AND (SIM_ST_COVER[ST_IDX] &gt;= SIM_COVER_SUDUT - 0.5) THEN
+				SIM_CYCLE_STEP := 22;
+			END_IF;
 
 		22:	POSE_REQ[0] := SIM_ST_X[ST_IDX];
 			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
@@ -1726,9 +1769,7 @@ IF SIM_AUTO THEN
 			NEED_IK := TRUE;
 			SIM_CYCLE_STEP := 23;
 
-		23:	IF SIM_MOVE_DONE AND (SIM_ST_COVER[ST_IDX] &gt;= SIM_COVER_SUDUT - 0.5) THEN
-				SIM_CYCLE_STEP := 24;
-			END_IF;
+		23:	IF SIM_MOVE_DONE AND NOT SIM_ERROR THEN SIM_CYCLE_STEP := 24; END_IF;
 
 		24:	POSE_REQ[0] := SIM_ST_X[ST_IDX];
 			POSE_REQ[1] := SIM_ST_Y[ST_IDX];
@@ -1737,7 +1778,7 @@ IF SIM_AUTO THEN
 			NEED_IK := TRUE;
 			SIM_CYCLE_STEP := 25;
 
-		25:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 26; END_IF;
+		25:	IF SIM_MOVE_DONE AND NOT SIM_ERROR THEN SIM_CYCLE_STEP := 26; END_IF;
 
 		26:	SIM_GRIP_CMD := FALSE;
 			SIM_CYCLE_STEP := 27;
@@ -1761,7 +1802,7 @@ IF SIM_AUTO THEN
 			NEED_IK := TRUE;
 			SIM_CYCLE_STEP := 29;
 
-		29:	IF SIM_MOVE_DONE THEN SIM_CYCLE_STEP := 30; END_IF;
+		29:	IF SIM_MOVE_DONE AND NOT SIM_ERROR THEN SIM_CYCLE_STEP := 30; END_IF;
 
 		30:	SIM_JOINT_CMD[1] := SIM_HOME[1];
 			SIM_JOINT_CMD[2] := SIM_HOME[2];
@@ -1868,14 +1909,34 @@ CK_Z[3] := CK_Z[2] - SIM_GRIP_LEN * SIN(TH);
 CAND_HIT := FALSE;
 NOW_HIT := FALSE;
 NOW_ST := -1;
+FOR i := 0 TO SIM_ST_N - 1 DO
+	SIM_ST_ZONA[i] := FALSE;
+END_FOR;
 FOR k := 0 TO 3 DO
 	IF (k &gt;= 2) OR NEED_IK THEN
 		FOR i := 0 TO SIM_ST_N - 1 DO
-			// Permukaan stasiun BUKAN tabrakan: produk memang diletakkan di situ.
-			// Yang dihitung menembus badan mesin, jadi batasnya sedikit DI BAWAH
-			// permukaan - tanpa itu, tiap penempatan produk memicu alarm tabrakan.
+			// Di dalam petak stasiun? Dua hal berbeda diperiksa di dalamnya:
+			//   badan mesin  - di BAWAH permukaan. Permukaannya sendiri bukan tabrakan,
+			//                  produk memang diletakkan di situ; batasnya sedikit di
+			//                  bawah, kalau tidak tiap penempatan memicu alarm.
+			//   penutup      - ruang DI ATAS permukaan setinggi daunnya. Penutup itu
+			//                  benda yang bergerak, dan yang membuatnya berbahaya justru
+			//                  gerakannya: yang aman satu detik lalu tidak aman sekarang.
+			ZONA_HIT := (ABS(CK_X[k] - SIM_ST_X[i]) &lt; CK_MX)
+			            AND (ABS(CK_Y[k] - SIM_ST_Y[i]) &lt; CK_MY)
+			            AND (CK_Z[k] &gt; SIM_ST_Z[i] - 2.0)
+			            AND (CK_Z[k] &lt; SIM_ST_Z[i] + SIM_COVER_JANGKAU);
+			IF (k &gt;= 2) AND ZONA_HIT THEN
+				// Dipakai interlock penutup: lengannya ADA di ruang sapuan.
+				SIM_ST_ZONA[i] := TRUE;
+			END_IF;
+			// Penutup dihitung sebagai badan HANYA waktu dia belum terbuka penuh.
+			// Terbuka penuh daunnya berdiri di belakang engsel, di luar jalan masuk -
+			// menghitungnya tetap menutup jalan berarti robot tidak akan pernah bisa
+			// turun ke stasiun mana pun.
 			IF (ABS(CK_X[k] - SIM_ST_X[i]) &lt; CK_MX) AND (ABS(CK_Y[k] - SIM_ST_Y[i]) &lt; CK_MY)
-			   AND (CK_Z[k] &lt; SIM_ST_Z[i] - 2.0) THEN
+			   AND ((CK_Z[k] &lt; SIM_ST_Z[i] - 2.0)
+			        OR (ZONA_HIT AND (SIM_ST_COVER[i] &lt; SIM_COVER_SUDUT - 0.5))) THEN
 				IF k &gt;= 2 THEN
 					NOW_HIT := TRUE;
 					NOW_ST := i;
@@ -2518,6 +2579,21 @@ SIM_HEARTBEAT := SIM_HEARTBEAT + 1;</ST>
             <Documentation xsi:type="SimpleText">kecepatan penutup, derajat/detik</Documentation>
             <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
             <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_COVER_JANGKAU">
+            <Documentation xsi:type="SimpleText">panjang daun penutup - tinggi ruang yang disapunya, mm</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type><TypeName>LREAL</TypeName></Type>
+          </Variable>
+          <Variable name="SIM_ST_ZONA">
+            <Documentation xsi:type="SimpleText">ada bagian robot di ruang sapuan penutup stasiun ini</Documentation>
+            <AddData><Data name="https://www.ia.omron.com/Smc IEC61131_10_Ed1_0_SmcExt1_0_Spc1_0.xsd" handleUnknown="discard"><smcext:GlobalVariableAdditionalProperties networkPublish="PublishOnly" /></Data></AddData>
+            <Type>
+              <InstantlyDefinedType xsi:type="ArrayTypeSpec">
+                <BaseType><TypeName>BOOL</TypeName></BaseType>
+                <DimensionSpec dimensionNumber="1"><IndexRange lower="0" upper="5" /></DimensionSpec>
+              </InstantlyDefinedType>
+            </Type>
           </Variable>
           <Variable name="SIM_COLLIDE">
             <Documentation xsi:type="SimpleText">lengan sedang menyentuh badan mesin atau lantai</Documentation>

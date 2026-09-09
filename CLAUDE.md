@@ -213,6 +213,12 @@ paling halus untuk berbohong - gambar benar, angka benar, penjelasan salah - dan
 membacanya justru orang yang belum bisa menilai. `viz.test.js` mengadu keduanya bit per
 bit DAN menolak `Math.acos/atan/asin` muncul di `robot.js` sama sekali.
 
+**Perintah yang DITOLAK tidak menggerakkan apa pun — dan `SIM_MOVE_DONE` tetap TRUE.**
+Tiap penantian sesudah permintaan IK karena itu menuntut `NOT SIM_ERROR` juga. Tanpa itu
+sekuenser melangkah maju seolah lengannya sudah sampai, dan waypoint yang dilewati justru
+approach — yang justru ada untuk menjaganya tidak menyapu mesin. Gejalanya: lengan turun
+langsung dari pose jalan ke permukaan, mulus, tanpa satu pun keluhan.
+
 **Penutup mesin: tiga aturan yang gagal tanpa keluhan.** (1) menutup HANYA selama
 memproses — di luar itu dia menutup jalan masuk gripper; (2) waktu proses baru jalan
 setelah penutup RAPAT — kalau tidak, mesin mengaku menguji papan yang belum tersentuh
@@ -220,6 +226,19 @@ probe dan tetap melaporkan selesai; (3) robot turun HANYA setelah penutup terbuk
 penutup tidak ada di penjaga tabrakan, jadi yang menjaga di sini urutan langkah.
 Di 3D penutup diputar pada ENGSEL (pivot di garis engsel, kotak jadi anaknya): kotak yang
 diputar di tengahnya menembus meja tiap kali membuka.
+
+**Penutup ikut jadi badan tabrakan, tapi HANYA waktu belum terbuka penuh.** Terbuka penuh
+daunnya berdiri di belakang engsel, di luar jalan masuk; menghitungnya tetap menutup jalan
+berarti robot tidak akan pernah bisa turun ke stasiun mana pun. Pasangannya interlock
+`SIM_ST_ZONA`: penutup tidak menutup selama ada titik lengan di ruang sapuannya, dan
+membuka balik kalau ada yang masuk lagi. Zonanya dihitung dari titik lengan yang SEKARANG
+di dalam loop penjaga tabrakan — bukan ditebak dari nomor langkah, karena jog dan gerakan
+tangan tidak punya nomor langkah.
+
+**Gerbang penutup ditunggu SEBELUM pose approach diminta (langkah 8 dan 21), bukan
+sesudahnya (11/23).** Kalau sesudah: pose approach diminta selagi penutup masih menutup,
+penjaga menolaknya dengan benar, sumbu tidak bergerak, `SIM_MOVE_DONE` tetap TRUE — dan
+langkah berikutnya jalan. Lengan turun langsung dari pose jalan ke permukaan.
 
 **Slider mengirim waktu DILEPAS (`onchange`), bukan tiap piksel (`oninput`).** Satu tulis
 OPC UA per gerakan mouse membanjiri sesi yang sama yang membaca puluhan tag, dan yang

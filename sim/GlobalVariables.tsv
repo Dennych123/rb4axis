@@ -69,6 +69,8 @@ SIM_ST_MARGIN	LREAL			False	False	Publish Only	jarak aman di sekeliling badan me
 SIM_ST_COVER	ARRAY[0..5] OF LREAL			False	False	Publish Only	sudut penutup tiap mesin: 0 menekan PCB, penuh = terbuka
 SIM_COVER_SUDUT	LREAL			False	False	Publish Only	bukaan penuh penutup, derajat
 SIM_COVER_VEL	LREAL			False	False	Publish Only	kecepatan penutup, derajat/detik
+SIM_COVER_JANGKAU	LREAL			False	False	Publish Only	panjang daun penutup - tinggi ruang yang disapunya, mm
+SIM_ST_ZONA	ARRAY[0..5] OF BOOL			False	False	Publish Only	ada bagian robot di ruang sapuan penutup stasiun ini
 SIM_COLLIDE	BOOL			False	False	Publish Only	lengan sedang menyentuh badan mesin atau lantai
 SIM_COLLIDE_ST	INT			False	False	Publish Only	yang disentuh: indeks stasiun, -1 lantai, -1 juga kalau tidak ada
 DEGREE_TO_RAD	LREAL	0.017453292		False	True	Do not publish	

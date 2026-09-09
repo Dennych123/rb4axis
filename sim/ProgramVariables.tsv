@@ -48,4 +48,5 @@ VT	LREAL		False	False	kecepatan yang dituju profil trapesium scan ini
 VB	LREAL		False	False	kecepatan tertinggi yang masih bisa direm sebelum target
 DV	LREAL		False	False	perubahan kecepatan maksimum satu scan = akselerasi x dt
 COVER_TARGET	LREAL		False	False	sudut penutup yang dituju stasiun yang sedang dihitung
+ZONA_HIT	BOOL		False	False	titik yang sedang diperiksa ada di ruang sapuan penutup
 OVR	LREAL		False	False	override kecepatan sebagai pecahan (0.01..1.0)

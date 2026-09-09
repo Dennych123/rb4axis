@@ -317,8 +317,29 @@ chk('halaman menghaluskan GAMBAR, bukan angkanya', (() => {
 // Penutup berengsel yang menekan PCB ke probe base. Tiga aturannya, dan ketiganya
 // gagal tanpa keluhan kalau dilanggar.
 chk('penutup menutup HANYA selama memproses',
-    /IF \(SIM_ST_STATE\[i\] = 1\) AND \(SIM_ST_TIPE\[i\] <> 0\) AND \(SIM_ST_TIPE\[i\] <> 3\) THEN[\s\S]{0,80}?COVER_TARGET := 0\.0;/.test(kode),
+    /IF \(SIM_ST_STATE\[i\] = 1\) AND \(SIM_ST_TIPE\[i\] <> 0\) AND \(SIM_ST_TIPE\[i\] <> 3\)[\s\S]{0,120}?COVER_TARGET := 0\.0;/.test(kode),
     'penutup yang menutup di luar proses menutup jalan masuk gripper');
+
+// Interlock. Tanpa ini penutup mulai menutup begitu produk diletakkan, sementara
+// gripper masih naik lewat ruang yang sama - daun penutup mengayun MENIMPA lengan, dan
+// di layar dua benda saling menembus tanpa satu pun yang mengeluh.
+chk('penutup tidak menutup selama ada bagian robot di ruangnya',
+    /AND NOT SIM_ST_ZONA\[i\] THEN[\s\S]{0,60}?COVER_TARGET := 0\.0;/.test(kode));
+chk('zona dihitung dari titik lengan yang SEKARANG, bukan dari langkah sekuenser',
+    /IF \(k >= 2\) AND ZONA_HIT THEN[\s\S]{0,120}?SIM_ST_ZONA\[i\] := TRUE;/.test(kode),
+    'menebak dari nomor langkah berarti jog dan gerakan tangan tidak ikut terlindungi');
+chk('zona dibersihkan tiap scan sebelum dihitung ulang',
+    /FOR i := 0 TO SIM_ST_N - 1 DO[\s\S]{0,80}?SIM_ST_ZONA\[i\] := FALSE;[\s\S]{0,40}?END_FOR;/.test(kode),
+    'bit yang tidak pernah dipadamkan mengunci penutup terbuka selamanya');
+
+// Penutup jadi BADAN TABRAKAN, tapi cuma waktu belum terbuka penuh: terbuka penuh
+// daunnya berdiri di belakang engsel, dan menghitungnya tetap menutup jalan berarti
+// robot tidak akan pernah bisa turun ke stasiun mana pun.
+chk('penutup ikut dihitung penjaga tabrakan',
+    /ZONA_HIT AND \(SIM_ST_COVER\[i\] < SIM_COVER_SUDUT - 0\.5\)/.test(kode));
+chk('ruang sapuan penutup setinggi daunnya',
+    /CK_Z\[k\] < SIM_ST_Z\[i\] \+ SIM_COVER_JANGKAU/.test(kode)
+    && glob.includes('SIM_COVER_JANGKAU'));
 chk('waktu proses cuma jalan waktu penutupnya RAPAT',
     /IF SIM_ST_COVER\[i\] <= 0\.5 THEN[\s\S]{0,200}?SIM_ST_TIMER\[i\] := SIM_ST_TIMER\[i\] - SIM_DT;/.test(kode),
     'menghitung sebelum rapat = mesin mengaku menguji papan yang belum tersentuh probe');

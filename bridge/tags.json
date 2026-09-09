@@ -319,6 +319,16 @@
       "komen": "kecepatan penutup, derajat/detik"
     },
     {
+      "nama": "SIM_COVER_JANGKAU",
+      "tipe": "LREAL",
+      "komen": "panjang daun penutup - tinggi ruang yang disapunya, mm"
+    },
+    {
+      "nama": "SIM_ST_ZONA",
+      "tipe": "ARRAY[0..5] OF BOOL",
+      "komen": "ada bagian robot di ruang sapuan penutup stasiun ini"
+    },
+    {
       "nama": "SIM_COLLIDE",
       "tipe": "BOOL",
       "komen": "lengan sedang menyentuh badan mesin atau lantai"

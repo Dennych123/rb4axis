@@ -131,6 +131,8 @@ const GLOBAL_SIM = [
   ['SIM_ST_COVER', 'ARRAY[0..5] OF LREAL', 'R', 'sudut penutup tiap mesin: 0 menekan PCB, penuh = terbuka'],
   ['SIM_COVER_SUDUT', 'LREAL', 'R', 'bukaan penuh penutup, derajat'],
   ['SIM_COVER_VEL', 'LREAL', 'R', 'kecepatan penutup, derajat/detik'],
+  ['SIM_COVER_JANGKAU', 'LREAL', 'R', 'panjang daun penutup - tinggi ruang yang disapunya, mm'],
+  ['SIM_ST_ZONA', 'ARRAY[0..5] OF BOOL', 'R', 'ada bagian robot di ruang sapuan penutup stasiun ini'],
   ['SIM_COLLIDE', 'BOOL', 'R', 'lengan sedang menyentuh badan mesin atau lantai'],
   ['SIM_COLLIDE_ST', 'INT', 'R', 'yang disentuh: indeks stasiun, -1 lantai, -1 juga kalau tidak ada']
 ];
@@ -199,6 +201,7 @@ const LOKAL = [
   ['VB', 'LREAL', 'kecepatan tertinggi yang masih bisa direm sebelum target'],
   ['DV', 'LREAL', 'perubahan kecepatan maksimum satu scan = akselerasi x dt'],
   ['COVER_TARGET', 'LREAL', 'sudut penutup yang dituju stasiun yang sedang dihitung'],
+  ['ZONA_HIT', 'BOOL', 'titik yang sedang diperiksa ada di ruang sapuan penutup'],
   ['OVR', 'LREAL', 'override kecepatan sebagai pecahan (0.01..1.0)']
 ];
 
@@ -304,6 +307,10 @@ function blokInit(cfg) {
   L.push(t('SIM_ST_MARGIN := ' + lreal(cfg.siklus.mesin.margin) + ';'));
   L.push(t('SIM_COVER_SUDUT := ' + lreal(cfg.siklus.mesin.cover.sudut) + ';'));
   L.push(t('SIM_COVER_VEL := ' + lreal(cfg.siklus.mesin.cover.kecepatan) + ';'));
+  // Daun penutup sepanjang 0.82 x kedalaman mesin - angka yang sama yang dipakai viz
+  // menggambarnya. Kalau dua-duanya punya angka sendiri, yang digambar dan yang dijaga
+  // adalah dua penutup yang berbeda.
+  L.push(t('SIM_COVER_JANGKAU := ' + lreal(Math.round(cfg.siklus.mesin.dalam * 0.82 * 10) / 10) + ';'));
   cfg.siklus.stasiun.forEach((s, i) => {
     L.push(t('// ' + s.nama));
     L.push(t('SIM_ST_X[' + i + '] := ' + lreal(s.x) + ';   SIM_ST_Y[' + i + '] := ' + lreal(s.y) + ';'));
@@ -312,7 +319,8 @@ function blokInit(cfg) {
     L.push(t('SIM_ST_STATE[' + i + '] := 0;   SIM_ST_TIMER[' + i + '] := 0.0;'));
     // Penutup mulai TERBUKA. Mulai tertutup berarti pekerjaan pertama menunggu
     // penutup membuka sementara di layar tidak ada yang bergerak.
-    L.push(t('SIM_ST_COVER[' + i + '] := ' + lreal(cfg.siklus.mesin.cover.sudut) + ';'));
+    L.push(t('SIM_ST_COVER[' + i + '] := ' + lreal(cfg.siklus.mesin.cover.sudut)
+      + ';   SIM_ST_ZONA[' + i + '] := FALSE;'));
   });
   L.push('');
   // Panel dimulai dari keadaan paling aman yang masuk akal: MANUAL, tidak emergency,

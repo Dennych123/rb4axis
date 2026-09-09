@@ -1211,7 +1211,11 @@ function panelTampil() {
   // puluhan elemen 8x per detik, dan yang tersendat justru animasi 3D-nya.
   for (var s = 0; s < refStasiun.length; s++) {
     var r = refStasiun[s], keadaan = st.stState[s] || 0;
-    r.badge.textContent = NAMA_STST[keadaan] || '-';
+    // "pressing" dibedakan dari "busy": penutup yang sudah rapat itu yang menekan PCB
+    // ke probe, dan waktu prosesnya baru jalan sejak saat itu. Dua keadaan yang di
+    // layar sama persis bikin "kenapa timernya belum turun" jadi pertanyaan.
+    var nekan = keadaan === 1 && (st.stCover[s] || 0) <= 0.5;
+    r.badge.textContent = nekan ? 'pressing' : (NAMA_STST[keadaan] || '-');
     r.badge.className = 'badge' + (keadaan === 1 ? ' proses' : keadaan === 2 ? ' siap' : '');
     r.timer.textContent = st.stTimer[s] > 0.05 ? st.stTimer[s].toFixed(0) + 's' : '';
     r.nama.className = 'stnama' + (st.auto && st.tujuan === s ? ' tuju' : '');
