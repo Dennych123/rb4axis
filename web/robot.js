@@ -48,7 +48,9 @@ var st = {
   stState: [0, 0, 0, 0, 0, 0], stTimer: [0, 0, 0, 0, 0, 0],
   mesin: { lebar: 300, dalam: 320, margin: 12, cover: { sudut: 80, kecepatan: 110, tebal: 18 } },
   stCover: [0, 0, 0, 0, 0, 0], coverSudut: 80,
-  frames: true, tri: true, ikSrc: 0,
+  frames: true, tri: true, ikSrc: 0, metode: 2, showPath: true,
+  dt: 0.004,                      // periode task - dipakai simulasi lintasan
+  uji: null,                      // hasil uji lintasan terakhir
   pcb: { panjang: 120, lebar: 80, tebal: 8 },
   dim: { L1: 400, L2: 300, L3: 250, L4: 100, toolY: 140, toolZ: 0,
          offset: [0, 0, 0, 0, 0], limitv: [-500, 500, -90, 180, -150, 0, -120, 120] },
@@ -242,21 +244,10 @@ function offlineMinta(pose) {
   if (ik.done) st.cmd = ik.joint;
 }
 
-// Profil trapesium, CERMINAN motion model di PRG_SIM_ROBOT.st: dipercepat sampai
-// SIM_VEL lalu direm tepat waktu (v = sqrt(2*a*s)). Kalau di sini dipakai model
-// yang lebih sederhana, mode offline dan mode PLC bergerak dengan bentuk yang beda -
-// dan bedanya terbaca seperti PLC-nya yang salah.
-function langkahSumbu(pos, cmd, vel, vmax, acc, dt) {
-  var d = cmd - pos;
-  var vt = Math.min(vmax, Math.sqrt(2 * acc * Math.abs(d)));
-  if (d < 0) vt = -vt;
-  var dv = acc * dt;
-  if (Math.abs(vt - vel) <= dv) vel = vt;
-  else vel += (vt > vel ? dv : -dv);
-  var s = vel * dt;
-  if (Math.abs(d) <= Math.abs(s)) return { pos: cmd, vel: 0, jalan: false };
-  return { pos: pos + s, vel: vel, jalan: true };
-}
+// Motion model (profil trapesium) TIDAK ditulis di sini lagi - dia di kin.js sebagai
+// langkahSumbu(), dipakai bersama oleh mode offline halaman ini DAN oleh pembanding
+// lintasan. Dua salinan pasti berbeda suatu hari, dan bedanya terbaca seperti
+// PLC-nya yang salah.
 
 var tSebelum = 0;
 function offlineStep(t) {
@@ -511,6 +502,19 @@ function bikinScene() {
   scene.add(bagian.tri);
   bagian.triLabel = [labelSprite('L2'), labelSprite('L3'), labelSprite('R')];
   bagian.triLabel.forEach(function (l) { l.scale.set(150, 38, 1); scene.add(l); });
+
+  // Dua lintasan pembanding: kuning = gerak sumbu, cyan = gerak lurus. Digambar di
+  // tempatnya supaya "melengkung" berhenti jadi kata dan jadi bentuk.
+  bagian.pathJ = new THREE.Line(new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0xf59e0b }));
+  bagian.pathL = new THREE.Line(new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0x22d3ee }));
+  bagian.pathJ.frustumCulled = false;
+  bagian.pathL.frustumCulled = false;
+  bagian.pathJ.visible = false;
+  bagian.pathL.visible = false;
+  scene.add(bagian.pathJ);
+  scene.add(bagian.pathL);
 
   // PCB: SATU per stasiun plus satu yang dipegang gripper. Dulu cuma satu kotak,
   // dan itu cukup selama cuma ada satu produk di seluruh sel. Sekarang ICC 1 dan
@@ -1019,6 +1023,200 @@ function panelKiriTampil() {
   }
 }
 
+// ================================================== pembanding DH / Jacobian
+// Semua angkanya dari kin.js: fkSteps (cara mesin), fkDH (cara buku teks), jacobian,
+// ikJacobian. Halaman ini tidak menghitung satu pun rumusnya sendiri - kalau menghitung
+// sendiri, yang dibandingkan bukan lagi dua cara, tapi dua salinan.
+var refDH = {}, refJac = {};
+
+function bikinPanelBanding() {
+  var d = el('dhFlow');
+  d.innerHTML = '';
+  refDH = {};
+  barisRumus(d, 'geo', refDH, 'geo', 'closed form: sum of link vectors');
+  barisRumus(d, 'dh', refDH, 'DH', 'product of 6 DH matrices');
+  barisRumus(d, 'beda', refDH, 'diff', 'same pose, two methods');
+
+  var j = el('jacFlow');
+  j.innerHTML = '';
+  refJac = {};
+  barisRumus(j, 'det', refJac, 'detJ', 'L2 L3 sin(theta2)   mm^2/rad');
+  barisRumus(j, 'dekat', refJac, 'sing', 'how close to a singularity');
+  barisRumus(j, 'ikg', refJac, 'IK-g', 'closed form, one step');
+  barisRumus(j, 'ikj', refJac, 'IK-J', 'Jacobian, iterative');
+  barisRumus(j, 'ikd', refJac, 'diff', 'same angles?');
+}
+
+function bandingTampil() {
+  if (!refDH.geo) return;
+  var cfg = cfgKin();
+  var g = fkSteps(st.joint, cfg).worldL;
+  var h = fkDH(st.joint, cfg).world;
+  var tulis = function (r, v) {
+    r.hs.textContent = f3(v[1]) + ', ' + f3(v[2]) + ', ' + f3(v[3]) + '\u00b0';
+  };
+  refDH.geo.baris.hidden = st.metode === 1;
+  refDH.dh.baris.hidden = st.metode === 0;
+  refDH.beda.baris.hidden = st.metode !== 2;
+  tulis(refDH.geo, g);
+  tulis(refDH.dh, h);
+  var beda = Math.max(Math.abs(g[1] - h[1]), Math.abs(g[2] - h[2]), Math.abs(g[3] - h[3]));
+  refDH.beda.hs.textContent = beda.toExponential(2);
+  // Bedanya BUKAN nol, dan itu bukan kesalahan: DH memakai PI/2 utuh untuk sudut
+  // offsetnya, sementara rumus mesin memakai 90 x DEGREE_TO_RAD yang dipotong 9 angka.
+  // Sudut yang sama, pembulatan yang beda.
+  refDH.beda.ex.textContent = beda < 1e-3
+    ? 'same answer (floor: truncated constants)' : 'DISAGREE - one of them is wrong';
+  refDH.beda.baris.className = 'rumus' + (beda < 1e-3 ? '' : ' gagal');
+
+  // tabel DH
+  var t = el('dhTabel');
+  if (t && !t.dataset.siap) {
+    t.dataset.siap = '1';
+    t.innerHTML = '<table class="dht"><thead><tr><th>link</th><th>theta</th><th>d</th>'
+      + '<th>a</th><th>alpha</th></tr></thead><tbody></tbody></table>';
+  }
+  if (t) {
+    var tb = t.querySelector('tbody'), tabel = dhTable(st.joint, cfg), html = '';
+    for (var i = 0; i < tabel.length; i++) {
+      var b = tabel[i];
+      html += '<tr><td>' + b.nama + '</td><td>' + (b.theta * KIN_RAD_TO_DEGREE).toFixed(1)
+        + '&deg;</td><td>' + b.d.toFixed(1) + '</td><td>' + b.a.toFixed(1)
+        + '</td><td>' + (b.alpha * KIN_RAD_TO_DEGREE).toFixed(0) + '&deg;</td></tr>';
+    }
+    tb.innerHTML = html;
+  }
+
+  // Jacobian + seberapa dekat singular
+  var jc = jacobian(st.joint, cfg);
+  var maksDet = cfg.L2 * cfg.L3;
+  var rasio = Math.abs(jc.det) / maksDet;
+  refJac.det.hs.textContent = jc.det.toFixed(0);
+  refJac.dekat.hs.textContent = (rasio * 100).toFixed(1) + '%';
+  refJac.dekat.ex.textContent = rasio < 0.08
+    ? 'NEAR SINGULAR - elbow almost straight' : 'clear of singularity';
+  refJac.dekat.baris.className = 'rumus' + (rasio < 0.08 ? ' gagal' : '');
+
+  // IK dua cara, pada pose yang sedang dilihat
+  var ikg = ikSteps(g, cfg, st.elbowUp);
+  var ikj = ikJacobian(g, st.joint, cfg);
+  refJac.ikg.hs.textContent = ikg.done
+    ? f3(ikg.joint[1]) + ', ' + f3(ikg.joint[2]) + ', ' + f3(ikg.joint[3]) : 'no solution';
+  refJac.ikj.hs.textContent = ikj.done
+    ? f3(ikj.joint[1]) + ', ' + f3(ikj.joint[2]) + ', ' + f3(ikj.joint[3]) : 'did not converge';
+  refJac.ikj.ex.textContent = ikj.iter + ' iterations, closed form needs 0';
+  var bedaIk = ikg.done && ikj.done
+    ? Math.max(Math.abs(ikg.joint[1] - ikj.joint[1]), Math.abs(ikg.joint[2] - ikj.joint[2]),
+               Math.abs(ikg.joint[3] - ikj.joint[3])) : NaN;
+  refJac.ikd.hs.textContent = isFinite(bedaIk) ? bedaIk.toExponential(2) + '\u00b0' : '-';
+}
+
+// ------------------------------------------------- uji lintasan: lurus atau tidak
+function ujiLintasan() {
+  var cfg = cfgKin();
+  var A = fkSteps(st.joint, cfg).worldL.slice();
+  var jarak = +el('ujiJarak').value || 300;
+  var arah = +el('ujiArah').value;
+  var B = A.slice();
+  if (arah === 1) B[1] += jarak;
+  else if (arah === 2) B[2] += jarak;
+  else { B[1] += jarak * 0.707; B[2] += jarak * 0.707; }
+
+  var ikA = inverseKinematicV2(A, cfg, st.elbowUp);
+  var ikB = inverseKinematicV2(B, cfg, st.elbowUp);
+  if (!ikA.done || !ikB.done) {
+    el('ujiHasil').innerHTML = '<span class="kotakBad">The end point is out of reach. '
+      + 'Try a smaller distance, or move the arm first.</span>';
+    st.uji = null;
+    gambarLintasan();
+    return;
+  }
+
+  // Gerak sumbu: motion model yang SAMA dengan PLC, bukan interpolasi sudut yang rapi.
+  var pj = pathJoint(ikA.joint, ikB.joint, cfg,
+    { dt: st.dt, vel: st.vel, acc: st.acc });
+  var pl = pathLine(A, B, cfg, 80, st.elbowUp, false);
+
+  var titikA = { x: A[0], y: A[1], z: A[2] }, titikB = { x: B[0], y: B[1], z: B[2] };
+  var dj = deviasiLurus(pj.titik, titikA, titikB);
+  var dl = deviasiLurus(pl.titik, titikA, titikB);
+  st.uji = { pj: pj, pl: pl, dj: dj, dl: dl, A: titikA, B: titikB };
+
+  el('ujiHasil').innerHTML =
+    '<table><tr><td class="k">joint move</td><td class="v"><b>' + dj.maks.toFixed(1)
+      + ' mm</b> off the line</td><td class="v">' + pj.waktu.toFixed(2) + ' s</td></tr>'
+    + '<tr><td class="k">line move</td><td class="v">' + dl.maks.toFixed(3)
+      + ' mm off the line</td><td class="v">' + (pl.gagal ? pl.gagal + ' points had no solution'
+        : pl.titik.length + ' IK solves') + '</td></tr>'
+    + '<tr><td class="k">distance</td><td class="v">' + dj.panjangGaris.toFixed(0)
+      + ' mm</td><td class="v"></td></tr></table>';
+  gambarGrafik();
+  gambarLintasan();
+}
+
+// Grafik simpangan. Kanvas 2D biasa - satu pustaka chart untuk dua kurva itu satu
+// unduhan CDN lagi yang bisa gagal sendiri.
+function gambarGrafik() {
+  var cv = el('grafik');
+  if (!cv) return;
+  var g = cv.getContext('2d');
+  var W = cv.width, H = cv.height;
+  var gaya = getComputedStyle(document.body);
+  var warnaTeks = gaya.getPropertyValue('--label') || '#888';
+  var warnaGaris = gaya.getPropertyValue('--garis') || '#ccc';
+  g.clearRect(0, 0, W, H);
+  if (!st.uji) {
+    g.fillStyle = warnaTeks;
+    g.font = '22px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.fillText('press Run', W / 2, H / 2);
+    return;
+  }
+  var pad = 34;
+  var maks = Math.max(st.uji.dj.maks, 1);
+  // Sumbu
+  g.strokeStyle = warnaGaris;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(pad, 8); g.lineTo(pad, H - pad); g.lineTo(W - 8, H - pad);
+  g.stroke();
+  g.fillStyle = warnaTeks;
+  g.font = '18px system-ui, sans-serif';
+  g.textAlign = 'right';
+  g.fillText(maks.toFixed(0) + ' mm', pad - 6, 20);
+  g.fillText('0', pad - 6, H - pad + 6);
+  g.textAlign = 'center';
+  g.fillText('start', pad + 18, H - 10);
+  g.fillText('end', W - 24, H - 10);
+
+  var kurva = function (nilai, warna) {
+    if (!nilai.length) return;
+    g.strokeStyle = warna;
+    g.lineWidth = 3;
+    g.beginPath();
+    for (var i = 0; i < nilai.length; i++) {
+      var x = pad + (W - pad - 8) * (i / Math.max(1, nilai.length - 1));
+      var y = (H - pad) - (H - pad - 12) * (nilai[i] / maks);
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.stroke();
+  };
+  kurva(st.uji.dj.nilai, '#f59e0b');
+  kurva(st.uji.dl.nilai, '#22d3ee');
+}
+
+// Lintasan digambar di 3D juga: grafik menjawab BERAPA, gambar menjawab DI MANA.
+function gambarLintasan() {
+  if (!bagian.pathJ) return;
+  var tampil = st.showPath && st.uji;
+  bagian.pathJ.visible = !!tampil;
+  bagian.pathL.visible = !!tampil;
+  if (!tampil) return;
+  var ke = function (t) { return t.map(function (p) { return ke3(p); }); };
+  bagian.pathJ.geometry.setFromPoints(ke(st.uji.pj.titik));
+  bagian.pathL.geometry.setFromPoints(ke(st.uji.pl.titik));
+}
+
 // -------------------------------------------------------------- slider jog
 // Slider menyetel TARGET, dan targetnya dikirim waktu slider DILEPAS. Satu tulis per
 // piksel gerakan mouse membanjiri sesi OPC UA yang sama yang sedang membaca 80 tag,
@@ -1254,6 +1452,7 @@ function panelTampil() {
 
   sliderTampil();
   panelKiriTampil();
+  bandingTampil();
 }
 
 var NAMA_STATE = ['MANUAL', 'HOMING', 'AUTO READY', 'RUNNING', 'STOPPING AT END OF CYCLE',
@@ -1325,6 +1524,9 @@ function pasangKontrol() {
   el('showFrames').onchange = function () { st.frames = this.checked; };
   el('showTri').onchange = function () { st.tri = this.checked; };
   el('ikSrc').onchange = function () { st.ikSrc = +this.value; panelKiriTampil(); };
+  el('metode').onchange = function () { st.metode = +this.value; bandingTampil(); };
+  el('ujiRun').onclick = ujiLintasan;
+  el('showPath').onchange = function () { st.showPath = this.checked; gambarLintasan(); };
   el('gripBtn').onclick = function () {
     st.grip.cmd = !st.grip.cmd;
     kirim('SIM_GRIP_CMD', st.grip.cmd);
@@ -1364,6 +1566,7 @@ function muatConfig() {
     st.dim.limitv = [c.limit.PD1300_000, c.limit.PD1300_001, c.limit.PD1300_002, c.limit.PD1300_003,
                      c.limit.PD1300_004, c.limit.PD1300_005, c.limit.PD1300_006, c.limit.PD1300_007];
     st.vel = c.jog.sumbu; st.acc = c.jog.akselerasi; st.ovr = c.jog.override_persen;
+    st.dt = c.task.periode_ms / 1000;
     el('ovr').value = Math.round(st.ovr);
     st.velW = c.jog.world; st.step = c.jog.langkah;
     st.grip = { pos: c.gripper.bukaan_awal, stroke: c.gripper.stroke, tutup: c.gripper.tutup,
@@ -1419,7 +1622,9 @@ pasangKontrol();
 muatConfig().then(function () {
   bikinPanelStatis();
   bikinPanelKiri();
+  bikinPanelBanding();
   bikinSlider();
+  gambarGrafik();
   panelTampil();
   if (bikinScene()) { ukur(); requestAnimationFrame(putar); }
   window.addEventListener('resize', ukur);

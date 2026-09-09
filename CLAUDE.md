@@ -206,6 +206,24 @@ terbaca sebagai "laggy". Ramalannya wajib dibatasi (120 ms): tanpa batas, kabar 
 berhenti datang bikin lengan terbang menjauh, dan itu terlihat seperti robot yang kabur
 alih-alih sambungan yang putus.
 
+**DH dan Jacobian ada sebagai PEMBANDING, bukan sebagai jalur produksi.** Yang dipakai
+PLC tetap rumus tertutup; `fkDH`/`jacobian`/`ikJacobian` di `kin.js` ada supaya klaim
+"hasilnya sama" bisa diadu, dan tesnya yang mengadu. Tiga hal yang gampang salah di situ:
+
+- **Selisih FK vs DH bukan nol (~4e-6 mm).** DH memakai `PI/2` utuh; rumus mesin memakai
+  `90 × DEGREE_TO_RAD` yang dipotong 9 angka. Menuntut nol berarti menuntut konstanta yang
+  lain. Toleransi tesnya 1e-4, dengan sebabnya tertulis.
+- **Redaman IK Jacobian KECIL (0.01), bukan besar.** Diukur di lengan ini: 0.01 sampai
+  dalam 3-6 putaran; 5 tidak pernah sampai dalam 80. Redaman itu obat untuk pose dekat
+  singular, bukan rem permanen. Langkah per putaran tetap dibatasi 30 derajat.
+- **Jacobian diturunkan dari `chainPoints()`**, bukan dari trigonometri yang ditulis ulang:
+  kolomnya `(-(Z-Zi), (Y-Yi), 1)`. Jadi Jacobian dan gambar tidak bisa bercerita beda, dan
+  tesnya mengadu ke beda-hingga FK - bukan ke rumus tangan kedua.
+
+**Motion model JS cuma satu salinan, dan dia di `kin.js`** (`langkahSumbu`). Dipakai mode
+offline halaman DAN pembanding lintasan. Salinan kedua di `robot.js` sudah pernah ada dan
+sudah dibuang; tesnya menolak kalau muncul lagi.
+
 **Panel penjelas WAJIB membaca `fkSteps()`/`ikSteps()`, bukan menghitung sendiri.**
 Kedua fungsi itu yang dipanggil `forwardKinematicV2`/`inverseKinematicV2`, jadi satu
 sumber untuk PLC, tes, gambar, dan penjelasan. Panel yang menghitung sendiri adalah cara

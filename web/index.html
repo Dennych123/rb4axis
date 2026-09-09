@@ -170,6 +170,19 @@
   .slider .lbl { width:58px; color:var(--label); font-size:12px; }
   .slider .val { width:74px; text-align:right; font:600 12.5px ui-monospace, monospace;
                  font-variant-numeric:tabular-nums; }
+
+  /* Grafik simpangan. Angka "lurus atau tidak" lebih jujur daripada perasaan waktu
+     melihat animasinya - dari sudut kamera tertentu, lengkungan 40 mm kelihatan lurus. */
+  #grafik { width:100%; height:112px; display:block; border:1px solid var(--garis);
+            border-radius:8px; background:var(--bg); margin-top:8px; }
+  .legenda { display:flex; gap:12px; font-size:11.5px; color:var(--teks2); margin-top:6px; }
+  .legenda i { display:inline-block; width:14px; height:3px; border-radius:2px;
+               margin-right:5px; vertical-align:3px; }
+  .dht { width:100%; font:11.5px ui-monospace, Consolas, monospace; border-collapse:collapse; }
+  .dht td, .dht th { padding:2px 4px; text-align:right; }
+  .dht th { color:var(--label); font-weight:600; font-family:system-ui, sans-serif;
+            font-size:11px; }
+  .dht td:first-child, .dht th:first-child { text-align:left; color:var(--label); }
 </style>
 </head>
 <body>
@@ -245,6 +258,95 @@
         Both put the fingers in the same spot.<br>
         The real machine uses elbow down, so this does too. The checkbox in the control
         panel tries the mirror.
+      </div>
+    </details>
+  </div>
+
+  <div class="kartu">
+    <p class="judul">Compare: DH &amp; Jacobian</p>
+    <div class="cerita">
+      Two ways to get the same answer.<br>
+      The machine uses <b>closed-form geometry</b> &mdash; one step, straight to the angles.<br>
+      The textbook way uses <b>DH matrices</b> for forward and a <b>Jacobian</b> for inverse.<br>
+      If they disagree, one of them is wrong. So they are run side by side.
+    </div>
+    <div class="jogrow">
+      <span class="lbl">method</span>
+      <select id="metode">
+        <option value="0">closed form (machine)</option>
+        <option value="1">DH + Jacobian (textbook)</option>
+        <option value="2">both, show difference</option>
+      </select>
+    </div>
+    <div id="dhFlow"></div>
+    <details>
+      <summary class="k2">the DH table</summary>
+      <div class="ket">
+        DH needs every joint to turn about its own <b>z</b>. Here all joints turn about
+        world X, so the frame is rotated first: (u, v, w) = (Y, Z, X).<br>
+        The <b>offset</b> row is the price of that: L1 points up in the world, and DH can
+        only move along x or z, so a +90&deg; turn is inserted &mdash; and joint 1 then
+        carries &minus;90&deg; to put its zero back on +Y.
+      </div>
+      <div id="dhTabel" style="margin-top:6px"></div>
+    </details>
+    <div id="jacFlow" style="margin-top:8px"></div>
+    <details>
+      <summary class="k2">what the Jacobian is for</summary>
+      <div class="ket">
+        It says how far the tool moves when a joint moves a little.<br>
+        <b>det J</b> is the short answer for this arm: <code>L2 &middot; L3 &middot; sin(&theta;2)</code>.
+        Near zero, the elbow is straight, and the tool can no longer move in every
+        direction &mdash; that is a <b>singularity</b>.<br>
+        The machine does not need it: closed-form IK solves in one step. It is needed for
+        straight-line motion, for force control, and for telling how close to singular
+        you are.
+      </div>
+    </details>
+  </div>
+
+  <div class="kartu">
+    <p class="judul">Straight or not?</p>
+    <div class="cerita">
+      Move the tool and compare two ways.<br>
+      <b>Joint move</b>: each axis runs on its own, at its own speed. That is what the PLC
+      does today.<br>
+      <b>Line move</b>: the tool is forced along a straight line, and IK is solved at every
+      step.<br>
+      The graph is the distance from the straight line, in mm.
+    </div>
+    <div class="jogrow">
+      <span class="lbl">direction</span>
+      <select id="ujiArah">
+        <option value="1">Y (in / out)</option>
+        <option value="2">Z (up / down)</option>
+        <option value="3">Y + Z (diagonal)</option>
+      </select>
+    </div>
+    <div class="jogrow">
+      <span class="lbl">distance</span>
+      <input class="num" id="ujiJarak" type="number" value="300" step="10">
+      <span style="font-size:12px;color:var(--label)">mm</span>
+      <button id="ujiRun" class="act">Run</button>
+    </div>
+    <canvas id="grafik" width="660" height="224"></canvas>
+    <div class="legenda">
+      <span><i style="background:#f59e0b"></i>joint move</span>
+      <span><i style="background:#22d3ee"></i>line move</span>
+    </div>
+    <div id="ujiHasil" style="margin-top:6px"></div>
+    <div class="jogrow">
+      <label><input type="checkbox" id="showPath" checked> draw both paths in 3D</label>
+    </div>
+    <details>
+      <summary class="k2">why the joint move bends</summary>
+      <div class="ket">
+        Each axis takes the shortest way <b>in its own angle</b>, not in space. They also
+        do not finish together: axis 1 may be done while axis 3 is still moving.<br>
+        For pick and place that is fine, and it is faster. That is why the cycle lifts to
+        an approach height first instead of trusting the path.<br>
+        For gluing, cutting or welding it is not fine &mdash; there the tool must go
+        straight, and that costs one IK per step.
       </div>
     </details>
   </div>

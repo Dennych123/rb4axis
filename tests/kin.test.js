@@ -235,5 +235,128 @@ chk('V2: tool arah -Y dibedakan dari +Y',
     Math.abs(K.toolPolarV2({ toolY: -50, toolZ: 0 }).theta - K.KIN_PI) < 1e-8,
     'ATAN polos memberi 0 untuk dua-duanya');
 
+
+// ===========================================================================
+// 8. PEMBANDING: DH dan Jacobian
+//
+// Mesin memakai rumus geometri tertutup. Buku teks memakai DH dan Jacobian. Kalau
+// dua-duanya benar, jawabannya sama - dan itu yang diuji di sini, bukan bahwa
+// kodenya ada.
+// ===========================================================================
+const cfgJ = Object.assign({}, cfg2, { limit: raw ? undefined : undefined });
+
+// --- FK: rumus mesin vs perkalian matriks DH
+let bedaDH = 0;
+const posUji = [[0, 0, 0, 0], [100, 45, -74.3, -60.7], [-300, 90, -90, -90],
+                [250, 120, -140, 60], [0, 170, -150, 110]];
+for (const j of posUji) {
+  const a = K.fkSteps(j, cfg2).worldL;
+  const b = K.fkDH(j, cfg2).world;
+  for (let i = 0; i < 4; i++) bedaDH = Math.max(bedaDH, Math.abs(a[i] - b[i]));
+}
+// Toleransinya 1e-4, bukan nol, dan sebabnya ada isinya: DH memakai PI/2 utuh untuk
+// sudut offsetnya, sementara rumus mesin memakai 90 x DEGREE_TO_RAD yang dipotong 9
+// angka. Sudut yang sama, pembulatan yang beda - lantai yang sama dengan round-trip.
+chk('DH memberi pose yang sama dengan rumus mesin (' + posUji.length + ' pose)', bedaDH < 1e-4,
+    'selisih terbesar ' + bedaDH.toExponential(2) + ' (lantai konstanta)');
+chk('DH bukan kebetulan: pose nol lurus ke +Y', (() => {
+  const w = K.fkDH([0, 0, 0, 0], cfg2).world;
+  return Math.abs(w[1] - (cfg2.L2 + cfg2.L3 + cfg2.L4 + cfg2.toolY)) < 1e-4
+      && Math.abs(w[2] - cfg2.L1) < 1e-4;
+})());
+chk('tabel DH punya enam baris, semua alpha nol (rantai sebidang)', (() => {
+  const t = K.dhTable([0, 30, -40, 10], cfg2);
+  return t.length === 6 && t.every(b => b.alpha === 0);
+})(), 'alpha bukan nol berarti ada sendi yang tidak sebidang - lengan ini tidak begitu');
+
+// --- Jacobian diadu ke beda-hingga FK. Ini yang membuktikan turunannya benar;
+// mencocokkannya ke rumus yang ditulis tangan cuma membuktikan dua tulisan sama.
+let bedaJ = 0;
+for (const j of [[0, 45, -74.3, -60.7], [0, 90, -90, -90], [0, 20, -30, 15]]) {
+  const J = K.jacobian(j, cfg2).J;
+  const h = 1e-6;                                  // radian
+  for (let c = 0; c < 3; c++) {
+    const jp = j.slice(), jm = j.slice();
+    jp[c + 1] += h * K.KIN_RAD_TO_DEGREE;
+    jm[c + 1] -= h * K.KIN_RAD_TO_DEGREE;
+    const wp = K.fkSteps(jp, cfg2).worldL, wm = K.fkSteps(jm, cfg2).worldL;
+    bedaJ = Math.max(bedaJ,
+      Math.abs((wp[1] - wm[1]) / (2 * h) - J[0][c]),
+      Math.abs((wp[2] - wm[2]) / (2 * h) - J[1][c]));
+  }
+}
+chk('Jacobian = turunan FK yang sebenarnya (beda-hingga)', bedaJ < 1e-3,
+    'selisih terbesar ' + bedaJ.toExponential(2) + ' mm/rad');
+
+// det J untuk lengan sebidang ini punya bentuk pendek. Kalau ini merah, bukan
+// rumusnya yang salah - Jacobian-nya yang tidak menggambarkan lengan ini.
+let bedaDet = 0;
+for (const t2 of [-140, -74.3, -20, 20, 90]) {
+  const d = K.jacobian([0, 45, t2, 10], cfg2).det;
+  bedaDet = Math.max(bedaDet, Math.abs(d - cfg2.L2 * cfg2.L3 * Math.sin(t2 * K.KIN_DEGREE_TO_RAD)));
+}
+chk('det J = L2 L3 sin(theta2)', bedaDet < 1e-6, bedaDet.toExponential(2));
+chk('siku lurus = singular (det J nol)',
+    Math.abs(K.jacobian([0, 45, 0, 10], cfg2).det) < 1e-9,
+    'di situ ujung tool tidak bisa lagi bergerak ke segala arah');
+
+// --- IK: tertutup vs Jacobian
+const poseIK = K.fkSteps([0, 45, -74.3, -60.7], cfg2).worldL;
+const ikTutup = K.inverseKinematicV2(poseIK, cfg2, false);
+const ikIter = K.ikJacobian(poseIK, [0, 40, -70, -55], cfg2);
+chk('IK Jacobian sampai ke jawaban yang sama dengan IK tertutup',
+    ikIter.done && [1, 2, 3].every(i => Math.abs(ikIter.joint[i] - ikTutup.joint[i]) < 1e-3),
+    ikIter.iter + ' putaran, sisa ' + ikIter.sisa.toExponential(1));
+chk('IK Jacobian butuh BEBERAPA putaran, IK tertutup nol', ikIter.iter >= 1 && ikIter.iter <= 20,
+    ikIter.iter + ' - itu harga yang dibayar untuk cara yang berlaku di rantai apa pun');
+
+// Tebakan awal MENENTUKAN cabang mana yang ketemu, dan itu perbedaan yang paling
+// penting antara dua cara ini. IK tertutup memilih cabangnya lewat parameter yang
+// eksplisit (elbowUp). Yang iteratif jatuh ke cabang yang paling dekat dengan
+// tebakannya - jadi jawabannya ikut berubah kalau posisi awal robot berubah, tanpa
+// ada yang meminta.
+chk('tebakan menentukan CABANG yang ketemu', (() => {
+  const atas = K.inverseKinematicV2(poseIK, cfg2, true);          // cabang cermin
+  const r = K.ikJacobian(poseIK, atas.joint, cfg2);
+  if (!r.done) return false;
+  // Berangkat dari cabang cermin, berakhir di cabang cermin - bukan di cabang mesin.
+  return Math.abs(r.joint[2] - atas.joint[2]) < 1e-2
+      && Math.abs(r.joint[2] - ikTutup.joint[2]) > 10;
+})(), 'yang tertutup memilih cabang lewat parameter; yang iteratif ikut tebakannya');
+
+// --- Lurus atau tidak. Ini klaim yang dipakai panel, jadi dijaga di sini.
+const gerakUji = { dt: 0.004, vel: [900, 90, 90, 120], acc: [1800, 240, 240, 320] };
+const pA = K.fkSteps([0, 45, -74.3, -60.7], cfg2).worldL;
+const pB = [pA[0], pA[1], pA[2] + 150, pA[3]];
+const jA = K.inverseKinematicV2(pA, cfg2, false).joint;
+const jB = K.inverseKinematicV2(pB, cfg2, false).joint;
+const lintJ = K.pathJoint(jA, jB, cfg2, gerakUji);
+const lintL = K.pathLine(pA, pB, cfg2, 80, false, false);
+const tA = { x: pA[0], y: pA[1], z: pA[2] }, tB = { x: pB[0], y: pB[1], z: pB[2] };
+const devJ = K.deviasiLurus(lintJ.titik, tA, tB);
+const devL = K.deviasiLurus(lintL.titik, tA, tB);
+chk('gerak sumbu MELENGKUNG (bukan garis lurus)', devJ.maks > 5,
+    'simpangan terbesar ' + devJ.maks.toFixed(1) + ' mm pada perpindahan 150 mm');
+chk('gerak lurus memang lurus', devL.maks < 0.01, devL.maks.toExponential(1) + ' mm');
+chk('gerak sumbu tetap SAMPAI di tujuan',
+    [1, 2, 3].every(i => Math.abs(lintJ.sudut[lintJ.sudut.length - 1][i] - jB[i]) < 1e-9),
+    'melengkung di tengah jalan itu wajar; tidak sampai itu cacat');
+chk('lintasan lurus melaporkan titik yang tidak punya solusi', (() => {
+  // Garis lurus antara dua pose yang sah bisa keluar dari ruang kerja di tengahnya.
+  // Yang dituntut di sini: gagalnya DIHITUNG, bukan diam-diam dilewati.
+  const jauh = K.pathLine(pA, [pA[0], pA[1] + 900, pA[2], pA[3]], cfg2, 40, false, false);
+  return jauh.gagal > 0;
+})());
+
+// Motion model cuma ADA SATU salinan di JS, dan dia di kin.js. Halaman memakainya
+// lewat sini; salinan kedua di halaman pasti berbeda suatu hari, dan bedanya terbaca
+// seperti PLC-nya yang salah.
+chk('langkahSumbu ada di kin.js', typeof K.langkahSumbu === 'function');
+chk('halaman TIDAK punya salinan motion model sendiri', (() => {
+  const r = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'web', 'robot.js'), 'utf8');
+  return !/function langkahSumbu\(/.test(r);
+})());
+
 console.log(fail ? 'GAGAL ' + fail : 'LULUS');
 process.exit(fail ? 1 : 0);

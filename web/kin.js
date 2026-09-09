@@ -423,9 +423,336 @@ function keArray(v, panjang) {
   return new Array(n).fill(0);
 }
 
+
+// ===========================================================================
+// PEMBANDING: DH, Jacobian, dan dua cara bergerak
+//
+// Bagian ini TIDAK dipakai PLC dan TIDAK dipakai menggambar robot. Dia ada buat
+// satu hal: menunjukkan bahwa cara yang dipakai mesin (rumus geometri tertutup)
+// memberi jawaban yang sama dengan cara buku teks (DH + Jacobian), dan
+// menunjukkan apa bedanya gerak sumbu dan gerak lurus.
+//
+// Kenapa mesin aslinya tidak memakai DH: lengannya 1 prismatik + 3 sendi SEBIDANG.
+// DH itu cara sistematis menyusun rantai 3D yang rumit; di sini dia menambah enam
+// matriks untuk hasil yang sama persis. Tapi kalau tidak pernah dibandingkan, itu
+// cuma klaim - jadi di sini dibandingkan, dan ada tesnya.
+// ===========================================================================
+
+/** Matriks DH standar 4x4, baris-mayor. T = Rz(theta) Tz(d) Tx(a) Rx(alpha). */
+function dhMat(theta, d, a, alpha) {
+  const ct = Math.cos(theta), st = Math.sin(theta);
+  const ca = Math.cos(alpha), sa = Math.sin(alpha);
+  return [
+    ct, -st * ca,  st * sa, a * ct,
+    st,  ct * ca, -ct * sa, a * st,
+    0,   sa,       ca,      d,
+    0,   0,        0,       1
+  ];
+}
+
+function matKali(A, B) {
+  const C = new Array(16).fill(0);
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      let x = 0;
+      for (let k = 0; k < 4; k++) x += A[r * 4 + k] * B[k * 4 + c];
+      C[r * 4 + c] = x;
+    }
+  }
+  return C;
+}
+
+/**
+ * Tabel DH untuk lengan ini, sudah diisi nilai pose yang diminta.
+ *
+ * Kerangkanya diputar dulu supaya bisa ditulis sebagai DH sama sekali: DH menuntut
+ * sendi berputar pada sumbu z, sementara di sini semua sendi berputar pada sumbu X
+ * dunia. Jadi kerangka DH-nya (u, v, w) = (Y dunia, Z dunia, X dunia).
+ *
+ * Baris "offset bahu" (theta = +90) itu yang bikin L1 - yang di dunia mengarah ke
+ * ATAS - bisa ditulis sebagai a, karena DH cuma bisa menggeser sepanjang x dan z.
+ * Ongkosnya: sudut sendi pertama jadi theta1 - 90 supaya nol-nya tetap di +Y.
+ * Ini bukan trik; ini memang harga yang dibayar tiap kali DH dipakai pada rantai
+ * yang nol mekaniknya tidak searah sumbu DH.
+ */
+function dhTable(pos, cfg) {
+  const tool = toolPolarV2(cfg);
+  const d2r = KIN_DEGREE_TO_RAD;
+  return [
+    { nama: 'rail (P)', theta: 0,                          d: pos[0], a: 0,        alpha: 0 },
+    { nama: 'offset',   theta: KIN_PI / 2,                  d: 0,      a: cfg.L1,   alpha: 0 },
+    { nama: 'joint 1',  theta: pos[1] * d2r - KIN_PI / 2,   d: 0,      a: cfg.L2,   alpha: 0 },
+    { nama: 'joint 2',  theta: pos[2] * d2r,                d: 0,      a: cfg.L3,   alpha: 0 },
+    { nama: 'joint 3',  theta: pos[3] * d2r,                d: 0,      a: cfg.L4,   alpha: 0 },
+    { nama: 'tool',     theta: tool.theta,                  d: 0,      a: tool.r,   alpha: 0 }
+  ];
+}
+
+/**
+ * FK lewat perkalian matriks DH. Jawabannya HARUS sama dengan fkSteps; kalau tidak,
+ * salah satunya salah - dan tes yang mengadu keduanya yang memberitahu.
+ *
+ * @returns {{world:number[], titik:Array, tabel:Array, T:number[]}}
+ */
+function fkDH(pos, cfg) {
+  const tabel = dhTable(pos, cfg);
+  let T = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  const titik = [];
+  let sudut = 0;
+  let thEE = 0;
+  for (let i = 0; i < tabel.length; i++) {
+    const b = tabel[i];
+    T = matKali(T, dhMat(b.theta, b.d, b.a, b.alpha));
+    sudut += b.theta;
+    // theta_EE dibaca SEBELUM baris tool: tool itu offset tetap, bukan sendi, dan
+    // memasukkannya bikin "sudut end effector" berubah tiap kali toolnya diganti.
+    //
+    // TIDAK dikurangi 90 lagi di sini. Putaran +90 di baris offset sudah DIBATALKAN
+    // oleh -90 di baris joint 1, jadi jumlahnya sampai sini memang theta1+theta2+theta3.
+    // Menguranginya sekali lagi memberi theta_EE yang meleset tepat 90 derajat - dan
+    // posisinya tetap benar, jadi yang salah cuma kelihatan di kolom terakhir.
+    if (b.nama === 'joint 3') thEE = sudut;
+    // (u, v, w) -> dunia (x, y, z)
+    titik.push({ x: T[11], y: T[3], z: T[7] });
+  }
+  return {
+    world: [T[11], T[3], T[7], thEE * KIN_RAD_TO_DEGREE],
+    titik: titik, tabel: tabel, T: T
+  };
+}
+
+/**
+ * Jacobian: seberapa besar TCP bergerak untuk perubahan kecil tiap sendi.
+ *
+ * Diturunkan dari GEOMETRI RANTAI, bukan dari trigonometri yang ditulis ulang:
+ * untuk sendi yang berputar pada sumbu X, kolomnya = (-(Z - Zi), (Y - Yi), 1),
+ * dengan (Yi, Zi) posisi sendi itu. Titik-titiknya diambil dari chainPoints(), yang
+ * juga dipakai menggambar - jadi Jacobian dan gambar tidak bisa bercerita beda.
+ *
+ * Satuannya PER RADIAN. Sudut sendi di seluruh project ini derajat, jadi yang
+ * memakai hasilnya wajib mengubah satuannya sendiri - dan itu sengaja kelihatan.
+ *
+ * Baris: dY, dZ, dtheta_EE.  Kolom: theta1, theta2, theta3.
+ * Sumbu 0 (rel) tidak ikut: dia prismatik dan lurus jadi X, kolomnya konstan 1 dan
+ * tidak pernah singular - memasukkannya cuma menambah baris nol.
+ */
+function jacobian(pos, cfg) {
+  const p = chainPoints(pos, cfg);
+  const tcp = p[6];
+  const sendi = [p[1], p[2], p[3]];
+  const J = [[0, 0, 0], [0, 0, 0], [1, 1, 1]];
+  for (let i = 0; i < 3; i++) {
+    J[0][i] = -(tcp.z - sendi[i].z);
+    J[1][i] = tcp.y - sendi[i].y;
+  }
+  const det = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1])
+            - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
+            + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
+  return { J: J, det: det };
+}
+
+/** Selesaikan A x = b untuk 3x3, eliminasi Gauss dengan pivot. null kalau singular. */
+function solve3(A, b) {
+  const M = [[A[0][0], A[0][1], A[0][2], b[0]],
+             [A[1][0], A[1][1], A[1][2], b[1]],
+             [A[2][0], A[2][1], A[2][2], b[2]]];
+  for (let k = 0; k < 3; k++) {
+    let besar = k;
+    for (let r = k + 1; r < 3; r++) if (Math.abs(M[r][k]) > Math.abs(M[besar][k])) besar = r;
+    if (Math.abs(M[besar][k]) < 1e-12) return null;
+    const t = M[k]; M[k] = M[besar]; M[besar] = t;
+    for (let r = k + 1; r < 3; r++) {
+      const f = M[r][k] / M[k][k];
+      for (let c = k; c < 4; c++) M[r][c] -= f * M[k][c];
+    }
+  }
+  const x = [0, 0, 0];
+  for (let r = 2; r >= 0; r--) {
+    let sum = M[r][3];
+    for (let c = r + 1; c < 3; c++) sum -= M[r][c] * x[c];
+    x[r] = sum / M[r][r];
+  }
+  return x;
+}
+
+/**
+ * IK cara Jacobian: tebak, lihat melesetnya, perbaiki, ulangi.
+ *
+ * Ini pembanding untuk IK tertutup yang dipakai mesin, dan bedanya penting:
+ *
+ *   tertutup  - satu langkah, selalu jawaban yang sama, tidak pernah gagal karena
+ *               tebakan awal. Cuma bisa ditulis kalau rantainya cukup sederhana.
+ *   Jacobian  - berlaku untuk rantai apa pun, tapi butuh tebakan awal, berputar
+ *               beberapa kali, dan MELAMBAT tepat di dekat singular - di situ
+ *               Jacobian hampir tidak bisa dibalik.
+ *
+ * Redaman (lambda) itu yang membuat pose dekat singular tidak meledak: tanpa itu,
+ * satu putaran bisa meminta sendi melompat ribuan derajat.
+ *
+ * @param {number[]} target  [X, Y, Z, theta_EE] - X lewat apa adanya (prismatik)
+ * @param {number[]} tebakan pose sumbu awal
+ */
+function ikJacobian(target, tebakan, cfg, opsi) {
+  const o = opsi || {};
+  const maks = o.maks || 60;
+  const tolMm = o.tol || 1e-4;
+  // Redaman kecil, bukan besar. Diukur di lengan ini: lambda 0.01 sampai dalam 3-6
+  // putaran; lambda 5 tidak pernah sampai dalam 80 putaran - langkahnya diperkecil
+  // terus sampai nyaris berhenti. Redaman itu obat untuk pose dekat singular, bukan
+  // rem yang dipasang permanen.
+  const lambda = o.lambda === undefined ? 0.01 : o.lambda;
+  // Batas langkah per putaran. Dekat singular, satu putaran bisa meminta sendi
+  // melompat ribuan derajat - jawabannya benar secara matematika dan tidak ada artinya
+  // secara mekanik.
+  const maksLangkah = o.maksLangkah || 30;
+  const th = [target[0], tebakan[1], tebakan[2], tebakan[3]];
+  let iter = 0, sisa = Infinity;
+
+  for (; iter < maks; iter++) {
+    const fk = fkSteps(th, cfg);
+    const e = [
+      target[1] - fk.worldL[1],
+      target[2] - fk.worldL[2],
+      (target[3] - fk.worldL[3]) * KIN_DEGREE_TO_RAD
+    ];
+    // Sisa dibaca sebagai "meleset berapa mm, dan berapa derajat" - dua satuan yang
+    // memang beda, jadi yang diambil yang TERBESAR. Menjumlahkannya jadi satu angka
+    // bikin nilainya tidak bisa dibandingkan dengan apa pun.
+    sisa = Math.max(Math.abs(e[0]), Math.abs(e[1]), Math.abs(e[2]) * KIN_RAD_TO_DEGREE);
+    if (sisa < tolMm) break;
+
+    const j = jacobian(th, cfg);
+    // (J^T J + lambda^2 I) d = J^T e  - damped least squares.
+    const A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    const b = [0, 0, 0];
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        let x = 0;
+        for (let k = 0; k < 3; k++) x += j.J[k][r] * j.J[k][c];
+        A[r][c] = x + (r === c ? lambda * lambda : 0);
+      }
+      let y = 0;
+      for (let k = 0; k < 3; k++) y += j.J[k][r] * e[k];
+      b[r] = y;
+    }
+    const d = solve3(A, b);
+    if (!d) break;
+    for (let i = 0; i < 3; i++) {
+      let langkah = d[i] * KIN_RAD_TO_DEGREE;
+      if (langkah > maksLangkah) langkah = maksLangkah;
+      if (langkah < -maksLangkah) langkah = -maksLangkah;
+      th[i + 1] += langkah;
+    }
+  }
+  return { joint: th, iter: iter, sisa: sisa, done: sisa < 1e-2 };
+}
+
+/**
+ * Satu langkah motion model per sumbu: profil trapesium yang SAMA dengan di
+ * PRG_SIM_ROBOT.st. Ditaruh di sini, bukan di halaman, supaya mode offline dan
+ * pembanding lintasan memakai model yang sama - dua salinan pasti berbeda suatu
+ * hari, dan bedanya terbaca seperti PLC-nya yang salah.
+ */
+function langkahSumbu(pos, cmd, vel, vmax, acc, dt) {
+  const d = cmd - pos;
+  let vt = Math.min(vmax, Math.sqrt(2 * acc * Math.abs(d)));
+  if (d < 0) vt = -vt;
+  const dv = acc * dt;
+  if (Math.abs(vt - vel) <= dv) vel = vt;
+  else vel += (vt > vel ? dv : -dv);
+  const s = vel * dt;
+  if (Math.abs(d) <= Math.abs(s)) return { pos: cmd, vel: 0, jalan: false };
+  return { pos: pos + s, vel: vel, jalan: true };
+}
+
+/**
+ * Lintasan GERAK SUMBU: persis yang dilakukan PLC hari ini. Tiap sumbu dikejar
+ * sendiri-sendiri dengan kecepatan dan akselerasinya masing-masing, jadi mereka
+ * TIDAK sampai bersamaan - dan ujung tool menempuh jalan melengkung.
+ *
+ * Dipakai motion model yang sama dengan sim, bukan interpolasi lurus antar sudut:
+ * interpolasi lurus akan memberi lengkungan yang lebih rapi daripada yang benar-benar
+ * terjadi, dan yang mau ditunjukkan justru yang benar-benar terjadi.
+ */
+function pathJoint(dari, ke, cfg, gerak) {
+  const dt = gerak.dt || 0.004;
+  const vmax = gerak.vel, acc = gerak.acc;
+  const pos = dari.slice(), vel = [0, 0, 0, 0];
+  const titik = [], sudut = [];
+  let t = 0;
+  for (let n = 0; n < 200000; n++) {
+    let jalan = false;
+    for (let i = 0; i < 4; i++) {
+      const r = langkahSumbu(pos[i], ke[i], vel[i], vmax[i], acc[i], dt);
+      pos[i] = r.pos; vel[i] = r.vel;
+      if (r.jalan) jalan = true;
+    }
+    t += dt;
+    const w = fkSteps(pos, cfg).worldL;
+    titik.push({ x: w[0], y: w[1], z: w[2], t: t });
+    sudut.push(pos.slice());
+    if (!jalan) break;
+  }
+  return { titik: titik, sudut: sudut, waktu: t };
+}
+
+/**
+ * Lintasan GERAK LURUS: ujung tool dipaksa menyusuri garis lurus, dan sudut sendi
+ * dicari ulang di TIAP titik. Ini yang dipakai kalau alatnya harus lurus - dispensing,
+ * potong, las.
+ *
+ * Harganya kelihatan di sini: satu IK per titik, dan tiap titik bisa GAGAL walau
+ * kedua ujungnya terjangkau. Garis lurus antara dua pose yang sah bisa keluar dari
+ * ruang kerja di tengah jalan - itu bukan bug, itu sifat lengan.
+ */
+function pathLine(poseA, poseB, cfg, n, elbowUp, pakaiJacobian) {
+  const titik = [], sudut = [];
+  let gagal = 0, iterTotal = 0;
+  let tebakan = null;
+  const langkah = n || 60;
+  for (let k = 0; k <= langkah; k++) {
+    const f = k / langkah;
+    const pose = [0, 1, 2, 3].map(i => poseA[i] + (poseB[i] - poseA[i]) * f);
+    let joint = null;
+    if (pakaiJacobian) {
+      const r = ikJacobian(pose, tebakan || inverseKinematicV2(poseA, cfg, elbowUp).joint, cfg);
+      iterTotal += r.iter;
+      if (r.done) joint = r.joint;
+    } else {
+      const r = inverseKinematicV2(pose, cfg, elbowUp);
+      if (r.done) joint = r.joint;
+    }
+    if (!joint) { gagal++; continue; }
+    tebakan = joint;
+    sudut.push(joint);
+    const w = fkSteps(joint, cfg).worldL;
+    titik.push({ x: w[0], y: w[1], z: w[2], t: f });
+  }
+  return { titik: titik, sudut: sudut, gagal: gagal, iter: iterTotal };
+}
+
+/**
+ * Seberapa jauh tiap titik menyimpang dari garis lurus A-B. Ini angka yang menjawab
+ * "gerakannya lurus atau tidak" - bukan perasaan waktu melihat animasinya.
+ */
+function deviasiLurus(titik, A, B) {
+  const ax = A.x, ay = A.y, az = A.z;
+  let ux = B.x - ax, uy = B.y - ay, uz = B.z - az;
+  const L = Math.hypot(ux, uy, uz) || 1;
+  ux /= L; uy /= L; uz /= L;
+  const nilai = titik.map(p => {
+    const dx = p.x - ax, dy = p.y - ay, dz = p.z - az;
+    const proy = dx * ux + dy * uy + dz * uz;
+    return Math.hypot(dx - proy * ux, dy - proy * uy, dz - proy * uz);
+  });
+  return { nilai: nilai, maks: nilai.reduce((m, v) => Math.max(m, v), 0), panjangGaris: L };
+}
+
 if (typeof module !== 'undefined') {
   module.exports = { forwardKinematic, inverseKinematic, reachable, atan2Fix, toolPolar, toREAL,
                      forwardKinematicV2, inverseKinematicV2, toolPolarV2, atanKuadran,
                      fkSteps, ikSteps, chainPoints, gripperPoints, collideCheck, keArray,
+                     dhMat, matKali, dhTable, fkDH, jacobian, solve3, ikJacobian,
+                     langkahSumbu, pathJoint, pathLine, deviasiLurus,
                      KIN_PI, KIN_DEGREE_TO_RAD, KIN_RAD_TO_DEGREE };
 }

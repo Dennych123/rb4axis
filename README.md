@@ -145,6 +145,49 @@ sebelahnya. Dikirim waktu slider DILEPAS: satu tulis per piksel gerakan mouse me
 sesi OPC UA yang sama yang sedang membaca 80 tag, dan yang kelihatan justru robot yang
 tersendat - lawan dari yang sedang disetel.
 
+**Panel kiri juga membandingkan DUA cara kinematik.** Mesin memakai rumus geometri
+tertutup. Buku teks memakai DH untuk maju dan Jacobian untuk balik. Dua-duanya jalan
+berdampingan, dan selisihnya ditampilkan - klaim "hasilnya sama" tidak ada gunanya kalau
+tidak pernah diadu.
+
+| | mesin (tertutup) | buku teks (DH + Jacobian) |
+|---|---|---|
+| FK | jumlah vektor tiap ruas | perkalian enam matriks DH |
+| IK | satu langkah, jawaban pasti | iterasi; 3-6 putaran dari tebakan dekat |
+| cabang siku | dipilih lewat parameter `ELBOW_UP` | ikut TEBAKAN awal, bisa berubah tanpa diminta |
+| dekat singular | tetap satu langkah | melambat, dan butuh redaman supaya tidak meledak |
+| berlaku untuk | rantai yang cukup sederhana | rantai apa pun |
+
+Selisih FK-nya **bukan nol** dan itu bukan kesalahan: DH memakai `PI/2` utuh, rumus mesin
+memakai `90 x DEGREE_TO_RAD` yang dipotong 9 angka. Sudut yang sama, pembulatan yang beda,
+~4e-6 mm. Lantai yang sama dengan round-trip.
+
+`det J = L2 · L3 · sin(theta2)` dipakai jadi ukuran **seberapa dekat ke singular**. Nol
+berarti siku lurus, dan di situ ujung tool tidak bisa lagi bergerak ke segala arah.
+Mesin tidak membutuhkannya - IK tertutup selesai satu langkah - tapi gerak lurus, kontrol
+gaya, dan peringatan singular semuanya butuh.
+
+**"Lurus atau tidak" dijawab angka, bukan perasaan.** Tombol Run menjalankan perpindahan
+yang sama dengan dua cara, lalu mengukur simpangannya dari garis lurus:
+
+| | |
+|---|---|
+| gerak sumbu (yang dipakai PLC hari ini) | **melengkung ~15 mm** pada perpindahan 150 mm |
+| gerak lurus (IK di tiap langkah) | ~2e-5 mm |
+
+Lengkungnya karena tiap sumbu mengambil jalan terpendek **di sudutnya sendiri**, bukan di
+ruang, dan mereka tidak selesai bersamaan. Untuk pick and place itu tidak masalah dan lebih
+cepat - itu sebabnya siklusnya naik ke ketinggian approach dulu, bukan mempercayai
+lintasannya. Untuk lem, potong, atau las itu masalah.
+
+Lintasannya digambar di 3D (kuning = gerak sumbu, cyan = gerak lurus) DAN sebagai grafik
+simpangan. Dari sudut kamera tertentu, lengkungan 15 mm kelihatan lurus - grafiknya yang
+tidak bisa dibohongi.
+
+Yang dipakai simulasi lintasan itu **motion model yang sama** dengan PLC (`langkahSumbu`
+di `kin.js`, satu salinan untuk mode offline dan untuk pembanding). Interpolasi sudut yang
+rapi akan memberi lengkungan yang lebih indah daripada yang benar-benar terjadi.
+
 **Cycle time diukur KELUAR ke KELUAR** - dari satu produk meninggalkan WIP OUT sampai
 berikutnya. Itu yang menentukan berapa produk per jam; diukur di tempat lain (mulai
 ambil, mulai antar) angkanya lebih kecil dan lebih enak dilihat, tapi menjawab pertanyaan
